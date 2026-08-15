@@ -9,9 +9,9 @@ import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.nativead.NativeAdOptions;
 
-public final class Overlay extends Ad {
+public final class NativeOverlayAdMob extends NativeAdMob {
 
-    static final class OverlayStyle {
+    static final class NativeOverlayAdMobStyle {
         final boolean fullscreen;
         final int countdownSec;
         final boolean xRandomSide;
@@ -19,7 +19,7 @@ public final class Overlay extends Ad {
         final float heightRatio;
         final float backgroundAlpha;
 
-        OverlayStyle(
+        NativeOverlayAdMobStyle(
                 boolean fullscreen
               , int countdownSec
               , boolean xRandomSide
@@ -34,8 +34,8 @@ public final class Overlay extends Ad {
             this.backgroundAlpha = backgroundAlpha;
         }
 
-        OverlayStyle WithCountdownSec(int newCountdownSec) {
-            return new OverlayStyle(
+        NativeOverlayAdMobStyle WithCountdownSec(int newCountdownSec) {
+            return new NativeOverlayAdMobStyle(
                     fullscreen
                   , newCountdownSec
                   , xRandomSide
@@ -50,33 +50,33 @@ public final class Overlay extends Ad {
     }
 
     private final String adUnitId;
-    private volatile OverlayStyle configuredStyle;
+    private volatile NativeOverlayAdMobStyle configuredStyle;
 
     private volatile com.google.android.gms.ads.nativead.NativeAd nativeAd;
     private volatile com.google.android.gms.ads.nativead.NativeAd activeNativeAd;
     private volatile boolean configured;
     private volatile boolean isAdLoading;
-    private OverlayPresentation presentation;
-    private OverlayPresentation preparedPresentation;
+    private NativeOverlayAdMobPresentation presentation;
+    private NativeOverlayAdMobPresentation preparedPresentation;
     private Activity preparedActivity;
     private com.google.android.gms.ads.nativead.NativeAd preparedNativeAd;
-    private OverlayStyle preparedStyle;
-    private AdCompletedListener activeShowCompleted;
+    private NativeOverlayAdMobStyle preparedStyle;
+    private NativeAdMobCompletedListener activeShowCompleted;
     private String activeActivitySessionId;
 
-    public Overlay(String adUnitId) {
+    public NativeOverlayAdMob(String adUnitId) {
         if (adUnitId == null || adUnitId.trim().isEmpty()) {
             throw new IllegalArgumentException(
-                    "Overlay requires a non-empty adUnitId");
+                    "NativeOverlayAdMob requires a non-empty adUnitId");
         }
         this.adUnitId = adUnitId;
     }
 
     // The full-screen listener surface stays flat (no slot index), so this
-    // format keeps the AdLoadListener shape and owns its delivery.
-    private volatile AdLoadListener loadListener;
+    // format keeps the NativeAdMobLoadListener shape and owns its delivery.
+    private volatile NativeAdMobLoadListener loadListener;
 
-    public void SetListener(AdLoadListener listener) {
+    public void SetListener(NativeAdMobLoadListener listener) {
         if (released) return;
         loadListener = listener;
         NotifyCurrentState();
@@ -87,7 +87,7 @@ public final class Overlay extends Ad {
     }
 
     private void NotifyLoadingStarted() {
-        AdLoadListener listener = loadListener;
+        NativeAdMobLoadListener listener = loadListener;
         if (listener == null) return;
         try {
             listener.OnLoadingStarted();
@@ -99,7 +99,7 @@ public final class Overlay extends Ad {
     private void NotifyStateChanged(
             boolean isReady
           , boolean isLoading) {
-        AdLoadListener listener = loadListener;
+        NativeAdMobLoadListener listener = loadListener;
         if (listener == null) return;
         try {
             listener.OnStateChanged(isReady, isLoading);
@@ -109,7 +109,7 @@ public final class Overlay extends Ad {
     }
 
     private void NotifyShowNotReady() {
-        AdLoadListener listener = loadListener;
+        NativeAdMobLoadListener listener = loadListener;
         if (listener == null) return;
         try {
             listener.OnShowNotReady();
@@ -121,7 +121,7 @@ public final class Overlay extends Ad {
     private void NotifyLoadingCompleted(
             int errorCode
           , String errorMessage) {
-        AdLoadListener listener = loadListener;
+        NativeAdMobLoadListener listener = loadListener;
         if (listener == null) return;
         try {
             listener.OnLoadingCompleted(errorCode, errorMessage);
@@ -137,7 +137,7 @@ public final class Overlay extends Ad {
           , double value
           , String currencyCode
           , int precision) {
-        AdLoadListener listener = loadListener;
+        NativeAdMobLoadListener listener = loadListener;
         if (listener == null) return;
         try {
             listener.OnAdPaid(
@@ -152,7 +152,7 @@ public final class Overlay extends Ad {
     }
 
     private void NotifyDisplayed() {
-        AdLoadListener listener = loadListener;
+        NativeAdMobLoadListener listener = loadListener;
         if (listener == null) return;
         try {
             listener.OnDisplayed();
@@ -164,7 +164,7 @@ public final class Overlay extends Ad {
     private void NotifyPresentationFailed(
             int errorCode
           , String errorMessage) {
-        AdLoadListener listener = loadListener;
+        NativeAdMobLoadListener listener = loadListener;
         if (listener == null) return;
         try {
             listener.OnPresentationFailed(errorCode, errorMessage);
@@ -189,11 +189,11 @@ public final class Overlay extends Ad {
         if (configured) {
             Log.e(
                     TAG
-                  , "Configure may only be called once per Ad instance");
+                  , "Configure may only be called once per NativeAdMob instance");
             return;
         }
 
-        configuredStyle = new OverlayStyle(
+        configuredStyle = new NativeOverlayAdMobStyle(
                 fullscreen
               , countdownSec
               , xRandomSide
@@ -204,12 +204,12 @@ public final class Overlay extends Ad {
     }
 
     public void SetCountdownSec(int countdownSec) {
-        OverlayStyle currentStyle = configuredStyle;
+        NativeOverlayAdMobStyle currentStyle = configuredStyle;
         if (!configured || released || currentStyle == null) {
             Log.e(TAG, "SetCountdownSec ignored before Configure or after Release");
             return;
         }
-        OverlayStyle updatedStyle =
+        NativeOverlayAdMobStyle updatedStyle =
                 currentStyle.WithCountdownSec(countdownSec);
         configuredStyle = updatedStyle;
         RequestPreparedPresentationRebuild(updatedStyle);
@@ -228,7 +228,7 @@ public final class Overlay extends Ad {
         // LoadAd chi snapshot phan style can cho request (hien tai la mute
         // policy). Presentation style se duoc snapshot muon hon tai ShowAd.
         final String requestAdUnitId = adUnitId;
-        final OverlayStyle loadStyle = configuredStyle;
+        final NativeOverlayAdMobStyle loadStyle = configuredStyle;
 
         RunOnMainThread(() -> {
             if (released || !configured || isAdLoading
@@ -248,7 +248,7 @@ public final class Overlay extends Ad {
     private void DoLoadAd(
             final Activity activity
           , final String requestAdUnitId
-          , final OverlayStyle loadStyle) {
+          , final NativeOverlayAdMobStyle loadStyle) {
         isAdLoading = true;
         final int generation = NextLoadGeneration();
         NotifyCurrentState();
@@ -271,7 +271,7 @@ public final class Overlay extends Ad {
                                 ad
                               , requestAdUnitId
                               , () -> IsCurrentLoadGeneration(generation));
-                        OverlayStyle presentationStyle =
+                        NativeOverlayAdMobStyle presentationStyle =
                                 configuredStyle;
                         if (presentationStyle != null
                                 && !presentationStyle.fullscreen) {
@@ -309,11 +309,11 @@ public final class Overlay extends Ad {
                             String activitySessionId =
                                     activeActivitySessionId;
                             if (activitySessionId != null) {
-                                OverlayActivity.CommitAdClick(
+                                NativeOverlayAdMobActivity.CommitAdClick(
                                         activitySessionId);
                                 return;
                             }
-                            AdPresentation activePresentation =
+                            NativeAdMobPresentation activePresentation =
                                     presentation;
                             if (activePresentation != null) {
                                 activePresentation.OnAdClicked();
@@ -339,14 +339,14 @@ public final class Overlay extends Ad {
 
     public void ShowAd(
             final Activity activity
-          , final AdCompletedListener onCompleted) {
+          , final NativeAdMobCompletedListener onCompleted) {
         // The config boundary of one show: updates completed before this
         // ShowAd call apply to it, later updates belong to the next one.
-        final OverlayStyle requestedShowStyle = configuredStyle;
+        final NativeOverlayAdMobStyle requestedShowStyle = configuredStyle;
 
         RunOnMainThread(() -> {
             if (released) {
-                NotifyCompleted(onCompleted, "Ad released", false);
+                NotifyCompleted(onCompleted, "NativeAdMob released", false);
                 return;
             }
             if (!configured || IsShowingInternal()
@@ -354,14 +354,14 @@ public final class Overlay extends Ad {
                 NotifyCompleted(
                         onCompleted
                       , !configured
-                                ? "Ad not configured"
-                                : "Ad already showing"
+                                ? "NativeAdMob not configured"
+                                : "NativeAdMob already showing"
                       , false);
                 return;
             }
             if (nativeAd == null || requestedShowStyle == null
                     || !IsActivityUsable(activity)) {
-                NotifyCompleted(onCompleted, "Ad not ready", false);
+                NotifyCompleted(onCompleted, "NativeAdMob not ready", false);
                 return;
             }
 
@@ -375,18 +375,18 @@ public final class Overlay extends Ad {
             if (requestedShowStyle.fullscreen) {
                 ReleasePreparedPresentation();
                 String sessionId =
-                        OverlayActivity.RegisterSession(
+                        NativeOverlayAdMobActivity.RegisterSession(
                                 activity
                               , this
                               , shownAd
                               , requestedShowStyle);
                 activeActivitySessionId = sessionId;
                 if (sessionId == null
-                        || !OverlayActivity.StartSession(
+                        || !NativeOverlayAdMobActivity.StartSession(
                                 activity
                               , sessionId)) {
                     activeActivitySessionId = null;
-                    OverlayActivity.CancelSession(sessionId);
+                    NativeOverlayAdMobActivity.CancelSession(sessionId);
                     CompletePresentation(
                             shownAd
                           , "Failed to start native full-screen Activity");
@@ -395,7 +395,7 @@ public final class Overlay extends Ad {
             }
 
             try {
-                OverlayPresentation createdPresentation =
+                NativeOverlayAdMobPresentation createdPresentation =
                         TakePreparedPresentation(
                                 activity
                               , shownAd
@@ -439,12 +439,12 @@ public final class Overlay extends Ad {
         RunOnMainThread(() -> {
             String activitySessionId = activeActivitySessionId;
             if (activitySessionId != null) {
-                OverlayActivity.DismissSession(
+                NativeOverlayAdMobActivity.DismissSession(
                         activitySessionId);
                 return;
             }
 
-            OverlayPresentation currentPresentation =
+            NativeOverlayAdMobPresentation currentPresentation =
                     presentation;
             if (currentPresentation != null
                     && currentPresentation.IsShowing()) {
@@ -477,10 +477,10 @@ public final class Overlay extends Ad {
 
             String activitySessionId = activeActivitySessionId;
             activeActivitySessionId = null;
-            OverlayActivity.CancelSession(
+            NativeOverlayAdMobActivity.CancelSession(
                     activitySessionId);
 
-            OverlayPresentation currentPresentation =
+            NativeOverlayAdMobPresentation currentPresentation =
                     presentation;
             presentation = null;
             if (currentPresentation != null) {
@@ -506,12 +506,12 @@ public final class Overlay extends Ad {
         });
     }
 
-    private OverlayPresentation CreatePresentation(
+    private NativeOverlayAdMobPresentation CreatePresentation(
             Activity activity
           , com.google.android.gms.ads.nativead.NativeAd ad
-          , OverlayStyle style) {
-        OverlayPresentation createdPresentation =
-                new OverlayPresentation(
+          , NativeOverlayAdMobStyle style) {
+        NativeOverlayAdMobPresentation createdPresentation =
+                new NativeOverlayAdMobPresentation(
                 activity
               , ad
               , style.countdownSec
@@ -531,7 +531,7 @@ public final class Overlay extends Ad {
     private boolean PreparePresentation(
             Activity activity
           , com.google.android.gms.ads.nativead.NativeAd ad
-          , OverlayStyle style) {
+          , NativeOverlayAdMobStyle style) {
         ReleasePreparedPresentation();
         if (released
                 || ad == null
@@ -541,7 +541,7 @@ public final class Overlay extends Ad {
             return false;
         }
 
-        OverlayPresentation createdPresentation = null;
+        NativeOverlayAdMobPresentation createdPresentation = null;
         try {
             createdPresentation = CreatePresentation(activity, ad, style);
             if (!createdPresentation.Prepare()
@@ -574,7 +574,7 @@ public final class Overlay extends Ad {
     }
 
     private void RequestPreparedPresentationRebuild(
-            OverlayStyle requestedStyle) {
+            NativeOverlayAdMobStyle requestedStyle) {
         // Every runtime presentation setter must publish a fresh style
         // snapshot and pass through here, so a prepared UI never keeps
         // stale config.
@@ -597,10 +597,10 @@ public final class Overlay extends Ad {
         });
     }
 
-    private OverlayPresentation TakePreparedPresentation(
+    private NativeOverlayAdMobPresentation TakePreparedPresentation(
             Activity activity
           , com.google.android.gms.ads.nativead.NativeAd ad
-          , OverlayStyle style) {
+          , NativeOverlayAdMobStyle style) {
         if (preparedPresentation == null
                 || preparedActivity != activity
                 || preparedNativeAd != ad
@@ -609,7 +609,7 @@ public final class Overlay extends Ad {
             return null;
         }
 
-        OverlayPresentation result = preparedPresentation;
+        NativeOverlayAdMobPresentation result = preparedPresentation;
         preparedPresentation = null;
         preparedActivity = null;
         preparedNativeAd = null;
@@ -618,7 +618,7 @@ public final class Overlay extends Ad {
     }
 
     private void ReleasePreparedPresentation() {
-        OverlayPresentation prepared = preparedPresentation;
+        NativeOverlayAdMobPresentation prepared = preparedPresentation;
         preparedPresentation = null;
         preparedActivity = null;
         preparedNativeAd = null;
@@ -664,7 +664,7 @@ public final class Overlay extends Ad {
         // Identity guard dam bao completion va destroy chi chay mot lan.
         if (activeNativeAd != shownAd) return;
 
-        AdCompletedListener onCompleted = activeShowCompleted;
+        NativeAdMobCompletedListener onCompleted = activeShowCompleted;
         activeShowCompleted = null;
         activeNativeAd = null;
         activeActivitySessionId = null;
@@ -681,7 +681,7 @@ public final class Overlay extends Ad {
     }
 
     private void CleanupFailedPresentation() {
-        OverlayPresentation failedPresentation = presentation;
+        NativeOverlayAdMobPresentation failedPresentation = presentation;
         presentation = null;
         if (failedPresentation == null) return;
         try {
@@ -695,16 +695,16 @@ public final class Overlay extends Ad {
     private boolean IsShowingInternal() {
         String activitySessionId = activeActivitySessionId;
         if (activitySessionId != null) {
-            return OverlayActivity.IsSessionActive(
+            return NativeOverlayAdMobActivity.IsSessionActive(
                     activitySessionId);
         }
-        OverlayPresentation currentPresentation = presentation;
+        NativeOverlayAdMobPresentation currentPresentation = presentation;
         return currentPresentation != null
                 && currentPresentation.IsShowing();
     }
 
     private void NotifyCompleted(
-            AdCompletedListener listener
+            NativeAdMobCompletedListener listener
           , String errorMessage
           , boolean adConsumed) {
         if (listener == null) return;

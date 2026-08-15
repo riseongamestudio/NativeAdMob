@@ -14,7 +14,7 @@ import java.util.function.BooleanSupplier;
 // Shared base of every ad format: main-thread dispatch, load generations,
 // request options, and the paid-event binding. The show/hide lifecycle of
 // each format lives in its subclass.
-public abstract class Ad {
+public abstract class NativeAdMob {
     protected static final String TAG = "NativeAdMob";
     protected static final int INTERNAL_LOAD_ERROR = -1;
     protected static final int INTERNAL_PRESENTATION_ERROR = -2;
@@ -25,7 +25,7 @@ public abstract class Ad {
 
     protected volatile boolean released;
 
-    protected Ad() {}
+    protected NativeAdMob() {}
 
     protected final int NextLoadGeneration() {
         return loadGeneration.incrementAndGet();

@@ -4,7 +4,7 @@ package com.riseon.nativeadmob;
 // AndroidJavaProxy dispatches by name. The loading and paid events describe
 // the shared supply of one ad unit; the slot-indexed events describe one
 // display slot of it.
-public interface InFeedListener {
+public interface NativeInFeedAdMobListener {
     void OnLoadingStarted();
     void OnLoadingCompleted(int errorCode, String errorMessage);
     void OnAdPaid(

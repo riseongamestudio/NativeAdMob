@@ -2,7 +2,7 @@ package com.riseon.nativeadmob;
 
 // The package and method names must match the C# proxy exactly:
 // AndroidJavaProxy dispatches by name.
-public interface AdLoadListener {
+public interface NativeAdMobLoadListener {
     void OnStateChanged(boolean isReady, boolean isLoading);
     void OnShowNotReady();
     void OnLoadingCompleted(int errorCode, String errorMessage);

@@ -16,12 +16,12 @@ import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.nativead.NativeAdOptions;
 
-// One InFeed is one ad unit id for the life of the app. It owns the shared
+// One NativeInFeedAdMob is one ad unit id for the life of the app. It owns the shared
 // supply - the cache of raw loaded ads, the load requests, the no-fill
 // backoff - and a fixed array of display slots that consume from it.
 // Everything rect-shaped (layout, dwell, rotation, watchdogs) lives in
-// InFeedSlot.
-public final class InFeed extends Ad {
+// NativeInFeedAdMobSlot.
+public final class NativeInFeedAdMob extends NativeAdMob {
     static final String TAG = "NativeInFeedAdMob";
     private static final int LOAD_SUCCESS_CODE = 0;
     private static final int MAX_RETRY_EXPONENT = 5;
@@ -49,7 +49,7 @@ public final class InFeed extends Ad {
     private final String adUnitId;
     private final int cacheSize;
     private final float backgroundAlpha;
-    private final InFeedSlot[] slots;
+    private final NativeInFeedAdMobSlot[] slots;
     private Activity activity;
     private final ArrayDeque<CachedAd> cachedAds = new ArrayDeque<>();
     // OwnsAd runs inside the SDK's paid-event callback, off whatever thread the
@@ -58,12 +58,12 @@ public final class InFeed extends Ad {
     // that may be changing underneath it.
     private final Set<com.google.android.gms.ads.nativead.NativeAd> ownedAds =
             Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private volatile InFeedListener listener;
+    private volatile NativeInFeedAdMobListener listener;
     private boolean isAdLoading;
     private boolean retryScheduled;
     private int noFillStreak;
 
-    public InFeed(
+    public NativeInFeedAdMob(
             Activity currentActivity
           , String adUnitId
           , int slotCount
@@ -71,7 +71,7 @@ public final class InFeed extends Ad {
           , float backgroundAlpha) {
         if (adUnitId == null || adUnitId.trim().isEmpty()) {
             throw new IllegalArgumentException(
-                    "InFeed requires a non-empty adUnitId");
+                    "NativeInFeedAdMob requires a non-empty adUnitId");
         }
         if (slotCount < 1 || slotCount > MAX_SLOT_COUNT) {
             throw new IllegalArgumentException(
@@ -84,9 +84,9 @@ public final class InFeed extends Ad {
               , cacheSize < 1 ? slotCount + 1 : cacheSize);
         this.backgroundAlpha = ResolveBackgroundAlpha(backgroundAlpha);
         this.activity = currentActivity;
-        InFeedSlot[] createdSlots = new InFeedSlot[slotCount];
+        NativeInFeedAdMobSlot[] createdSlots = new NativeInFeedAdMobSlot[slotCount];
         for (int i = 0; i < slotCount; ++i) {
-            createdSlots[i] = new InFeedSlot(this, i);
+            createdSlots[i] = new NativeInFeedAdMobSlot(this, i);
         }
         this.slots = createdSlots;
         main.post(() -> {
@@ -94,7 +94,7 @@ public final class InFeed extends Ad {
             if (!IsActivityUsable(activity)) {
                 Log.e(
                         TAG
-                      , "InFeed created without a usable Activity; "
+                      , "NativeInFeedAdMob created without a usable Activity; "
                                 + "cache loading will start when Configure or "
                                 + "Show receives one");
                 return;
@@ -103,7 +103,7 @@ public final class InFeed extends Ad {
         });
     }
 
-    public void SetListener(InFeedListener newListener) {
+    public void SetListener(NativeInFeedAdMobListener newListener) {
         if (released) return;
         listener = newListener;
     }
@@ -126,7 +126,7 @@ public final class InFeed extends Ad {
                 Log.e(TAG, "Configure requires a usable Activity");
                 return;
             }
-            InFeedSlot slot = SlotAt(slotIndex, "Configure");
+            NativeInFeedAdMobSlot slot = SlotAt(slotIndex, "Configure");
             if (slot == null) return;
 
             AdoptActivity(currentActivity);
@@ -142,7 +142,7 @@ public final class InFeed extends Ad {
                 Log.e(TAG, "Show ignored because Activity is not usable");
                 return;
             }
-            InFeedSlot slot = SlotAt(slotIndex, "Show");
+            NativeInFeedAdMobSlot slot = SlotAt(slotIndex, "Show");
             if (slot == null) return;
 
             AdoptActivity(currentActivity);
@@ -154,7 +154,7 @@ public final class InFeed extends Ad {
         if (released) return;
         main.post(() -> {
             if (released) return;
-            InFeedSlot slot = SlotAt(slotIndex, "Hide");
+            NativeInFeedAdMobSlot slot = SlotAt(slotIndex, "Hide");
             if (slot != null) slot.Hide();
         });
     }
@@ -163,7 +163,7 @@ public final class InFeed extends Ad {
         if (released) return;
         main.post(() -> {
             if (released) return;
-            InFeedSlot slot = SlotAt(slotIndex, "SetPosition");
+            NativeInFeedAdMobSlot slot = SlotAt(slotIndex, "SetPosition");
             if (slot != null) slot.SetPosition(xPx, yPx);
         });
     }
@@ -176,14 +176,14 @@ public final class InFeed extends Ad {
         main.post(() -> {
             isAdLoading = false;
             retryScheduled = false;
-            for (InFeedSlot slot : slots) slot.ReleaseOnMain();
+            for (NativeInFeedAdMobSlot slot : slots) slot.ReleaseOnMain();
             DestroyCachedAds();
             activity = null;
             listener = null;
         });
     }
 
-    private InFeedSlot SlotAt(int slotIndex, String operation) {
+    private NativeInFeedAdMobSlot SlotAt(int slotIndex, String operation) {
         if (slotIndex >= 0 && slotIndex < slots.length) {
             return slots[slotIndex];
         }
@@ -198,7 +198,7 @@ public final class InFeed extends Ad {
     // windows are gone, so every slot starts over on the new one.
     private void AdoptActivity(Activity currentActivity) {
         if (activity != null && activity != currentActivity) {
-            for (InFeedSlot slot : slots) slot.HandleActivityChanged();
+            for (NativeInFeedAdMobSlot slot : slots) slot.HandleActivityChanged();
         }
         activity = currentActivity;
     }
@@ -311,7 +311,7 @@ public final class InFeed extends Ad {
     }
 
     private void OfferCacheToSlots() {
-        for (InFeedSlot slot : slots) {
+        for (NativeInFeedAdMobSlot slot : slots) {
             if (cachedAds.isEmpty()) return;
             if (slot.WantsCachedAd()) slot.PresentCachedAd();
         }
@@ -446,7 +446,7 @@ public final class InFeed extends Ad {
     }
 
     private void CommitAdClick() {
-        for (InFeedSlot slot : slots) slot.CommitAdClick();
+        for (NativeInFeedAdMobSlot slot : slots) slot.CommitAdClick();
     }
 
     Activity CurrentActivity() {
@@ -487,7 +487,7 @@ public final class InFeed extends Ad {
     }
 
     private void NotifyLoadingStarted() {
-        InFeedListener current = listener;
+        NativeInFeedAdMobListener current = listener;
         if (current == null) return;
         try {
             current.OnLoadingStarted();
@@ -499,7 +499,7 @@ public final class InFeed extends Ad {
     private void NotifyLoadingCompleted(
             int errorCode
           , String errorMessage) {
-        InFeedListener current = listener;
+        NativeInFeedAdMobListener current = listener;
         if (current == null) return;
         try {
             current.OnLoadingCompleted(errorCode, errorMessage);
@@ -515,7 +515,7 @@ public final class InFeed extends Ad {
           , double value
           , String currencyCode
           , int precision) {
-        InFeedListener current = listener;
+        NativeInFeedAdMobListener current = listener;
         if (current == null) return;
         try {
             current.OnAdPaid(
@@ -530,7 +530,7 @@ public final class InFeed extends Ad {
     }
 
     void NotifySlotDisplayed(int slotIndex) {
-        InFeedListener current = listener;
+        NativeInFeedAdMobListener current = listener;
         if (current == null) return;
         try {
             current.OnSlotDisplayed(slotIndex);
@@ -540,7 +540,7 @@ public final class InFeed extends Ad {
     }
 
     void NotifySlotShowNotReady(int slotIndex) {
-        InFeedListener current = listener;
+        NativeInFeedAdMobListener current = listener;
         if (current == null) return;
         try {
             current.OnSlotShowNotReady(slotIndex);
@@ -553,7 +553,7 @@ public final class InFeed extends Ad {
             int slotIndex
           , int errorCode
           , String errorMessage) {
-        InFeedListener current = listener;
+        NativeInFeedAdMobListener current = listener;
         if (current == null) return;
         try {
             current.OnSlotPresentationFailed(

@@ -5,12 +5,12 @@ import android.os.SystemClock;
 import android.util.Log;
 import android.view.Choreographer;
 
-// One display slot of an InFeed unit: a rect on screen, the presentation
+// One display slot of an NativeInFeedAdMob unit: a rect on screen, the presentation
 // pair being shown and warmed for it, and every trigger that decides when
 // the rect earns a fresh ad. It consumes raw ads from its owner's shared
 // cache and never talks to the network itself.
-final class InFeedSlot {
-    private static final String TAG = InFeed.TAG;
+final class NativeInFeedAdMobSlot {
+    private static final String TAG = NativeInFeedAdMob.TAG;
     private static final int RETRY_IMMEDIATE_LAYOUT_ATTEMPTS = 2;
     private static final int MAX_UNPROVEN_LAYOUT_FAILURES = 20;
     private static final long UNPROVEN_LAYOUT_RETRY_DELAY_MS = 300_000L;
@@ -50,7 +50,7 @@ final class InFeedSlot {
 
     private static final class DisplayEntry {
         final com.google.android.gms.ads.nativead.NativeAd ad;
-        final InFeedPresentation presentation;
+        final NativeInFeedAdMobPresentation presentation;
         final long loadedAtMs;
         long accumulatedVisibleMs;
         long visibleStartedAtMs = NO_VISIBLE_TIMER;
@@ -61,7 +61,7 @@ final class InFeedSlot {
 
         DisplayEntry(
                 com.google.android.gms.ads.nativead.NativeAd ad
-              , InFeedPresentation presentation
+              , NativeInFeedAdMobPresentation presentation
               , long loadedAtMs) {
             this.ad = ad;
             this.presentation = presentation;
@@ -82,7 +82,7 @@ final class InFeedSlot {
     private final Choreographer.FrameCallback hiddenSwapFrameCallback =
             frameTimeNanos -> owner.main.post(hiddenSwapRunnable);
 
-    private final InFeed owner;
+    private final NativeInFeedAdMob owner;
     private final int index;
     private SlotRect rect;
     private DisplayEntry activeEntry;
@@ -94,7 +94,7 @@ final class InFeedSlot {
     private int layoutFailStreak;
     private boolean layoutProven;
 
-    InFeedSlot(InFeed owner, int index) {
+    NativeInFeedAdMobSlot(NativeInFeedAdMob owner, int index) {
         this.owner = owner;
         this.index = index;
     }
@@ -287,7 +287,7 @@ final class InFeedSlot {
                 || !configured
                 || materializingEntry != null
                 || !owner.HasCachedAd()
-                || !Ad.IsActivityUsable(owner.CurrentActivity())) {
+                || !NativeAdMob.IsActivityUsable(owner.CurrentActivity())) {
             return;
         }
         if (!IsActivityVisible(owner.CurrentActivity())) {
@@ -298,7 +298,7 @@ final class InFeedSlot {
             return;
         }
 
-        InFeed.CachedAd next = owner.TakeCachedAd();
+        NativeInFeedAdMob.CachedAd next = owner.TakeCachedAd();
         if (next == null) {
             owner.RequestLoad();
             return;
@@ -308,8 +308,8 @@ final class InFeedSlot {
         final long loadedAtMs = next.loadedAtMs;
 
         final DisplayEntry[] holder = new DisplayEntry[1];
-        InFeedPresentation presentation =
-                new InFeedPresentation(
+        NativeInFeedAdMobPresentation presentation =
+                new NativeInFeedAdMobPresentation(
                         owner.CurrentActivity()
                       , ad
                       , rect.xPx
@@ -317,7 +317,7 @@ final class InFeedSlot {
                       , rect.widthPx
                       , rect.heightPx
                       , owner.BackgroundAlpha()
-                      , new AdPresentation.Listener() {
+                      , new NativeAdMobPresentation.Listener() {
                             @Override
                             public void OnReady() {
                                 HandlePresentationReady(holder[0]);
@@ -355,7 +355,7 @@ final class InFeedSlot {
             long retryDelayMs = ScheduleLayoutRetry();
             owner.NotifySlotPresentationFailed(
                     index
-                  , Ad.INTERNAL_PRESENTATION_ERROR
+                  , NativeAdMob.INTERNAL_PRESENTATION_ERROR
                   , BuildFailureMessage(
                         failureMessage == null
                                 ? "In-feed presentation failed before display"
@@ -445,14 +445,14 @@ final class InFeedSlot {
         if (failureMessage != null) {
             owner.NotifySlotPresentationFailed(
                     index
-                  , Ad.INTERNAL_PRESENTATION_ERROR
+                  , NativeAdMob.INTERNAL_PRESENTATION_ERROR
                   , BuildFailureMessage(failureMessage, retryDelayMs));
         }
     }
 
     private void HandleRefresh() {
         if (owner.released
-                || !Ad.IsActivityUsable(owner.CurrentActivity())) {
+                || !NativeAdMob.IsActivityUsable(owner.CurrentActivity())) {
             return;
         }
         if (!visibleRequested
@@ -525,7 +525,7 @@ final class InFeedSlot {
     // unusable - and never once some creative has already rendered in it.
     private long ScheduleLayoutRetry() {
         CancelLayoutRetry();
-        if (owner.released || !configured) return InFeed.NO_RETRY_SCHEDULED_MS;
+        if (owner.released || !configured) return NativeInFeedAdMob.NO_RETRY_SCHEDULED_MS;
 
         ++layoutFailStreak;
         if (!layoutProven
@@ -540,14 +540,14 @@ final class InFeedSlot {
             return PostLayoutRetry(UNPROVEN_LAYOUT_RETRY_DELAY_MS);
         }
         return PostLayoutRetry(
-                InFeed.BackoffDelayMs(
+                NativeInFeedAdMob.BackoffDelayMs(
                         layoutFailStreak
                       , RETRY_IMMEDIATE_LAYOUT_ATTEMPTS));
     }
 
     private long PostLayoutRetry(long delayMs) {
         CancelLayoutRetry();
-        if (owner.released || !configured) return InFeed.NO_RETRY_SCHEDULED_MS;
+        if (owner.released || !configured) return NativeInFeedAdMob.NO_RETRY_SCHEDULED_MS;
 
         layoutRetryScheduled = true;
         owner.main.postDelayed(layoutRetryRunnable, Math.max(0L, delayMs));
@@ -591,12 +591,12 @@ final class InFeedSlot {
         if (materializingEntry != null) {
             nextExpiryAtMs = Math.min(
                     nextExpiryAtMs
-                  , materializingEntry.loadedAtMs + InFeed.MAX_CACHED_AD_AGE_MS);
+                  , materializingEntry.loadedAtMs + NativeInFeedAdMob.MAX_CACHED_AD_AGE_MS);
         }
         if (activeEntry != null) {
             nextExpiryAtMs = Math.min(
                     nextExpiryAtMs
-                  , activeEntry.loadedAtMs + InFeed.MAX_CACHED_AD_AGE_MS);
+                  , activeEntry.loadedAtMs + NativeInFeedAdMob.MAX_CACHED_AD_AGE_MS);
         }
         if (nextExpiryAtMs == Long.MAX_VALUE) return;
 
@@ -635,7 +635,7 @@ final class InFeedSlot {
     // entry to become visible - has to wait for the foreground instead of
     // being treated as a failure.
     private static boolean IsActivityVisible(Activity currentActivity) {
-        return Ad.IsActivityUsable(currentActivity)
+        return NativeAdMob.IsActivityUsable(currentActivity)
                 && currentActivity.hasWindowFocus();
     }
 
@@ -643,7 +643,7 @@ final class InFeedSlot {
         owner.main.removeCallbacks(foregroundRecheckRunnable);
         if (owner.released
                 || IsActivityVisible(owner.CurrentActivity())
-                || !Ad.IsActivityUsable(owner.CurrentActivity())) {
+                || !NativeAdMob.IsActivityUsable(owner.CurrentActivity())) {
             return;
         }
         if (!visibleRequested && !(configured && owner.HasCachedAd())) return;
@@ -673,7 +673,7 @@ final class InFeedSlot {
     // otherwise only clear after MAX_CACHED_AD_AGE_MS or an app restart.
     private void HandleWatchdog() {
         if (owner.released
-                || !Ad.IsActivityUsable(owner.CurrentActivity())) {
+                || !NativeAdMob.IsActivityUsable(owner.CurrentActivity())) {
             return;
         }
         if (!IsActivityVisible(owner.CurrentActivity())) {
@@ -758,7 +758,7 @@ final class InFeedSlot {
                 || !visibleRequested
                 || activeEntry == null
                 || !activeEntry.actuallyVisible
-                || !Ad.IsActivityUsable(owner.CurrentActivity())) {
+                || !NativeAdMob.IsActivityUsable(owner.CurrentActivity())) {
             return;
         }
 
@@ -782,7 +782,7 @@ final class InFeedSlot {
                 || entry.visibleStartedAtMs != NO_VISIBLE_TIMER
                 || !visibleRequested
                 || !entry.actuallyVisible
-                || !Ad.IsActivityUsable(owner.CurrentActivity())) {
+                || !NativeAdMob.IsActivityUsable(owner.CurrentActivity())) {
             return;
         }
         entry.visibleStartedAtMs = SystemClock.elapsedRealtime();
@@ -830,7 +830,7 @@ final class InFeedSlot {
     private static boolean IsExpired(DisplayEntry entry) {
         return entry != null
                 && SystemClock.elapsedRealtime() - entry.loadedAtMs
-                        >= InFeed.MAX_CACHED_AD_AGE_MS;
+                        >= NativeInFeedAdMob.MAX_CACHED_AD_AGE_MS;
     }
 
     private void DestroyEntry(DisplayEntry entry) {
@@ -868,7 +868,7 @@ final class InFeedSlot {
     private String BuildFailureMessage(
             String reason
           , long retryDelayMs) {
-        String retryDescription = retryDelayMs == InFeed.NO_RETRY_SCHEDULED_MS
+        String retryDescription = retryDelayMs == NativeInFeedAdMob.NO_RETRY_SCHEDULED_MS
                 ? "not scheduled"
                 : retryDelayMs + "ms";
         return String.valueOf(reason)
@@ -882,7 +882,7 @@ final class InFeedSlot {
 
     private String DescribeRequestedRect() {
         if (rect == null) return "unavailable";
-        if (!Ad.IsActivityUsable(owner.CurrentActivity())) {
+        if (!NativeAdMob.IsActivityUsable(owner.CurrentActivity())) {
             return "["
                     + rect.xPx + "," + rect.yPx + ","
                     + rect.widthPx + "," + rect.heightPx + "]px";

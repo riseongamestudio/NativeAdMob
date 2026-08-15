@@ -15,9 +15,9 @@ import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 
-public final class OverlayPresentation
+public final class NativeOverlayAdMobPresentation
         extends Dialog
-        implements AdPresentation {
+        implements NativeAdMobPresentation {
     private static final int NON_FULLSCREEN_WINDOW_TYPE =
             WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL;
     private static final int FULLSCREEN_WINDOW_TYPE =
@@ -31,9 +31,9 @@ public final class OverlayPresentation
     private final boolean fullscreen;
     private final float heightRatio;
     private final float backgroundAlpha;
-    private OverlayContentView contentView;
+    private NativeOverlayAdMobContentView contentView;
 
-    public OverlayPresentation(
+    public NativeOverlayAdMobPresentation(
             Context context
           , com.google.android.gms.ads.nativead.NativeAd nativeAd
           , int countDownSec
@@ -68,7 +68,7 @@ public final class OverlayPresentation
                 nativeAd.getMediaContent() != null
                         && nativeAd.getMediaContent().hasVideoContent();
         int requestedPanelHeight =
-                OverlayContentView.ResolveInitialPanelHeight(
+                NativeOverlayAdMobContentView.ResolveInitialPanelHeight(
                         context
                       , fullscreen
                       , heightRatio
@@ -76,7 +76,7 @@ public final class OverlayPresentation
         Window window = getWindow();
         ConfigureWindow(window, requestedPanelHeight);
 
-        contentView = new OverlayContentView(
+        contentView = new NativeOverlayAdMobContentView(
                 context
               , nativeAd
               , countDownSec

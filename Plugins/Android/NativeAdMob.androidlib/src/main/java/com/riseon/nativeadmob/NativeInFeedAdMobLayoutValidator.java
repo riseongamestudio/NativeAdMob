@@ -16,7 +16,7 @@ import com.google.android.gms.ads.nativead.NativeAdView;
 import java.text.Normalizer;
 import java.util.ArrayList;
 
-final class InFeedLayoutValidator {
+final class NativeInFeedAdMobLayoutValidator {
     private static final String TAG = "NativeInFeedAdMob";
     private static final float MIN_VIDEO_MEDIA_DP = 120f;
     private static final int MIN_VIDEO_LONG_SIDE_PX = 256;
@@ -36,13 +36,13 @@ final class InFeedLayoutValidator {
 
     private final com.google.android.gms.ads.nativead.NativeAd nativeAd;
     private final float density;
-    private final InFeedViewFactory viewFactory;
+    private final NativeInFeedAdMobViewFactory viewFactory;
     private String lastFailureReason;
 
-    InFeedLayoutValidator(
+    NativeInFeedAdMobLayoutValidator(
             com.google.android.gms.ads.nativead.NativeAd nativeAd
           , float density
-          , InFeedViewFactory viewFactory) {
+          , NativeInFeedAdMobViewFactory viewFactory) {
         this.nativeAd = nativeAd;
         this.density = density;
         this.viewFactory = viewFactory;
@@ -50,8 +50,8 @@ final class InFeedLayoutValidator {
 
     boolean ValidateAssetGeometry(
             View rootView
-          , InFeedViewFactory.AssetViews views
-          , InFeedLayoutEngine.LayoutPlan plan
+          , NativeInFeedAdMobViewFactory.AssetViews views
+          , NativeInFeedAdMobLayoutEngine.LayoutPlan plan
           , boolean logFailure) {
         lastFailureReason = null;
         if (!(rootView instanceof ViewGroup)
@@ -268,7 +268,7 @@ final class InFeedLayoutValidator {
     private static boolean IsAllowedBadgeOverlay(
             View first
           , View second
-          , InFeedViewFactory.AssetViews views
+          , NativeInFeedAdMobViewFactory.AssetViews views
           , View adChoicesView) {
         return IsBadge(first, views, adChoicesView)
                         && !IsReadableText(second, views)
@@ -282,7 +282,7 @@ final class InFeedLayoutValidator {
     private static boolean IsAllowedScrimOverlay(
             View first
           , View second
-          , InFeedViewFactory.AssetViews views) {
+          , NativeInFeedAdMobViewFactory.AssetViews views) {
         if (views.scrim == null) return false;
 
         return first == views.media && IsInsideScrim(second, views)
@@ -291,7 +291,7 @@ final class InFeedLayoutValidator {
 
     private static boolean IsInsideScrim(
             View view
-          , InFeedViewFactory.AssetViews views) {
+          , NativeInFeedAdMobViewFactory.AssetViews views) {
         if (view == views.scrim) return true;
 
         android.view.ViewParent parent = view.getParent();
@@ -304,7 +304,7 @@ final class InFeedLayoutValidator {
 
     private static boolean IsReadableText(
             View view
-          , InFeedViewFactory.AssetViews views) {
+          , NativeInFeedAdMobViewFactory.AssetViews views) {
         return view == views.headline
                 || view == views.body
                 || view == views.advertiser
@@ -314,7 +314,7 @@ final class InFeedLayoutValidator {
 
     private static boolean IsBadge(
             View view
-          , InFeedViewFactory.AssetViews views
+          , NativeInFeedAdMobViewFactory.AssetViews views
           , View adChoicesView) {
         return view == views.attribution || view == adChoicesView;
     }
@@ -322,7 +322,7 @@ final class InFeedLayoutValidator {
     long GeometrySignature(
             View host
           , ViewGroup root
-          , InFeedViewFactory.AssetViews views) {
+          , NativeInFeedAdMobViewFactory.AssetViews views) {
         long signature = GEOMETRY_HASH_OFFSET;
         signature = MixGeometry(signature, root.getWidth());
         signature = MixGeometry(signature, root.getHeight());
@@ -631,7 +631,7 @@ final class InFeedLayoutValidator {
 
     private static View ResolveAdChoicesView(
             ViewGroup root
-          , InFeedViewFactory.AssetViews views) {
+          , NativeInFeedAdMobViewFactory.AssetViews views) {
         if (root instanceof NativeAdView) {
             View sdkAdChoices =
                     ((NativeAdView) root).getAdChoicesView();

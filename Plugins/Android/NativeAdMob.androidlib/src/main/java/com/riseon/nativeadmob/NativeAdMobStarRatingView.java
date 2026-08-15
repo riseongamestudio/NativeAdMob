@@ -7,7 +7,7 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.view.View;
 
-final class StarRatingView extends View {
+final class NativeAdMobStarRatingView extends View {
     private static final String EMPTY_STAR_COLOR = "#66FFFFFF";
     private static final String FILLED_STAR_COLOR = "#FFFFC107";
     private static final int STAR_COUNT = 5;
@@ -22,7 +22,7 @@ final class StarRatingView extends View {
     private final float density;
     private float rating;
 
-    StarRatingView(Context context) {
+    NativeAdMobStarRatingView(Context context) {
         super(context);
         density = context.getResources().getDisplayMetrics().density;
         emptyPaint.setColor(Color.parseColor(EMPTY_STAR_COLOR));

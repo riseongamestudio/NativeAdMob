@@ -12,7 +12,7 @@ import com.google.android.gms.ads.MediaContent;
 
 import java.util.ArrayList;
 
-final class InFeedLayoutEngine {
+final class NativeInFeedAdMobLayoutEngine {
     static final int TEMPLATE_COMPACT_ROW = 0;
     static final int TEMPLATE_COMPACT_COLUMN = 1;
     static final int TEMPLATE_MEDIA_LEFT = 2;
@@ -110,14 +110,14 @@ final class InFeedLayoutEngine {
     // re-applies them to a cached tree, so one tree serves the whole scale
     // ladder instead of a fresh build per attempt.
     private static final class CachedProbeLayout {
-        final InFeedViewFactory.ProbeLayout probe;
+        final NativeInFeedAdMobViewFactory.ProbeLayout probe;
         final boolean showBody;
         final boolean showAdvertiser;
         final boolean showRating;
         final boolean showIcon;
 
         CachedProbeLayout(
-                InFeedViewFactory.ProbeLayout probe
+                NativeInFeedAdMobViewFactory.ProbeLayout probe
               , LayoutPlan plan) {
             this.probe = probe;
             showBody = plan.showBody;
@@ -132,20 +132,20 @@ final class InFeedLayoutEngine {
     private int requestedY;
     private final int requestedWidth;
     private final int requestedHeight;
-    private final InFeedViewFactory viewFactory;
-    private final InFeedLayoutValidator validator;
+    private final NativeInFeedAdMobViewFactory viewFactory;
+    private final NativeInFeedAdMobLayoutValidator validator;
     private final ArrayList<CachedProbeLayout> probeLayouts =
             new ArrayList<>();
     private final String[] rejectionReasons = new String[TEMPLATE_COUNT];
 
-    InFeedLayoutEngine(
+    NativeInFeedAdMobLayoutEngine(
             com.google.android.gms.ads.nativead.NativeAd nativeAd
           , int requestedX
           , int requestedY
           , int requestedWidth
           , int requestedHeight
-          , InFeedViewFactory viewFactory
-          , InFeedLayoutValidator validator) {
+          , NativeInFeedAdMobViewFactory viewFactory
+          , NativeInFeedAdMobLayoutValidator validator) {
         this.nativeAd = nativeAd;
         this.requestedX = requestedX;
         this.requestedY = requestedY;
@@ -578,7 +578,7 @@ final class InFeedLayoutEngine {
             plan.textScale = TEXT_LADDER_SCALES[rung];
             plan.mediaWidth = baseMediaWidth;
             plan.mediaHeight = baseMediaHeight;
-            InFeedViewFactory.ProbeLayout probeLayout =
+            NativeInFeedAdMobViewFactory.ProbeLayout probeLayout =
                     GetProbeLayout(plan);
             viewFactory.ConfigureProbeLayout(probeLayout, plan);
             View finalProbe = probeLayout.root;
@@ -696,7 +696,7 @@ final class InFeedLayoutEngine {
 
     private int ShrinkImageTopToFitHeight(
             LayoutPlan plan
-          , InFeedViewFactory.ProbeLayout probeLayout
+          , NativeInFeedAdMobViewFactory.ProbeLayout probeLayout
           , int width
           , int desiredHeight
           , int originalNaturalHeight) {
@@ -843,7 +843,7 @@ final class InFeedLayoutEngine {
 
     private void NudgeCutTextsWhole(
             View probeRoot
-          , InFeedViewFactory.AssetViews views
+          , NativeInFeedAdMobViewFactory.AssetViews views
           , LayoutPlan plan
           , int width
           , int height) {
@@ -900,10 +900,10 @@ final class InFeedLayoutEngine {
                 < text.getText().length();
     }
 
-    private InFeedViewFactory.ProbeLayout GetProbeLayout(
+    private NativeInFeedAdMobViewFactory.ProbeLayout GetProbeLayout(
             LayoutPlan plan) {
         for (CachedProbeLayout cached : probeLayouts) {
-            InFeedViewFactory.ProbeLayout probe = cached.probe;
+            NativeInFeedAdMobViewFactory.ProbeLayout probe = cached.probe;
             if (probe.template == plan.template
                     && probe.tier == plan.tier
                     && probe.showMedia == plan.showMedia
@@ -916,7 +916,7 @@ final class InFeedLayoutEngine {
             }
         }
 
-        InFeedViewFactory.ProbeLayout probe =
+        NativeInFeedAdMobViewFactory.ProbeLayout probe =
                 viewFactory.CreateProbe(plan);
         probeLayouts.add(new CachedProbeLayout(probe, plan));
         return probe;
@@ -1053,7 +1053,7 @@ final class InFeedLayoutEngine {
         int bestNaturalHeight = plan.measuredContentHeight;
         double low = 1.0;
         double high = maxScale;
-        InFeedViewFactory.ProbeLayout probe = GetProbeLayout(plan);
+        NativeInFeedAdMobViewFactory.ProbeLayout probe = GetProbeLayout(plan);
 
         for (int iteration = 0;
              iteration < MEDIA_EXPANSION_ITERATIONS;

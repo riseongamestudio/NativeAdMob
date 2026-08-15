@@ -22,8 +22,8 @@ import com.google.android.gms.ads.nativead.NativeAdView;
 
 import java.util.ArrayList;
 
-final class InFeedPresentation extends FrameLayout
-        implements AdPresentation {
+final class NativeInFeedAdMobPresentation extends FrameLayout
+        implements NativeAdMobPresentation {
     private static final String TAG = "NativeInFeedAdMob";
     private static final int MIN_STABLE_LAYOUT_PASSES = 3;
     private static final long MIN_FINAL_LAYOUT_OBSERVATION_MS = 80L;
@@ -44,16 +44,16 @@ final class InFeedPresentation extends FrameLayout
     private final int requestedWidth;
     private final int requestedHeight;
     private final float backgroundAlpha;
-    private final AdPresentation.Listener listener;
-    private final InFeedViewFactory viewFactory;
-    private final InFeedLayoutValidator validator;
-    private final InFeedLayoutEngine layoutEngine;
-    private final ArrayList<InFeedLayoutEngine.LayoutPlan>
+    private final NativeAdMobPresentation.Listener listener;
+    private final NativeInFeedAdMobViewFactory viewFactory;
+    private final NativeInFeedAdMobLayoutValidator validator;
+    private final NativeInFeedAdMobLayoutEngine layoutEngine;
+    private final ArrayList<NativeInFeedAdMobLayoutEngine.LayoutPlan>
             layoutPlans = new ArrayList<>();
 
     private NativeAdView nativeAdView;
-    private InFeedViewFactory.AssetViews boundViews;
-    private InFeedLayoutEngine.LayoutPlan activePlan;
+    private NativeInFeedAdMobViewFactory.AssetViews boundViews;
+    private NativeInFeedAdMobLayoutEngine.LayoutPlan activePlan;
     private Drawable mainImage;
     private int nextLayoutPlanIndex;
     private String lastLayoutFailure;
@@ -79,7 +79,7 @@ final class InFeedPresentation extends FrameLayout
     private boolean clickCommitted;
     private String failureMessage;
 
-    InFeedPresentation(
+    NativeInFeedAdMobPresentation(
             Activity activity
           , com.google.android.gms.ads.nativead.NativeAd nativeAd
           , int xPx
@@ -87,7 +87,7 @@ final class InFeedPresentation extends FrameLayout
           , int widthPx
           , int heightPx
           , float backgroundAlpha
-          , AdPresentation.Listener listener) {
+          , NativeAdMobPresentation.Listener listener) {
         super(activity);
         this.activity = activity;
         this.nativeAd = nativeAd;
@@ -100,16 +100,16 @@ final class InFeedPresentation extends FrameLayout
 
         float density =
                 activity.getResources().getDisplayMetrics().density;
-        viewFactory = new InFeedViewFactory(
+        viewFactory = new NativeInFeedAdMobViewFactory(
                 activity
               , nativeAd
               , density
               , Math.min(widthPx, heightPx));
-        validator = new InFeedLayoutValidator(
+        validator = new NativeInFeedAdMobLayoutValidator(
                 nativeAd
               , density
               , viewFactory);
-        layoutEngine = new InFeedLayoutEngine(
+        layoutEngine = new NativeInFeedAdMobLayoutEngine(
                 nativeAd
               , xPx
               , yPx
@@ -392,11 +392,11 @@ final class InFeedPresentation extends FrameLayout
     private boolean ActivateNextLayoutPlan() {
         DestroyNativeAdView();
         while (nextLayoutPlanIndex < layoutPlans.size()) {
-            InFeedLayoutEngine.LayoutPlan plan =
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan =
                     layoutPlans.get(nextLayoutPlanIndex);
             ++nextLayoutPlanIndex;
             try {
-                InFeedViewFactory.NativeAdViewResult viewResult =
+                NativeInFeedAdMobViewFactory.NativeAdViewResult viewResult =
                         viewFactory.BuildNativeAdView(plan, mainImage);
                 nativeAdView = viewResult.nativeAdView;
                 boundViews = viewResult.assetViews;
@@ -536,11 +536,11 @@ final class InFeedPresentation extends FrameLayout
             return false;
         }
 
-        int actualX = InFeedLayoutEngine.Clamp(
+        int actualX = NativeInFeedAdMobLayoutEngine.Clamp(
                 requestedX
               , 0
               , rootWidth - activePlan.width);
-        int actualY = InFeedLayoutEngine.Clamp(
+        int actualY = NativeInFeedAdMobLayoutEngine.Clamp(
                 requestedY
               , 0
               , rootHeight - activePlan.height);
@@ -622,7 +622,7 @@ final class InFeedPresentation extends FrameLayout
                         if (!valid) {
                             long invalidGeometrySignature =
                                     validator.GeometrySignature(
-                                            InFeedPresentation.this
+                                            NativeInFeedAdMobPresentation.this
                                           , nativeAdView
                                           , boundViews);
                             if (invalidGeometrySignature
@@ -643,7 +643,7 @@ final class InFeedPresentation extends FrameLayout
                             if (!invalidObservationComplete) {
                                 stablePasses = 0;
                                 lastGeometrySignature = Long.MIN_VALUE;
-                                InFeedPresentation.this
+                                NativeInFeedAdMobPresentation.this
                                         .RequestObservationPass();
                                 return true;
                             }
@@ -671,7 +671,7 @@ final class InFeedPresentation extends FrameLayout
 
                         long geometrySignature =
                                 validator.GeometrySignature(
-                                        InFeedPresentation.this
+                                        NativeInFeedAdMobPresentation.this
                                       , nativeAdView
                                       , boundViews);
                         if (geometrySignature == lastGeometrySignature) {
@@ -701,7 +701,7 @@ final class InFeedPresentation extends FrameLayout
                                                 + "become stable");
                                 return true;
                             }
-                            InFeedPresentation.this
+                            NativeInFeedAdMobPresentation.this
                                     .RequestObservationPass();
                             return true;
                         }
@@ -924,7 +924,7 @@ final class InFeedPresentation extends FrameLayout
     }
 
     private void LogAdjustmentIfNeeded(
-            InFeedLayoutEngine.LayoutPlan plan
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan
           , int actualX
           , int actualY) {
         if (actualX == requestedX
@@ -941,12 +941,12 @@ final class InFeedPresentation extends FrameLayout
                         + "] actual=[" + actualX + "," + actualY + ","
                         + plan.width + "," + plan.height
                         + "] template="
-                        + InFeedLayoutEngine.TemplateName(
+                        + NativeInFeedAdMobLayoutEngine.TemplateName(
                                 plan.template)
                         + " tier="
-                        + InFeedLayoutEngine.TierName(plan.tier)
+                        + NativeInFeedAdMobLayoutEngine.TierName(plan.tier)
                         + " media="
-                        + InFeedLayoutEngine.MediaName(plan));
+                        + NativeInFeedAdMobLayoutEngine.MediaName(plan));
     }
 
     private boolean Fail(String message) {
@@ -982,11 +982,11 @@ final class InFeedPresentation extends FrameLayout
     }
 
     private static String DescribePlan(
-            InFeedLayoutEngine.LayoutPlan plan) {
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         if (plan == null) return "none";
-        return InFeedLayoutEngine.TemplateName(plan.template)
-                + "/" + InFeedLayoutEngine.TierName(plan.tier)
-                + "/" + InFeedLayoutEngine.MediaName(plan)
+        return NativeInFeedAdMobLayoutEngine.TemplateName(plan.template)
+                + "/" + NativeInFeedAdMobLayoutEngine.TierName(plan.tier)
+                + "/" + NativeInFeedAdMobLayoutEngine.MediaName(plan)
                 + "/icon=" + plan.showIcon
                 + "/body=" + plan.showBody
                 + "/advertiser=" + plan.showAdvertiser

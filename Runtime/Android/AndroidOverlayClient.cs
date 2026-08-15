@@ -4,7 +4,7 @@ using UnityEngine.Android;
 
 namespace RiseOn.NativeAdMob {
     internal sealed class AndroidOverlayClient : IOverlayClient {
-        private const string JAVA_CLASS_NAME               = "com.riseon.nativeadmob.Overlay";
+        private const string JAVA_CLASS_NAME               = "com.riseon.nativeadmob.NativeOverlayAdMob";
         private const string JAVA_SET_LISTENER_METHOD      = "SetListener";
         private const string JAVA_CONFIGURE_METHOD         = "Configure";
         private const string JAVA_SET_COUNTDOWN_SEC_METHOD = "SetCountdownSec";
@@ -16,8 +16,8 @@ namespace RiseOn.NativeAdMob {
         private readonly IOverlayCallbacks callbacks;
         private AndroidJavaObject javaObject;
         // Anchor the proxies while the Java side holds them.
-        private AdLoadListenerProxy listener;
-        private AdCompletedListenerProxy activeShowCompleted;
+        private NativeAdMobLoadListenerProxy listener;
+        private NativeAdMobCompletedListenerProxy activeShowCompleted;
 
         internal AndroidOverlayClient(
             OverlaySettings settings
@@ -34,7 +34,7 @@ namespace RiseOn.NativeAdMob {
               , settings.NumberOppositeSide
               , settings.HeightRatio
               , settings.BackgroundAlpha);
-            listener = new AdLoadListenerProxy(callbacks);
+            listener = new NativeAdMobLoadListenerProxy(callbacks);
             javaObject.Call(
                 JAVA_SET_LISTENER_METHOD
               , new object[] { listener });
@@ -51,7 +51,7 @@ namespace RiseOn.NativeAdMob {
         }
 
         public void ShowAd(int showId) {
-            var completedListener = new AdCompletedListenerProxy(
+            var completedListener = new NativeAdMobCompletedListenerProxy(
                 (errorMessage, adConsumed) =>
                     callbacks.OnShowCompleted(
                         showId

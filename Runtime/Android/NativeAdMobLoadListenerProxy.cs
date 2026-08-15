@@ -4,20 +4,25 @@ namespace RiseOn.NativeAdMob {
     // The interface and method names must match the Java side exactly:
     // AndroidJavaProxy dispatches by name. Callbacks arrive on JNI threads;
     // the core wrapper marshals and gates them.
-    internal sealed class InFeedListenerProxy : AndroidJavaProxy {
-        private const string JAVA_LISTENER_CLASS_NAME = "com.riseon.nativeadmob.InFeedListener";
+    internal sealed class NativeAdMobLoadListenerProxy : AndroidJavaProxy {
+        private const string JAVA_LISTENER_CLASS_NAME = "com.riseon.nativeadmob.NativeAdMobLoadListener";
 
-        private readonly IInFeedCallbacks callbacks;
+        private readonly IOverlayCallbacks callbacks;
 
-        internal InFeedListenerProxy(IInFeedCallbacks callbacks)
+        internal NativeAdMobLoadListenerProxy(IOverlayCallbacks callbacks)
             : base(JAVA_LISTENER_CLASS_NAME) {
             this.callbacks = callbacks;
         }
 
-        public void OnLoadingStarted() => callbacks.OnLoadingStarted();
+        public void OnStateChanged(bool isReady, bool isLoading)
+            => callbacks.OnStateChanged(isReady, isLoading);
+
+        public void OnShowNotReady() => callbacks.OnShowNotReady();
 
         public void OnLoadingCompleted(int errorCode, string errorMessage)
             => callbacks.OnLoadingCompleted(errorCode, errorMessage);
+
+        public void OnLoadingStarted() => callbacks.OnLoadingStarted();
 
         public void OnAdPaid(
             string adSource
@@ -32,19 +37,9 @@ namespace RiseOn.NativeAdMob {
               , currencyCode
               , (AdValuePrecision)precision));
 
-        public void OnSlotDisplayed(int slotIndex)
-            => callbacks.OnSlotDisplayed(slotIndex);
+        public void OnDisplayed() => callbacks.OnDisplayed();
 
-        public void OnSlotShowNotReady(int slotIndex)
-            => callbacks.OnSlotShowNotReady(slotIndex);
-
-        public void OnSlotPresentationFailed(
-            int slotIndex
-          , int errorCode
-          , string errorMessage)
-            => callbacks.OnSlotPresentationFailed(
-                slotIndex
-              , errorCode
-              , errorMessage);
+        public void OnPresentationFailed(int errorCode, string errorMessage)
+            => callbacks.OnPresentationFailed(errorCode, errorMessage);
     }
 }

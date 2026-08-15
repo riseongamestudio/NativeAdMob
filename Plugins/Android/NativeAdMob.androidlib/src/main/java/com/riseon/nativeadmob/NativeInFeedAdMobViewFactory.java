@@ -27,8 +27,8 @@ import com.google.android.gms.ads.nativead.NativeAdView;
 
 import java.util.List;
 
-final class InFeedViewFactory {
-    private static final String ATTRIBUTION_TEXT = "Ad";
+final class NativeInFeedAdMobViewFactory {
+    private static final String ATTRIBUTION_TEXT = "NativeAdMob";
     private static final String ATTRIBUTION_BACKGROUND_COLOR = "#FFFFC107";
     private static final String SECONDARY_TEXT_COLOR = "#CCFFFFFF";
     private static final String RATING_TEXT_COLOR = "#FFFFC107";
@@ -177,7 +177,7 @@ final class InFeedViewFactory {
     private final float density;
     private final int slotShortSidePx;
 
-    InFeedViewFactory(
+    NativeInFeedAdMobViewFactory(
             Activity activity
           , com.google.android.gms.ads.nativead.NativeAd nativeAd
           , float density
@@ -189,7 +189,7 @@ final class InFeedViewFactory {
     }
 
     ProbeLayout CreateProbe(
-            InFeedLayoutEngine.LayoutPlan plan) {
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         ProbeLayout probe = new ProbeLayout();
         probe.template = plan.template;
         probe.tier = plan.tier;
@@ -209,7 +209,7 @@ final class InFeedViewFactory {
 
     void ConfigureProbeLayout(
             ProbeLayout probe
-          , InFeedLayoutEngine.LayoutPlan plan) {
+          , NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         ConfigureInsetContent(probe.views, plan);
         ConfigureBadgeOverlays(probe.views, plan);
         ApplyPlanTextConfiguration(probe.views, plan);
@@ -235,7 +235,7 @@ final class InFeedViewFactory {
     // of the probe cache key.
     private void ApplyPlanTextConfiguration(
             AssetViews views
-          , InFeedLayoutEngine.LayoutPlan plan) {
+          , NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         if (views.headline != null) {
             views.headline.setTextSize(HeadlineSp(plan));
             if (!plan.renderVideo) {
@@ -265,13 +265,13 @@ final class InFeedViewFactory {
     }
 
     NativeAdViewResult BuildNativeAdView(
-            InFeedLayoutEngine.LayoutPlan plan
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan
           , Drawable mainImage) {
         NativeAdView nativeAdView = new NativeAdView(activity);
         boolean completed = false;
         try {
             // Left clickable so a tap anywhere in the slot reaches the
-            // advertiser, matching OverlayContentView, which never
+            // advertiser, matching NativeOverlayAdMobContentView, which never
             // takes the click off its own NativeAdView.
             AssetViews views = new AssetViews();
             View content = BuildContent(plan, false, views, mainImage);
@@ -389,16 +389,16 @@ final class InFeedViewFactory {
 
     int MediaSizeForTier(int tier) {
         if (HasVideoContent()) {
-            if (tier == InFeedLayoutEngine.TIER_COMPACT) {
+            if (tier == NativeInFeedAdMobLayoutEngine.TIER_COMPACT) {
                 return Dp(MIN_VIDEO_MEDIA_SIZE_DP);
             }
-            if (tier == InFeedLayoutEngine.TIER_REGULAR) {
+            if (tier == NativeInFeedAdMobLayoutEngine.TIER_REGULAR) {
                 return Dp(144);
             }
             return Dp(180);
         }
-        if (tier == InFeedLayoutEngine.TIER_COMPACT) return Dp(56);
-        if (tier == InFeedLayoutEngine.TIER_REGULAR) return Dp(88);
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_COMPACT) return Dp(56);
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_REGULAR) return Dp(88);
         return Dp(120);
     }
 
@@ -410,39 +410,39 @@ final class InFeedViewFactory {
     }
 
     int GapForTier(int tier) {
-        if (tier == InFeedLayoutEngine.TIER_COMPACT) return Dp(1);
-        if (tier == InFeedLayoutEngine.TIER_REGULAR) return Dp(3);
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_COMPACT) return Dp(1);
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_REGULAR) return Dp(3);
         return Dp(5);
     }
 
     int PreferredTier(int width, int height) {
         int shortSide = Math.min(width, height);
         if (shortSide >= Dp(280)) {
-            return InFeedLayoutEngine.TIER_ROOMY;
+            return NativeInFeedAdMobLayoutEngine.TIER_ROOMY;
         }
         if (shortSide >= Dp(150)) {
-            return InFeedLayoutEngine.TIER_REGULAR;
+            return NativeInFeedAdMobLayoutEngine.TIER_REGULAR;
         }
-        return InFeedLayoutEngine.TIER_COMPACT;
+        return NativeInFeedAdMobLayoutEngine.TIER_COMPACT;
     }
 
     int MinimumMediaLeftTextSlotWidth(
-            InFeedLayoutEngine.LayoutPlan plan) {
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         int minimumDp;
         if (plan.renderVideo) {
-            if (plan.tier == InFeedLayoutEngine.TIER_ROOMY) {
+            if (plan.tier == NativeInFeedAdMobLayoutEngine.TIER_ROOMY) {
                 minimumDp = VIDEO_RAIL_MIN_WIDTH_ROOMY_DP;
             } else if (plan.tier
-                    == InFeedLayoutEngine.TIER_REGULAR) {
+                    == NativeInFeedAdMobLayoutEngine.TIER_REGULAR) {
                 minimumDp = VIDEO_RAIL_MIN_WIDTH_REGULAR_DP;
             } else {
                 minimumDp = VIDEO_RAIL_MIN_WIDTH_COMPACT_DP;
             }
         } else if (plan.tier
-                == InFeedLayoutEngine.TIER_ROOMY) {
+                == NativeInFeedAdMobLayoutEngine.TIER_ROOMY) {
             minimumDp = MEDIA_LEFT_TEXT_WIDTH_ROOMY_DP;
         } else if (plan.tier
-                == InFeedLayoutEngine.TIER_REGULAR) {
+                == NativeInFeedAdMobLayoutEngine.TIER_REGULAR) {
             minimumDp = MEDIA_LEFT_TEXT_WIDTH_REGULAR_DP;
         } else {
             minimumDp = MEDIA_LEFT_TEXT_WIDTH_COMPACT_DP;
@@ -455,7 +455,7 @@ final class InFeedViewFactory {
     }
 
     private View BuildContent(
-            InFeedLayoutEngine.LayoutPlan plan
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan
           , boolean probe
           , AssetViews outViews
           , Drawable mainImage) {
@@ -470,7 +470,7 @@ final class InFeedViewFactory {
         outer.setPadding(0, 0, 0, 0);
 
         if (plan.template
-                == InFeedLayoutEngine.TEMPLATE_MEDIA_BACKGROUND) {
+                == NativeInFeedAdMobLayoutEngine.TEMPLATE_MEDIA_BACKGROUND) {
             View backgroundMedia = CreateMediaView(
                     plan
                   , views
@@ -532,7 +532,7 @@ final class InFeedViewFactory {
         }
 
         if (plan.template
-                == InFeedLayoutEngine.TEMPLATE_COMPACT_ROW) {
+                == NativeInFeedAdMobLayoutEngine.TEMPLATE_COMPACT_ROW) {
             LinearLayout row = new LinearLayout(activity);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
@@ -563,7 +563,7 @@ final class InFeedViewFactory {
         }
 
         if (plan.template
-                == InFeedLayoutEngine.TEMPLATE_COMPACT_COLUMN) {
+                == NativeInFeedAdMobLayoutEngine.TEMPLATE_COMPACT_COLUMN) {
             LinearLayout content = BuildHeadlineAndActionStack(
                     views
                   , plan
@@ -586,7 +586,7 @@ final class InFeedViewFactory {
               , probe
               , mainImage);
         if (plan.template
-                == InFeedLayoutEngine.TEMPLATE_MEDIA_LEFT) {
+                == NativeInFeedAdMobLayoutEngine.TEMPLATE_MEDIA_LEFT) {
             if (plan.renderVideo) {
                 BuildVideoMediaLeftContent(
                         outer
@@ -628,7 +628,7 @@ final class InFeedViewFactory {
         }
 
         if (plan.template
-                == InFeedLayoutEngine.TEMPLATE_MEDIA_RIGHT) {
+                == NativeInFeedAdMobLayoutEngine.TEMPLATE_MEDIA_RIGHT) {
             LinearLayout row = new LinearLayout(activity);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
@@ -698,14 +698,14 @@ final class InFeedViewFactory {
             FrameLayout root
           , LinearLayout outer
           , AssetViews views
-          , InFeedLayoutEngine.LayoutPlan plan) {
+          , NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         boolean fillsAvailableHeight =
                 plan.template
-                        == InFeedLayoutEngine.TEMPLATE_COMPACT_COLUMN
+                        == NativeInFeedAdMobLayoutEngine.TEMPLATE_COMPACT_COLUMN
                 || plan.template
-                        == InFeedLayoutEngine.TEMPLATE_MEDIA_TOP
+                        == NativeInFeedAdMobLayoutEngine.TEMPLATE_MEDIA_TOP
                 || plan.template
-                        == InFeedLayoutEngine
+                        == NativeInFeedAdMobLayoutEngine
                                 .TEMPLATE_MEDIA_BACKGROUND;
         root.addView(
                 outer
@@ -749,11 +749,11 @@ final class InFeedViewFactory {
 
     private void ConfigureInsetContent(
             AssetViews views
-          , InFeedLayoutEngine.LayoutPlan plan) {
+          , NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         if (views.insetContent == null) return;
 
         if (plan.template
-                    == InFeedLayoutEngine.TEMPLATE_MEDIA_TOP
+                    == NativeInFeedAdMobLayoutEngine.TEMPLATE_MEDIA_TOP
                 && plan.renderVideo) {
             views.insetContent.setPadding(
                     Dp(VIDEO_FOOTER_HORIZONTAL_PADDING_DP)
@@ -763,7 +763,7 @@ final class InFeedViewFactory {
             return;
         }
         if (plan.template
-                    == InFeedLayoutEngine.TEMPLATE_MEDIA_LEFT
+                    == NativeInFeedAdMobLayoutEngine.TEMPLATE_MEDIA_LEFT
                 && plan.renderVideo) {
             int edgePadding = Dp(VIDEO_RAIL_EDGE_PADDING_DP);
             views.insetContent.setPadding(
@@ -789,7 +789,7 @@ final class InFeedViewFactory {
 
     private void ConfigureBadgeOverlays(
             AssetViews views
-          , InFeedLayoutEngine.LayoutPlan plan) {
+          , NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         int badgeHeight = BadgeHeightPx(plan);
         int edgeInset = CONTENT_EDGE_INSET_PX;
         if (views.attribution != null) {
@@ -827,7 +827,7 @@ final class InFeedViewFactory {
     }
 
     private int BadgeHeightPx(
-            InFeedLayoutEngine.LayoutPlan plan) {
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         return Clamp(
                 Math.round(slotShortSidePx * BADGE_SHORT_SIDE_RATIO)
               , MIN_ATTRIBUTION_SIZE_PX
@@ -835,7 +835,7 @@ final class InFeedViewFactory {
     }
 
     private int AttributionWidthPx(
-            InFeedLayoutEngine.LayoutPlan plan
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan
           , int badgeHeight) {
         int desiredWidth = Math.round(
                 badgeHeight * ATTRIBUTION_ASPECT_RATIO);
@@ -852,7 +852,7 @@ final class InFeedViewFactory {
             LinearLayout outer
           , View mediaView
           , AssetViews views
-          , InFeedLayoutEngine.LayoutPlan plan
+          , NativeInFeedAdMobLayoutEngine.LayoutPlan plan
           , boolean probe) {
         int gap = GapForTier(plan.tier);
         LinearLayout row = new LinearLayout(activity);
@@ -909,7 +909,7 @@ final class InFeedViewFactory {
 
     private LinearLayout BuildVideoSideRail(
             AssetViews views
-          , InFeedLayoutEngine.LayoutPlan plan
+          , NativeInFeedAdMobLayoutEngine.LayoutPlan plan
           , boolean probe) {
         int gap = GapForTier(plan.tier);
         LinearLayout rail = new LinearLayout(activity);
@@ -952,7 +952,7 @@ final class InFeedViewFactory {
 
     private LinearLayout BuildVideoFooterRow(
             AssetViews views
-          , InFeedLayoutEngine.LayoutPlan plan) {
+          , NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         int gap = GapForTier(plan.tier);
         LinearLayout footer = new LinearLayout(activity);
         footer.setOrientation(LinearLayout.HORIZONTAL);
@@ -987,7 +987,7 @@ final class InFeedViewFactory {
 
     private LinearLayout BuildIdentityAndText(
             AssetViews views
-          , InFeedLayoutEngine.LayoutPlan plan
+          , NativeInFeedAdMobLayoutEngine.LayoutPlan plan
           , boolean probe) {
         int gap = GapForTier(plan.tier);
         LinearLayout content = new LinearLayout(activity);
@@ -1045,7 +1045,7 @@ final class InFeedViewFactory {
 
     private LinearLayout BuildHeadlineAndActionStack(
             AssetViews views
-          , InFeedLayoutEngine.LayoutPlan plan
+          , NativeInFeedAdMobLayoutEngine.LayoutPlan plan
           , boolean probe) {
         int gap = GapForTier(plan.tier);
         LinearLayout content = new LinearLayout(activity);
@@ -1149,7 +1149,7 @@ final class InFeedViewFactory {
 
     private LinearLayout BuildTextStack(
             AssetViews views
-          , InFeedLayoutEngine.LayoutPlan plan) {
+          , NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         LinearLayout texts = new LinearLayout(activity);
         texts.setOrientation(LinearLayout.VERTICAL);
         texts.setGravity(Gravity.CENTER_VERTICAL);
@@ -1171,7 +1171,7 @@ final class InFeedViewFactory {
     private void AddBodyAndOptional(
             LinearLayout parent
           , AssetViews views
-          , InFeedLayoutEngine.LayoutPlan plan) {
+          , NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         String bodyValue = nativeAd.getBody();
         if (plan.showBody && !TextUtils.isEmpty(bodyValue)) {
             views.body = CreateText(
@@ -1227,7 +1227,7 @@ final class InFeedViewFactory {
     // so it only ever absorbs room that was going to be empty anyway.
     private View CreateIconFiller(
             AssetViews views
-          , InFeedLayoutEngine.LayoutPlan plan) {
+          , NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         if (plan.showMedia
                 || !plan.showIcon
                 || !HasRenderableIcon()) {
@@ -1327,13 +1327,13 @@ final class InFeedViewFactory {
     private void AddCallToAction(
             LinearLayout parent
           , AssetViews views
-          , InFeedLayoutEngine.LayoutPlan plan
+          , NativeInFeedAdMobLayoutEngine.LayoutPlan plan
           , int gap
           , boolean fullWidth) {
         String callToActionValue = nativeAd.getCallToAction();
         if (TextUtils.isEmpty(callToActionValue)) return;
 
-        // OverlayActivity uses Theme.Translucent.NoTitleBar.
+        // NativeOverlayAdMobActivity uses Theme.Translucent.NoTitleBar.
         // Create the in-feed CTA with the same theme instead of applying a
         // separate color or corner radius.
         views.callToAction = new CallToActionButton(
@@ -1341,7 +1341,7 @@ final class InFeedViewFactory {
                         activity
                       , android.R.style.Theme_Translucent_NoTitleBar));
         views.callToAction.setText(
-                InFeedLayoutValidator.TruncatePolicyText(
+                NativeInFeedAdMobLayoutValidator.TruncatePolicyText(
                         callToActionValue
                       , NO_POLICY_TEXT_LIMIT_UNITS));
         views.callToAction.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -1397,7 +1397,7 @@ final class InFeedViewFactory {
     }
 
     private View CreateMediaView(
-            InFeedLayoutEngine.LayoutPlan plan
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan
           , AssetViews views
           , boolean probe
           , Drawable mainImage) {
@@ -1421,7 +1421,7 @@ final class InFeedViewFactory {
         }
 
         // Still fallback, drawn through a child of the MediaView exactly as
-        // OverlayContentView does. Handing MediaContent to this view
+        // NativeOverlayAdMobContentView does. Handing MediaContent to this view
         // instead would let a video creative auto-play in a slot that is below
         // the video size minimum.
         if (mainImage == null) {
@@ -1475,22 +1475,22 @@ final class InFeedViewFactory {
     }
 
     private int HeadlineMaxLines(
-            InFeedLayoutEngine.LayoutPlan plan) {
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         if (plan.renderVideo) return 1;
-        if (InFeedLayoutEngine.IsMediaSide(plan.template)) {
-            return plan.tier == InFeedLayoutEngine.TIER_ROOMY
+        if (NativeInFeedAdMobLayoutEngine.IsMediaSide(plan.template)) {
+            return plan.tier == NativeInFeedAdMobLayoutEngine.TIER_ROOMY
                     ? 3
                     : 2;
         }
         if (plan.template
-                == InFeedLayoutEngine.TEMPLATE_MEDIA_TOP) {
-            return plan.tier == InFeedLayoutEngine.TIER_COMPACT
+                == NativeInFeedAdMobLayoutEngine.TEMPLATE_MEDIA_TOP) {
+            return plan.tier == NativeInFeedAdMobLayoutEngine.TIER_COMPACT
                     ? 2
                     : 3;
         }
         if (plan.template
-                == InFeedLayoutEngine.TEMPLATE_COMPACT_COLUMN) {
-            return plan.tier == InFeedLayoutEngine.TIER_ROOMY
+                == NativeInFeedAdMobLayoutEngine.TEMPLATE_COMPACT_COLUMN) {
+            return plan.tier == NativeInFeedAdMobLayoutEngine.TIER_ROOMY
                     ? 3
                     : 2;
         }
@@ -1498,45 +1498,45 @@ final class InFeedViewFactory {
     }
 
     private int BodyMaxLines(
-            InFeedLayoutEngine.LayoutPlan plan) {
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         if (plan.renderVideo) return 0;
-        if (InFeedLayoutEngine.IsMediaSide(plan.template)) {
+        if (NativeInFeedAdMobLayoutEngine.IsMediaSide(plan.template)) {
             if (ShouldPrioritizeMediaSize(plan)) return 1;
-            return plan.tier == InFeedLayoutEngine.TIER_ROOMY
+            return plan.tier == NativeInFeedAdMobLayoutEngine.TIER_ROOMY
                     ? 3
                     : 2;
         }
         if (plan.template
-                == InFeedLayoutEngine.TEMPLATE_MEDIA_TOP
+                == NativeInFeedAdMobLayoutEngine.TEMPLATE_MEDIA_TOP
                 || plan.template
-                        == InFeedLayoutEngine.TEMPLATE_COMPACT_COLUMN) {
-            return plan.tier == InFeedLayoutEngine.TIER_COMPACT
+                        == NativeInFeedAdMobLayoutEngine.TEMPLATE_COMPACT_COLUMN) {
+            return plan.tier == NativeInFeedAdMobLayoutEngine.TIER_COMPACT
                     ? 2
                     : 3;
         }
-        return plan.tier == InFeedLayoutEngine.TIER_COMPACT
+        return plan.tier == NativeInFeedAdMobLayoutEngine.TIER_COMPACT
                 ? 1
                 : 2;
     }
 
     private int AdvertiserMaxLines(
-            InFeedLayoutEngine.LayoutPlan plan) {
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         if (plan.renderVideo) return 0;
-        if (InFeedLayoutEngine.IsMediaSide(plan.template)) {
+        if (NativeInFeedAdMobLayoutEngine.IsMediaSide(plan.template)) {
             if (ShouldPrioritizeMediaSize(plan)) return 1;
-            return plan.tier == InFeedLayoutEngine.TIER_ROOMY
+            return plan.tier == NativeInFeedAdMobLayoutEngine.TIER_ROOMY
                     ? 2
                     : 1;
         }
-        return plan.tier == InFeedLayoutEngine.TIER_ROOMY
+        return plan.tier == NativeInFeedAdMobLayoutEngine.TIER_ROOMY
                 ? 2
                 : 1;
     }
 
     private boolean ShouldPrioritizeMediaSize(
-            InFeedLayoutEngine.LayoutPlan plan) {
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         if (plan.renderVideo) return true;
-        if (!InFeedLayoutEngine.IsMediaSide(plan.template)) {
+        if (!NativeInFeedAdMobLayoutEngine.IsMediaSide(plan.template)) {
             return false;
         }
 
@@ -1544,7 +1544,7 @@ final class InFeedViewFactory {
         int constrainedHeight = plan.mediaHeight + Dp(12);
         return plan.mediaWidth <= compactThreshold
                 || plan.height <= constrainedHeight
-                || plan.tier == InFeedLayoutEngine.TIER_COMPACT;
+                || plan.tier == NativeInFeedAdMobLayoutEngine.TIER_COMPACT;
     }
 
     private TextView CreateText(
@@ -1554,7 +1554,7 @@ final class InFeedViewFactory {
           , int policyTextLimitUnits) {
         TextView text = new TextView(activity);
         text.setText(
-                InFeedLayoutValidator.TruncatePolicyText(
+                NativeInFeedAdMobLayoutValidator.TruncatePolicyText(
                         value
                       , policyTextLimitUnits));
         text.setTextColor(Color.WHITE);
@@ -1568,26 +1568,26 @@ final class InFeedViewFactory {
 
 
     private int IconSizeForTier(int tier) {
-        if (tier == InFeedLayoutEngine.TIER_COMPACT) return Dp(24);
-        if (tier == InFeedLayoutEngine.TIER_REGULAR) return Dp(36);
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_COMPACT) return Dp(24);
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_REGULAR) return Dp(36);
         return Dp(48);
     }
 
     private int VideoRailIconSizeForTier(int tier) {
-        if (tier == InFeedLayoutEngine.TIER_COMPACT) {
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_COMPACT) {
             return Dp(VIDEO_RAIL_ICON_COMPACT_DP);
         }
-        if (tier == InFeedLayoutEngine.TIER_REGULAR) {
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_REGULAR) {
             return Dp(VIDEO_RAIL_ICON_REGULAR_DP);
         }
         return Dp(VIDEO_RAIL_ICON_ROOMY_DP);
     }
 
     private int VideoRailCallToActionHeightForTier(int tier) {
-        if (tier == InFeedLayoutEngine.TIER_COMPACT) {
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_COMPACT) {
             return Dp(VIDEO_RAIL_CTA_HEIGHT_COMPACT_DP);
         }
-        if (tier == InFeedLayoutEngine.TIER_REGULAR) {
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_REGULAR) {
             return Dp(VIDEO_RAIL_CTA_HEIGHT_REGULAR_DP);
         }
         return Dp(VIDEO_RAIL_CTA_HEIGHT_ROOMY_DP);
@@ -1596,17 +1596,17 @@ final class InFeedViewFactory {
     // Every text size passes through the plan's scale, so a candidate that has
     // to shrink to fit shrinks as a whole and keeps its proportions.
     private float Scaled(
-            InFeedLayoutEngine.LayoutPlan plan
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan
           , float sizeSp) {
         return sizeSp * Math.max(0.1f, plan.textScale);
     }
 
     private float HeadlineSp(
-            InFeedLayoutEngine.LayoutPlan plan) {
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         return Scaled(plan, HeadlineSpForTier(plan.tier));
     }
 
-    private float BodySp(InFeedLayoutEngine.LayoutPlan plan) {
+    private float BodySp(NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         return Scaled(plan, BodySpForTier(plan.tier));
     }
 
@@ -1614,38 +1614,38 @@ final class InFeedViewFactory {
     // makes a candidate too tall - so they do not ride the scale ladder all
     // the way down with the texts that are. Below this floor they stop
     // reading as information and just dirty the layout.
-    private float OptionalSp(InFeedLayoutEngine.LayoutPlan plan) {
+    private float OptionalSp(NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         return Math.max(
                 OPTIONAL_TEXT_MIN_SP
               , Scaled(plan, OptionalSpForTier(plan.tier)));
     }
 
     private float HeadlineSpForTier(int tier) {
-        if (tier == InFeedLayoutEngine.TIER_COMPACT) return 12f;
-        if (tier == InFeedLayoutEngine.TIER_REGULAR) return 16f;
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_COMPACT) return 12f;
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_REGULAR) return 16f;
         return 17f;
     }
 
     private float BodySpForTier(int tier) {
-        if (tier == InFeedLayoutEngine.TIER_COMPACT) return 12f;
-        if (tier == InFeedLayoutEngine.TIER_REGULAR) return 13f;
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_COMPACT) return 12f;
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_REGULAR) return 13f;
         return 14f;
     }
 
     private float OptionalSpForTier(int tier) {
-        if (tier == InFeedLayoutEngine.TIER_COMPACT) return 11f;
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_COMPACT) return 11f;
         return 12f;
     }
 
     int CallToActionHeightPx(
-            InFeedLayoutEngine.LayoutPlan plan) {
+            NativeInFeedAdMobLayoutEngine.LayoutPlan plan) {
         if (plan.template
-                    == InFeedLayoutEngine.TEMPLATE_MEDIA_LEFT
+                    == NativeInFeedAdMobLayoutEngine.TEMPLATE_MEDIA_LEFT
                 && plan.renderVideo) {
             return VideoRailCallToActionHeightForTier(plan.tier);
         }
         if (plan.template
-                    == InFeedLayoutEngine.TEMPLATE_MEDIA_TOP
+                    == NativeInFeedAdMobLayoutEngine.TEMPLATE_MEDIA_TOP
                 && plan.renderVideo) {
             return Dp(VIDEO_FOOTER_CTA_HEIGHT_DP);
         }
@@ -1659,14 +1659,14 @@ final class InFeedViewFactory {
     }
 
     private int CtaVerticalPadding(int tier) {
-        if (tier == InFeedLayoutEngine.TIER_COMPACT) return Dp(1);
-        if (tier == InFeedLayoutEngine.TIER_REGULAR) return Dp(2);
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_COMPACT) return Dp(1);
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_REGULAR) return Dp(2);
         return Dp(4);
     }
 
     private int CtaHorizontalPadding(int tier) {
-        if (tier == InFeedLayoutEngine.TIER_COMPACT) return Dp(6);
-        if (tier == InFeedLayoutEngine.TIER_REGULAR) return Dp(8);
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_COMPACT) return Dp(6);
+        if (tier == NativeInFeedAdMobLayoutEngine.TIER_REGULAR) return Dp(8);
         return Dp(10);
     }
 

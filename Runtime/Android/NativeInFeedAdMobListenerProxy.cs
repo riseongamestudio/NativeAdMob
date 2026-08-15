@@ -4,25 +4,20 @@ namespace RiseOn.NativeAdMob {
     // The interface and method names must match the Java side exactly:
     // AndroidJavaProxy dispatches by name. Callbacks arrive on JNI threads;
     // the core wrapper marshals and gates them.
-    internal sealed class AdLoadListenerProxy : AndroidJavaProxy {
-        private const string JAVA_LISTENER_CLASS_NAME = "com.riseon.nativeadmob.AdLoadListener";
+    internal sealed class NativeInFeedAdMobListenerProxy : AndroidJavaProxy {
+        private const string JAVA_LISTENER_CLASS_NAME = "com.riseon.nativeadmob.NativeInFeedAdMobListener";
 
-        private readonly IOverlayCallbacks callbacks;
+        private readonly IInFeedCallbacks callbacks;
 
-        internal AdLoadListenerProxy(IOverlayCallbacks callbacks)
+        internal NativeInFeedAdMobListenerProxy(IInFeedCallbacks callbacks)
             : base(JAVA_LISTENER_CLASS_NAME) {
             this.callbacks = callbacks;
         }
 
-        public void OnStateChanged(bool isReady, bool isLoading)
-            => callbacks.OnStateChanged(isReady, isLoading);
-
-        public void OnShowNotReady() => callbacks.OnShowNotReady();
+        public void OnLoadingStarted() => callbacks.OnLoadingStarted();
 
         public void OnLoadingCompleted(int errorCode, string errorMessage)
             => callbacks.OnLoadingCompleted(errorCode, errorMessage);
-
-        public void OnLoadingStarted() => callbacks.OnLoadingStarted();
 
         public void OnAdPaid(
             string adSource
@@ -37,9 +32,19 @@ namespace RiseOn.NativeAdMob {
               , currencyCode
               , (AdValuePrecision)precision));
 
-        public void OnDisplayed() => callbacks.OnDisplayed();
+        public void OnSlotDisplayed(int slotIndex)
+            => callbacks.OnSlotDisplayed(slotIndex);
 
-        public void OnPresentationFailed(int errorCode, string errorMessage)
-            => callbacks.OnPresentationFailed(errorCode, errorMessage);
+        public void OnSlotShowNotReady(int slotIndex)
+            => callbacks.OnSlotShowNotReady(slotIndex);
+
+        public void OnSlotPresentationFailed(
+            int slotIndex
+          , int errorCode
+          , string errorMessage)
+            => callbacks.OnSlotPresentationFailed(
+                slotIndex
+              , errorCode
+              , errorMessage);
     }
 }

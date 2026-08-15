@@ -4,7 +4,7 @@ using UnityEngine.Android;
 
 namespace RiseOn.NativeAdMob {
     internal sealed class AndroidInFeedClient : IInFeedClient {
-        private const string JAVA_CLASS_NAME          = "com.riseon.nativeadmob.InFeed";
+        private const string JAVA_CLASS_NAME          = "com.riseon.nativeadmob.NativeInFeedAdMob";
         private const string JAVA_SET_LISTENER_METHOD = "SetListener";
         private const string JAVA_CONFIGURE_METHOD    = "Configure";
         private const string JAVA_SHOW_METHOD         = "Show";
@@ -14,7 +14,7 @@ namespace RiseOn.NativeAdMob {
 
         private AndroidJavaObject javaObject;
         // Anchors the proxy while the Java side holds it.
-        private InFeedListenerProxy listener;
+        private NativeInFeedAdMobListenerProxy listener;
 
         internal AndroidInFeedClient(
             NativeInFeedAdMob.Settings settings
@@ -26,7 +26,7 @@ namespace RiseOn.NativeAdMob {
               , settings.SlotCount
               , settings.CacheSize
               , settings.BackgroundAlpha);
-            listener = new InFeedListenerProxy(callbacks);
+            listener = new NativeInFeedAdMobListenerProxy(callbacks);
             javaObject.Call(
                 JAVA_SET_LISTENER_METHOD
               , new object[] { listener });

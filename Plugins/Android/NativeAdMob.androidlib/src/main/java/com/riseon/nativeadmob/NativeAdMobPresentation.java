@@ -2,7 +2,7 @@ package com.riseon.nativeadmob;
 
 // Shared adapter so the controllers never need to know whether the
 // renderer is a Dialog or a plain View.
-public interface AdPresentation {
+public interface NativeAdMobPresentation {
 
     interface Listener {
         default void OnReady() {}

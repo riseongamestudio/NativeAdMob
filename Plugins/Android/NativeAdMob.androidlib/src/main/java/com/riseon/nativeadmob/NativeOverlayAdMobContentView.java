@@ -29,7 +29,7 @@ import com.google.android.gms.ads.nativead.NativeAdView;
 
 import java.util.List;
 
-final class OverlayContentView extends FrameLayout {
+final class NativeOverlayAdMobContentView extends FrameLayout {
     private static final class SingleClickNativeAdContainer
             extends FrameLayout {
         private boolean clickCommitted;
@@ -56,7 +56,7 @@ final class OverlayContentView extends FrameLayout {
     }
 
     private static final String TAG = "NativeOverlayAdMob";
-    private static final String ATTRIBUTION_TEXT = "Ad";
+    private static final String ATTRIBUTION_TEXT = "NativeAdMob";
     private static final String SECONDARY_TEXT_COLOR = "#CCFFFFFF";
     private static final String ATTRIBUTION_BACKGROUND_COLOR = "#FFFFC107";
     private static final String TIMER_BACKGROUND_COLOR = "#66000000";
@@ -154,7 +154,7 @@ final class OverlayContentView extends FrameLayout {
     private TextView close;
     private boolean released;
 
-    OverlayContentView(
+    NativeOverlayAdMobContentView(
             Context context
           , com.google.android.gms.ads.nativead.NativeAd nativeAd
           , int countDownSec
@@ -176,7 +176,7 @@ final class OverlayContentView extends FrameLayout {
               , onClose);
     }
 
-    OverlayContentView(
+    NativeOverlayAdMobContentView(
             Context context
           , com.google.android.gms.ads.nativead.NativeAd nativeAd
           , long countDownRemainingMs
@@ -430,8 +430,8 @@ final class OverlayContentView extends FrameLayout {
         advertiser.setMaxLines(1);
         MarqueeWhenTooLong(advertiser);
 
-        StarRatingView starRating =
-                new StarRatingView(context);
+        NativeAdMobStarRatingView starRating =
+                new NativeAdMobStarRatingView(context);
         LinearLayout.LayoutParams starRatingLayoutParams =
                 new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.WRAP_CONTENT
@@ -758,7 +758,7 @@ final class OverlayContentView extends FrameLayout {
           , LinearLayout identityRow
           , TextView headline
           , TextView advertiser
-          , StarRatingView starRating
+          , NativeAdMobStarRatingView starRating
           , TextView body
           , ImageView icon
           , Button callToAction) {
@@ -1343,7 +1343,7 @@ final class OverlayContentView extends FrameLayout {
     private void BindAssets(
             TextView headline
           , TextView advertiser
-          , StarRatingView starRating
+          , NativeAdMobStarRatingView starRating
           , TextView body
           , ImageView icon
           , Button callToAction) {
