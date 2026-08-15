@@ -3,8 +3,8 @@ using System;
 using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
-    public abstract partial class Ad {
-        protected AndroidJavaObject androidNativeAd;
+    public abstract partial class NativeAdMob {
+        private protected AndroidJavaObject androidNativeAd;
         private AndroidJavaProxy androidListener;
 
         partial void AndroidCall(string methodName, object[] parameters) {

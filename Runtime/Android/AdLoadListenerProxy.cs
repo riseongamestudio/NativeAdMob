@@ -9,7 +9,7 @@ namespace RiseOn.NativeAdMob {
         private readonly int                                                  generation;
         private readonly Action<int, string>                                  onLoadingCompleted;
         private readonly Action                                               onLoadingStarted;
-        private readonly Action<string, string, double, string>               onAdPaid;
+        private readonly Action<AdValue>               onAdPaid;
         private readonly Action                                               onDisplayed;
         private readonly Action<int, string>                                  onPresentationFailed;
         private readonly Action<bool, bool>                                   onStateChanged;
@@ -20,7 +20,7 @@ namespace RiseOn.NativeAdMob {
             int generation
           , Action<int, string> onLoadingCompleted
           , Action onLoadingStarted
-          , Action<string, string, double, string> onAdPaid
+          , Action<AdValue> onAdPaid
           , Action onDisplayed
           , Action<int, string> onPresentationFailed
           , Action<bool, bool> onStateChanged
@@ -70,11 +70,17 @@ namespace RiseOn.NativeAdMob {
             string adSource
           , string adUnitId
           , double value
-          , string currencyCode) {
+          , string currencyCode
+          , int precision) {
             dispatch?.Invoke(
                 this
               , generation
-              , () => onAdPaid?.Invoke(adSource, adUnitId, value, currencyCode));
+              , () => onAdPaid?.Invoke(new AdValue(
+                    adSource
+                  , adUnitId
+                  , value
+                  , currencyCode
+                  , (AdValuePrecision)precision)));
         }
 
         public void OnDisplayed() {

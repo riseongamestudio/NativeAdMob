@@ -3,7 +3,7 @@ using System;
 using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
-    public sealed partial class FullScreen {
+    public abstract partial class NativeOverlayAdMob {
         private const int EDITOR_PREVIEW_LOAD_ERROR = -1;
 
         private EditorPreviewConfig editorPreviewConfig;

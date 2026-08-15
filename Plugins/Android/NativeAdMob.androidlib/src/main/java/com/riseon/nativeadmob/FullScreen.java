@@ -135,7 +135,8 @@ public final class FullScreen extends Ad {
             String source
           , String paidAdUnitId
           , double value
-          , String currencyCode) {
+          , String currencyCode
+          , int precision) {
         AdLoadListener listener = loadListener;
         if (listener == null) return;
         try {
@@ -143,7 +144,8 @@ public final class FullScreen extends Ad {
                     source
                   , paidAdUnitId
                   , value
-                  , currencyCode);
+                  , currencyCode
+                  , precision);
         } catch (RuntimeException exception) {
             Log.e(TAG, "OnAdPaid callback failed", exception);
         }

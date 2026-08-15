@@ -10,7 +10,8 @@ public interface InFeedListener {
         String adSource
       , String adUnitId
       , double value
-      , String currencyCode);
+      , String currencyCode
+      , int precision);
     void OnSlotDisplayed(int slotIndex);
     void OnSlotShowNotReady(int slotIndex);
     void OnSlotPresentationFailed(

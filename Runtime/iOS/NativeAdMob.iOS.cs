@@ -2,9 +2,9 @@
 using System;
 
 namespace RiseOn.NativeAdMob {
-    public abstract partial class Ad {
-        protected IntPtr iosNativeAd;
-        protected int iosInstanceId;
+    public abstract partial class NativeAdMob {
+        private protected IntPtr iosNativeAd;
+        private protected int iosInstanceId;
 
         // Native calls back on iOS's main thread; hop to Unity's update loop
         // and re-check the release gate there, the same marshalling the
@@ -26,9 +26,18 @@ namespace RiseOn.NativeAdMob {
                 () => RaiseLoadingCompleted(errorCode, errorMessage));
 
         internal void IOSHandleAdPaid(
-            string source, string adUnitId, double value, string currencyCode)
+            string source
+          , string adUnitId
+          , double value
+          , string currencyCode
+          , int precision)
             => DispatchFromNative(
-                () => RaiseAdPaid(source, adUnitId, value, currencyCode));
+                () => RaiseAdPaid(new AdValue(
+                    source
+                  , adUnitId
+                  , value
+                  , currencyCode
+                  , (AdValuePrecision)precision)));
 
         internal void IOSHandleStateChanged(bool isReady, bool isLoading)
             => HandleNativeStateChanged(isReady, isLoading);

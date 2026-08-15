@@ -73,7 +73,8 @@ public abstract class Ad {
                     source
                   , paidAdUnitId
                   , adValue.getValueMicros() / MICROS_PER_CURRENCY_UNIT
-                  , adValue.getCurrencyCode());
+                  , adValue.getCurrencyCode()
+                  , adValue.getPrecisionType());
         });
     }
 
@@ -100,5 +101,6 @@ public abstract class Ad {
             String source
           , String paidAdUnitId
           , double value
-          , String currencyCode);
+          , String currencyCode
+          , int precision);
 }

@@ -4,13 +4,13 @@ using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
     /// <summary>
-    /// One InFeed is one ad unit id for the life of the app: it owns the
+    /// One NativeInFeedAdMob is one ad unit id for the life of the app: it owns the
     /// shared supply (cache, loads, retry) natively and exposes a fixed array
     /// of display slots. Index it to get an Item - a stateless handle over
     /// one slot - and call Show/Hide/SetPosition there; everything unit-wide
     /// (settings, events, disposal) lives here.
     /// </summary>
-    public sealed partial class InFeed : Ad {
+    public sealed partial class NativeInFeedAdMob : NativeAdMob {
         private const string JAVA_CLASS_NAME = "com.riseon.nativeadmob.InFeed";
         private const int MAX_SLOT_COUNT = 8;
 
@@ -24,13 +24,13 @@ namespace RiseOn.NativeAdMob {
 
         /// <summary>
         /// A stateless view over one slot: just (owner, index), so copies are
-        /// harmless and every bit of state stays inside the owning InFeed.
+        /// harmless and every bit of state stays inside the owning NativeInFeedAdMob.
         /// </summary>
         public readonly struct Item {
-            private readonly InFeed owner;
+            private readonly NativeInFeedAdMob owner;
             private readonly int index;
 
-            internal Item(InFeed owner, int index) {
+            internal Item(NativeInFeedAdMob owner, int index) {
                 this.owner = owner;
                 this.index = index;
             }
@@ -61,7 +61,7 @@ namespace RiseOn.NativeAdMob {
         [IndexerName("Slots")]
         public ref readonly Item this[int index] => ref items[index];
 
-        public InFeed(in Settings settings)
+        public NativeInFeedAdMob(in Settings settings)
             : base(settings.AdUnitId) {
             if (settings.SlotCount < 1 || settings.SlotCount > MAX_SLOT_COUNT) {
                 throw new ArgumentOutOfRangeException(
@@ -82,7 +82,7 @@ namespace RiseOn.NativeAdMob {
             } else if (supportsEditorPreview) {
                 EditorCreate(settings);
             } else {
-                Debug.Log($"{nameof(InFeed)} is not supported on this platform");
+                Debug.Log($"{nameof(NativeInFeedAdMob)} is not supported on this platform");
             }
         }
 
@@ -192,7 +192,7 @@ namespace RiseOn.NativeAdMob {
 
         internal void HandleSlotShowNotReady(int slotIndex) {
             Debug.LogWarning(
-                $"{nameof(InFeed)} slot {slotIndex}: Show Called While Not Ready");
+                $"{nameof(NativeInFeedAdMob)} slot {slotIndex}: Show Called While Not Ready");
         }
 
         internal void HandleSlotPresentationFailed(

@@ -9,7 +9,7 @@ namespace RiseOn.NativeAdMob {
         private readonly int                                     generation;
         private readonly Action<int, string>                     onLoadingCompleted;
         private readonly Action                                  onLoadingStarted;
-        private readonly Action<string, string, double, string>  onAdPaid;
+        private readonly Action<AdValue>  onAdPaid;
         private readonly Action<int>                             onSlotDisplayed;
         private readonly Action<int>                             onSlotShowNotReady;
         private readonly Action<int, int, string>                onSlotPresentationFailed;
@@ -19,7 +19,7 @@ namespace RiseOn.NativeAdMob {
             int generation
           , Action<int, string> onLoadingCompleted
           , Action onLoadingStarted
-          , Action<string, string, double, string> onAdPaid
+          , Action<AdValue> onAdPaid
           , Action<int> onSlotDisplayed
           , Action<int> onSlotShowNotReady
           , Action<int, int, string> onSlotPresentationFailed
@@ -53,11 +53,17 @@ namespace RiseOn.NativeAdMob {
             string adSource
           , string adUnitId
           , double value
-          , string currencyCode) {
+          , string currencyCode
+          , int precision) {
             dispatch?.Invoke(
                 this
               , generation
-              , () => onAdPaid?.Invoke(adSource, adUnitId, value, currencyCode));
+              , () => onAdPaid?.Invoke(new AdValue(
+                    adSource
+                  , adUnitId
+                  , value
+                  , currencyCode
+                  , (AdValuePrecision)precision)));
         }
 
         public void OnSlotDisplayed(int slotIndex) {

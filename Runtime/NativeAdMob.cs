@@ -10,21 +10,21 @@ namespace RiseOn.NativeAdMob {
     /// platforms that do not implement them. Listeners attach internally at
     /// construction - the public surface is these events.
     /// </summary>
-    public abstract partial class Ad {
-        protected int loadListenerGeneration;
-        protected bool releasedManaged;
+    public abstract partial class NativeAdMob {
+        private protected int loadListenerGeneration;
+        private protected bool releasedManaged;
 
-        protected readonly bool supportsAndroid;
-        protected readonly bool supportsIOS;
-        protected readonly bool supportsEditorPreview;
-        protected readonly object nativeAdStateLock = new();
+        private protected readonly bool supportsAndroid;
+        private protected readonly bool supportsIOS;
+        private protected readonly bool supportsEditorPreview;
+        private protected readonly object nativeAdStateLock = new();
 
         /// <summary>Supply-side events of the ad unit.</summary>
         public event Action OnLoadingStarted;
         public event Action<int, string> OnLoadingCompleted;
-        public event Action<string, string, double, string> OnAdPaid;
+        public event Action<AdValue> OnAdPaid;
 
-        protected Ad(string adUnitId) {
+        private protected NativeAdMob(string adUnitId) {
             RequireAdUnitId(adUnitId);
 
             supportsAndroid = Application.platform == RuntimePlatform.Android;
@@ -33,7 +33,7 @@ namespace RiseOn.NativeAdMob {
             supportsEditorPreview = Application.isEditor;
         }
 
-        protected static string RequireAdUnitId(string adUnitId) {
+        private protected static string RequireAdUnitId(string adUnitId) {
             if (!string.IsNullOrWhiteSpace(adUnitId)) return adUnitId;
 
             throw new ArgumentException(
@@ -44,7 +44,7 @@ namespace RiseOn.NativeAdMob {
         partial void AndroidCall(string methodName, object[] parameters);
         partial void AndroidInvalidateLoadListener();
 
-        protected void CallAndroid(
+        private protected void CallAndroid(
             string methodName
           , params object[] parameters) {
             if (supportsAndroid) {
@@ -54,36 +54,32 @@ namespace RiseOn.NativeAdMob {
             }
         }
 
-        protected void InvalidateLoadListener() {
+        private protected void InvalidateLoadListener() {
             ++loadListenerGeneration;
             AndroidInvalidateLoadListener();
         }
 
-        protected void RaiseLoadingStarted() => InvokeSafely(OnLoadingStarted);
+        private protected void RaiseLoadingStarted() => InvokeSafely(OnLoadingStarted);
 
-        protected void RaiseLoadingCompleted(int errorCode, string errorMessage) {
+        private protected void RaiseLoadingCompleted(int errorCode, string errorMessage) {
             var handler = OnLoadingCompleted;
             if (handler == null) return;
             InvokeSafely(() => handler(errorCode, errorMessage));
         }
 
-        protected void RaiseAdPaid(
-            string source
-          , string adUnitId
-          , double value
-          , string currencyCode) {
+        private protected void RaiseAdPaid(AdValue adValue) {
             var handler = OnAdPaid;
             if (handler == null) return;
-            InvokeSafely(() => handler(source, adUnitId, value, currencyCode));
+            InvokeSafely(() => handler(adValue));
         }
 
-        protected virtual void HandleNativeStateChanged(
+        private protected virtual void HandleNativeStateChanged(
             bool isReady
           , bool isLoading) {}
 
-        protected virtual void HandleShowNotReady() {}
+        private protected virtual void HandleShowNotReady() {}
 
-        protected static void InvokeSafely(Action callback) {
+        private protected static void InvokeSafely(Action callback) {
             try {
                 callback?.Invoke();
             } catch (Exception exception) {

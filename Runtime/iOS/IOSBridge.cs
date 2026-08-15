@@ -21,7 +21,8 @@ namespace RiseOn.NativeAdMob {
           , string source
           , string adUnitId
           , double value
-          , string currencyCode);
+          , string currencyCode
+          , int precision);
         internal delegate void DisplayedDelegate(int instanceId);
         internal delegate void PresentationFailedDelegate(
             int instanceId, int errorCode, string errorMessage);
@@ -137,11 +138,11 @@ namespace RiseOn.NativeAdMob {
         internal static readonly SlotPresentationFailedDelegate
             OnSlotPresentationFailedCallback = OnSlotPresentationFailed;
 
-        private static readonly Dictionary<int, Ad> instances = new();
+        private static readonly Dictionary<int, NativeAdMob> instances = new();
         private static readonly object registryLock = new();
         private static int nextInstanceId;
 
-        internal static int Register(Ad ad) {
+        internal static int Register(NativeAdMob ad) {
             lock (registryLock) {
                 var instanceId = ++nextInstanceId;
                 instances[instanceId] = ad;
@@ -155,7 +156,7 @@ namespace RiseOn.NativeAdMob {
             }
         }
 
-        private static Ad Find(int instanceId) {
+        private static NativeAdMob Find(int instanceId) {
             lock (registryLock) {
                 return instances.TryGetValue(instanceId, out var ad)
                     ? ad
@@ -179,18 +180,19 @@ namespace RiseOn.NativeAdMob {
           , string source
           , string adUnitId
           , double value
-          , string currencyCode)
+          , string currencyCode
+          , int precision)
             => Find(instanceId)?.IOSHandleAdPaid(
-                source, adUnitId, value, currencyCode);
+                source, adUnitId, value, currencyCode, precision);
 
         [MonoPInvokeCallback(typeof(DisplayedDelegate))]
         private static void OnDisplayed(int instanceId)
-            => (Find(instanceId) as FullScreen)?.IOSHandleDisplayed();
+            => (Find(instanceId) as NativeOverlayAdMob)?.IOSHandleDisplayed();
 
         [MonoPInvokeCallback(typeof(PresentationFailedDelegate))]
         private static void OnPresentationFailed(
             int instanceId, int errorCode, string errorMessage)
-            => (Find(instanceId) as FullScreen)?.IOSHandlePresentationFailed(
+            => (Find(instanceId) as NativeOverlayAdMob)?.IOSHandlePresentationFailed(
                 errorCode, errorMessage);
 
         [MonoPInvokeCallback(typeof(StateChangedDelegate))]
@@ -205,21 +207,21 @@ namespace RiseOn.NativeAdMob {
         [MonoPInvokeCallback(typeof(ShowCompletedDelegate))]
         private static void OnShowCompleted(
             int instanceId, int showId, string errorMessage, bool adConsumed)
-            => (Find(instanceId) as FullScreen)
+            => (Find(instanceId) as NativeOverlayAdMob)
                 ?.IOSHandleShowCompleted(showId, errorMessage, adConsumed);
 
         [MonoPInvokeCallback(typeof(SlotDisplayedDelegate))]
         private static void OnSlotDisplayed(int instanceId, int slotIndex)
-            => (Find(instanceId) as InFeed)?.IOSHandleSlotDisplayed(slotIndex);
+            => (Find(instanceId) as NativeInFeedAdMob)?.IOSHandleSlotDisplayed(slotIndex);
 
         [MonoPInvokeCallback(typeof(SlotShowNotReadyDelegate))]
         private static void OnSlotShowNotReady(int instanceId, int slotIndex)
-            => (Find(instanceId) as InFeed)?.IOSHandleSlotShowNotReady(slotIndex);
+            => (Find(instanceId) as NativeInFeedAdMob)?.IOSHandleSlotShowNotReady(slotIndex);
 
         [MonoPInvokeCallback(typeof(SlotPresentationFailedDelegate))]
         private static void OnSlotPresentationFailed(
             int instanceId, int slotIndex, int errorCode, string errorMessage)
-            => (Find(instanceId) as InFeed)?.IOSHandleSlotPresentationFailed(
+            => (Find(instanceId) as NativeInFeedAdMob)?.IOSHandleSlotPresentationFailed(
                 slotIndex, errorCode, errorMessage);
     }
 }

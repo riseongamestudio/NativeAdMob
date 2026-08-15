@@ -3,7 +3,7 @@ using System;
 using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
-    public sealed partial class InFeed {
+    public sealed partial class NativeInFeedAdMob {
         private IntPtr iosReleasePendingHandle;
         private int iosReleasePendingInstanceId;
 

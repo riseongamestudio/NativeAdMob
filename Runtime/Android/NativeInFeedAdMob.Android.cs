@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.Android;
 
 namespace RiseOn.NativeAdMob {
-    public sealed partial class InFeed {
+    public sealed partial class NativeInFeedAdMob {
         private const string JAVA_CONFIGURE_METHOD    = "Configure";
         private const string JAVA_SHOW_METHOD         = "Show";
         private const string JAVA_HIDE_METHOD         = "Hide";

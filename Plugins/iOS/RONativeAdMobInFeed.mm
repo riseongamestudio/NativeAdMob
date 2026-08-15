@@ -470,7 +470,8 @@ static float ROResolveBackgroundAlpha(float value) {
 - (void)notifyAdPaidWithSource:(NSString *)source
                       adUnitId:(NSString *)adUnitId
                          value:(double)value
-                  currencyCode:(NSString *)currencyCode {
+                  currencyCode:(NSString *)currencyCode
+                     precision:(int32_t)precision {
     RONativeAdMobInFeedListenerCallbacks callbacks =
             [self ro_currentInFeedCallbacks];
     if (callbacks.adPaid == NULL) return;
@@ -479,7 +480,8 @@ static float ROResolveBackgroundAlpha(float value) {
           , (source ?: @"").UTF8String
           , (adUnitId ?: @"").UTF8String
           , value
-          , (currencyCode ?: @"").UTF8String);
+          , (currencyCode ?: @"").UTF8String
+          , precision);
 }
 
 - (void)notifySlotDisplayed:(NSInteger)slotIndex {

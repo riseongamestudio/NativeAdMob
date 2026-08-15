@@ -10,7 +10,8 @@ public interface AdLoadListener {
         String adSource
       , String adUnitId
       , double value
-      , String currencyCode);
+      , String currencyCode
+      , int precision);
     void OnDisplayed();
     void OnPresentationFailed(int errorCode, String errorMessage);
 }

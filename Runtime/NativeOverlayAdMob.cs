@@ -14,13 +14,13 @@ namespace RiseOn.NativeAdMob {
         string errorMessage
       , bool adConsumed);
 
-    public sealed partial class FullScreen : Ad {
+    public abstract partial class NativeOverlayAdMob : NativeAdMob {
         private const int INVALID_GENERATION = 0;
 
-        private const string AD_RELEASED_ERROR        = "Ad released";
-        private const string AD_ALREADY_SHOWING_ERROR = "Ad already showing";
-        private const string AD_NOT_READY_ERROR       = "Ad not ready";
-        private const string AD_NOT_CONFIGURED_ERROR  = "Ad not configured";
+        private const string AD_RELEASED_ERROR        = "NativeAdMob released";
+        private const string AD_ALREADY_SHOWING_ERROR = "NativeAdMob already showing";
+        private const string AD_NOT_READY_ERROR       = "NativeAdMob not ready";
+        private const string AD_NOT_CONFIGURED_ERROR  = "NativeAdMob not configured";
 
         private const string JAVA_CLASS_NAME               = "com.riseon.nativeadmob.FullScreen";
         private const string JAVA_CONFIGURE_METHOD         = "Configure";
@@ -34,35 +34,32 @@ namespace RiseOn.NativeAdMob {
         private bool cachedAdLoading;
         private int  showGeneration;
 
-        public struct Settings {
-            public string AdUnitId;
-            public bool Fullscreen;
-            public int CountdownSec;
-            public bool XRandomSide;
-            public bool NumberOppositeSide;
-            public float HeightRatio;
-            public float BackgroundAlpha;
-        }
-
         /// <summary>Presentation-side events of this placement.</summary>
         public event Action OnDisplayed;
         public event Action<int, string> OnPresentationFailed;
 
-        public FullScreen(in Settings settings)
-            : base(settings.AdUnitId) {
-            adUnitId = settings.AdUnitId;
+        private protected NativeOverlayAdMob(
+            string adUnitId
+          , bool coversFullScreen
+          , int countdownSec
+          , bool xRandomSide
+          , bool numberOppositeSide
+          , float heightRatio
+          , float backgroundAlpha)
+            : base(adUnitId) {
+            this.adUnitId = adUnitId;
             if (supportsAndroid) {
                 AndroidCreate();
             } else if (supportsIOS) {
                 IOSCreate();
             }
             Configure(
-                settings.Fullscreen
-              , settings.CountdownSec
-              , settings.XRandomSide
-              , settings.NumberOppositeSide
-              , settings.HeightRatio
-              , settings.BackgroundAlpha);
+                coversFullScreen
+              , countdownSec
+              , xRandomSide
+              , numberOppositeSide
+              , heightRatio
+              , backgroundAlpha);
         }
 
         partial void AndroidCreate();
@@ -239,7 +236,7 @@ namespace RiseOn.NativeAdMob {
             }
         }
 
-        protected override void HandleNativeStateChanged(
+        private protected override void HandleNativeStateChanged(
             bool isReady
           , bool isLoading) {
             lock (nativeAdStateLock) {

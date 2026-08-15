@@ -62,6 +62,11 @@ extern const int32_t RONativeAdMobInternalPresentationError; // -2, same as Java
 
 // Listener notifications, each a no-op when the callback is absent.
 - (void)notifyLoadingStarted;
+- (void)notifyAdPaidWithSource:(NSString *)source
+                      adUnitId:(NSString *)adUnitId
+                         value:(double)value
+                  currencyCode:(NSString *_Nullable)currencyCode
+                     precision:(int32_t)precision;
 - (void)notifyLoadingCompletedWithCode:(int32_t)errorCode
                                message:(NSString *_Nullable)errorMessage;
 - (void)notifyStateChangedWithReady:(BOOL)isReady loading:(BOOL)isLoading;

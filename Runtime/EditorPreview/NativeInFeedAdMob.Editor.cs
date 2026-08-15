@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
-    public sealed partial class InFeed {
+    public sealed partial class NativeInFeedAdMob {
         private const int EDITOR_PREVIEW_SUCCESS_CODE = 0;
 
         private EditorPreviewConfig[] editorConfigs;

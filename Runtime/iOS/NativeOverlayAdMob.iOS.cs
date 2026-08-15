@@ -3,7 +3,7 @@ using System;
 using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
-    public sealed partial class FullScreen {
+    public abstract partial class NativeOverlayAdMob {
         private IntPtr iosReleasePendingHandle;
         private int iosReleasePendingInstanceId;
 

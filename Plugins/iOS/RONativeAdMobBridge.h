@@ -39,7 +39,8 @@ typedef void (*RONativeAdMobPaidCallback)(
       , const char* source
       , const char* adUnitId
       , double value
-      , const char* currencyCode);
+      , const char* currencyCode
+      , int32_t precision);
 typedef void (*RONativeAdMobDisplayedCallback)(int32_t instanceId);
 typedef void (*RONativeAdMobPresentationFailedCallback)(
         int32_t instanceId

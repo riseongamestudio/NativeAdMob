@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.Android;
 
 namespace RiseOn.NativeAdMob {
-    public sealed partial class FullScreen {
+    public abstract partial class NativeOverlayAdMob {
         private const string JAVA_LOAD_AD_METHOD = "LoadAd";
         private const string JAVA_SHOW_AD_METHOD = "ShowAd";
         private const string JAVA_RELEASE_METHOD = "Release";

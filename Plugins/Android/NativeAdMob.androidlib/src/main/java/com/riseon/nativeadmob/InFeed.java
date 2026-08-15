@@ -513,7 +513,8 @@ public final class InFeed extends Ad {
             String source
           , String paidAdUnitId
           , double value
-          , String currencyCode) {
+          , String currencyCode
+          , int precision) {
         InFeedListener current = listener;
         if (current == null) return;
         try {
@@ -521,7 +522,8 @@ public final class InFeed extends Ad {
                     source
                   , paidAdUnitId
                   , value
-                  , currencyCode);
+                  , currencyCode
+                  , precision);
         } catch (RuntimeException exception) {
             Log.e(TAG, "OnAdPaid callback failed", exception);
         }
