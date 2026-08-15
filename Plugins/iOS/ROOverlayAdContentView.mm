@@ -28,8 +28,24 @@ static const CGFloat kRORightControlInset = 18;
 // never reported its ratio (which reads as 1.0) is not locked out of the
 // layout that suits portrait video best.
 static const CGFloat kROSideMediaMaxAspect = 1.05f;
-static const CGFloat kROSideMediaMaxWidthShare = 0.62f;
+// Half the width, no more: past it the rail is a sliver that can hold
+// neither whole text nor a readable button.
+static const CGFloat kROSideMediaMaxWidthShare = 0.5f;
 static const CGFloat kROSideMediaMinRail = 120;
+// The rail's side padding follows the rail's width; a narrow column cannot
+// afford the full 8pt on each side.
+static const CGFloat kRORailSidePaddingRatio = 0.03f;
+static const CGFloat kRORailMinSidePadding = 2;
+static const CGFloat kRORailIconGap = 4;
+// Text no larger than the rail can wear: the scale ceiling follows the
+// rail's width, reaching full size only in a genuinely wide rail.
+static const CGFloat kRORailScaleCapMinWidth = 160;
+static const CGFloat kRORailScaleCapRange = 240;
+// Whole text before size, size before scrolling: how many size steps the
+// rail trades away before a line is allowed to scroll.
+static const NSInteger kRORailFullTextSteps = 3;
+static const CGFloat kRORailFullTextScaleStep = 0.34f;
+static const NSInteger kRORailHeadlineMaxLineCount = 4;
 // A panel meaningfully taller than wide reads as a page: media belongs
 // stacked on top of it, not beside it. Side media only suits panels near
 // screen proportions.
@@ -441,21 +457,27 @@ static UIColor *HBArgb(uint32_t argb) {
         rail.ro_vertical = YES;
         rail.ro_gravity = HBGravityCenterVertical;
         // The corner controls and AdChoices sit over the rail's top, so only
-        // the rail keeps the strip inset; the media needs none.
+        // the rail keeps the strip inset; the media needs none. Side padding
+        // follows the rail's width - a narrow column keeps its ground for
+        // content.
+        CGFloat railOuterWidth = MAX(
+                0
+              , UIScreen.mainScreen.bounds.size.width - sideMediaWidth);
+        CGFloat railPad = MAX(
+                kRORailMinSidePadding
+              , MIN(
+                    kROHorizontalPadding
+                  , railOuterWidth * kRORailSidePaddingRatio));
         rail.ro_padding = UIEdgeInsetsMake(
                 kROControlStripHeight
-              , kROHorizontalPadding
+              , railPad
               , 0
-              , kROHorizontalPadding);
+              , railPad);
         // The rail is narrow, so the icon never shares a line with text
         // here: it stands alone and the identity stack follows below at the
         // rail's full width.
         if (!_iconHero) {
-            CGFloat railWidth = MAX(
-                    0
-                  , UIScreen.mainScreen.bounds.size.width
-                            - sideMediaWidth
-                            - 2 * kROHorizontalPadding);
+            CGFloat railWidth = MAX(0, railOuterWidth - 2 * railPad);
             CGFloat railIconSize = MAX(
                     kROMinIconSize
                   , MIN(
@@ -465,7 +487,7 @@ static UIColor *HBArgb(uint32_t argb) {
             _icon.ro_layoutHeight = railIconSize;
             _icon.ro_layoutGravity = HBGravityCenterHorizontal;
             _icon.ro_layoutMargins =
-                    UIEdgeInsetsMake(0, 0, kROIconGap, 0);
+                    UIEdgeInsetsMake(0, 0, kRORailIconGap, 0);
             [rail addSubview:_icon];
         }
         [rail addSubview:_identityRow];
@@ -839,7 +861,7 @@ static UIColor *HBArgb(uint32_t argb) {
 
     _headline.maxLines = kROCollapsibleHeadlineMaxLines;
     _body.maxLines = kROMaxBodyLineCount;
-    [self ro_applyResponsiveContentScale:0];
+    [self ro_applyRailContentScale:0];
 
     BOOL railFits = [self ro_sideRailFitsWithPanelHeight:panelHeight];
     while (!railFits
@@ -865,46 +887,114 @@ static UIColor *HBArgb(uint32_t argb) {
     }
     if (!railFits) return;
 
-    [self ro_applyResponsiveContentScale:1];
+    // Text no larger than the rail can wear: the ceiling follows the
+    // rail's width, so a narrow column keeps modest sizes even with height
+    // to spare.
+    CGFloat railOuterWidth = MAX(
+            0
+          , UIScreen.mainScreen.bounds.size.width - _sideMediaWidthPx);
+    CGFloat railScaleCap = MAX(
+            0
+          , MIN(
+                1
+              , (railOuterWidth - kRORailScaleCapMinWidth)
+                        / kRORailScaleCapRange));
+    CGFloat railScale = railScaleCap;
+    [self ro_applyRailContentScale:railScale];
     if (![self ro_sideRailFitsWithPanelHeight:panelHeight]) {
         CGFloat minimumScale = 0;
-        CGFloat maximumScale = 1;
+        CGFloat maximumScale = railScaleCap;
         for (NSInteger iteration = 0;
              iteration < kROResponsiveScaleSearchIterations;
              ++iteration) {
             CGFloat candidateScale = (minimumScale + maximumScale) / 2;
-            [self ro_applyResponsiveContentScale:candidateScale];
+            [self ro_applyRailContentScale:candidateScale];
             if ([self ro_sideRailFitsWithPanelHeight:panelHeight]) {
                 minimumScale = candidateScale;
             } else {
                 maximumScale = candidateScale;
             }
         }
-        [self ro_applyResponsiveContentScale:minimumScale];
+        railScale = minimumScale;
+        [self ro_applyRailContentScale:railScale];
     }
-    [self ro_growSideRailIntoSlackWithPanelHeight:panelHeight];
+
+    // Whole text before size, size before scrolling: give lines while they
+    // fit, and when a text still cannot show itself whole, trade the scale
+    // down a step and try again. Only what survives this may ever scroll.
+    CGFloat railContentWidth = MAX(
+            0
+          , railOuterWidth
+                - 2 * MAX(
+                    kRORailMinSidePadding
+                  , MIN(
+                        kROHorizontalPadding
+                      , railOuterWidth * kRORailSidePaddingRatio)));
+    for (NSInteger attempt = 0;
+         attempt <= kRORailFullTextSteps;
+         ++attempt) {
+        [self ro_growTextLines:_headline
+                       maximum:kRORailHeadlineMaxLineCount
+                   panelHeight:panelHeight];
+        [self ro_growTextLines:_body
+                       maximum:kRORailBodyMaxLineCount
+                   panelHeight:panelHeight];
+        BOOL allWhole =
+                [self ro_railTextWhole:_headline width:railContentWidth]
+                && [self ro_railTextWhole:_body width:railContentWidth]
+                && [self ro_railTextWhole:_advertiser
+                                    width:railContentWidth];
+        if (allWhole) break;
+        if (railScale <= 0) break;
+
+        railScale = MAX(0, railScale - kRORailFullTextScaleStep);
+        [self ro_applyRailContentScale:railScale];
+    }
+
+    [self ro_growRailIconWithPanelHeight:panelHeight
+                          railOuterWidth:railOuterWidth];
 }
 
-// Height that remains after the fit belongs to the content, not to the
-// void: the body takes more whole lines while they fit - full text
-// outranks a scrolling line - and the icon grows into what is left.
-- (void)ro_growSideRailIntoSlackWithPanelHeight:(CGFloat)panelHeight {
-    if (![self ro_sideRailFitsWithPanelHeight:panelHeight]) return;
+// The rail's own dress code on top of the shared scale: the button keeps
+// the avoidance floor and the rows drop their optional padding - a narrow
+// column spends its ground on text and media, not on chrome.
+- (void)ro_applyRailContentScale:(CGFloat)scale {
+    [self ro_applyResponsiveContentScale:scale];
+    _callToAction.ro_minimumSize =
+            CGSizeMake(0, kROAvoidCallToActionHeight);
+    _identityRow.ro_padding = UIEdgeInsetsZero;
+    _body.ro_padding = UIEdgeInsetsZero;
+}
 
-    while (!_body.ro_gone
-            && _body.maxLines < kRORailBodyMaxLineCount) {
-        _body.maxLines = _body.maxLines + 1;
+- (void)ro_growTextLines:(ROAdTextLabel *)text
+                 maximum:(NSInteger)maximumLineCount
+             panelHeight:(CGFloat)panelHeight {
+    if (text == nil || text.ro_gone || text.hidden) return;
+
+    while (text.maxLines < maximumLineCount) {
+        text.maxLines = text.maxLines + 1;
         if (![self ro_sideRailFitsWithPanelHeight:panelHeight]) {
-            _body.maxLines = _body.maxLines - 1;
-            break;
+            text.maxLines = text.maxLines - 1;
+            return;
         }
     }
+}
 
+- (BOOL)ro_railTextWhole:(ROAdTextLabel *)text
+                   width:(CGFloat)width {
+    if (text == nil || text.ro_gone || text.hidden || width <= 0) {
+        return YES;
+    }
+    return [text ro_showsEntireTextForWidth:width];
+}
+
+// Height that remains after the text has everything belongs to the icon:
+// it grows into the slack, never past the rail's proportion.
+- (void)ro_growRailIconWithPanelHeight:(CGFloat)panelHeight
+                        railOuterWidth:(CGFloat)railOuterWidth {
     if (_iconHero || _icon.ro_gone || _icon.superview != _sideRail) return;
+    if (![self ro_sideRailFitsWithPanelHeight:panelHeight]) return;
 
-    CGFloat railOuterWidth = MAX(
-            0
-          , UIScreen.mainScreen.bounds.size.width - _sideMediaWidthPx);
     CGFloat maximumIconSize = railOuterWidth * kRORailIconMaxWidthRatio;
     while (_icon.ro_layoutWidth + kRORailIconGrowthStep
             <= maximumIconSize) {

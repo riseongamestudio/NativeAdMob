@@ -127,8 +127,24 @@ final class OverlayAdContentView extends FrameLayout {
     // the rail, and a video that never reported its ratio (which reads as
     // 1.0) is not locked out of the layout that suits portrait video best.
     private static final float SIDE_MEDIA_MAX_ASPECT = 1.05f;
-    private static final float SIDE_MEDIA_MAX_WIDTH_SHARE = 0.62f;
+    // Half the width, no more: past it the rail is a sliver that can hold
+    // neither whole text nor a readable button.
+    private static final float SIDE_MEDIA_MAX_WIDTH_SHARE = 0.5f;
     private static final int SIDE_MEDIA_MIN_RAIL_DP = 120;
+    // The rail's side padding follows the rail's width; a narrow column
+    // cannot afford the full 8dp on each side.
+    private static final float RAIL_SIDE_PADDING_RATIO = 0.03f;
+    private static final int RAIL_MIN_SIDE_PADDING_DP = 2;
+    private static final int RAIL_ICON_GAP_DP = 4;
+    // Text no larger than the rail can wear: the scale ceiling follows the
+    // rail's width, reaching full size only in a genuinely wide rail.
+    private static final int RAIL_SCALE_CAP_MIN_WIDTH_DP = 160;
+    private static final int RAIL_SCALE_CAP_RANGE_DP = 240;
+    // Whole text before size, size before scrolling: how many size steps
+    // the rail trades away before a line is allowed to scroll.
+    private static final int RAIL_FULL_TEXT_STEPS = 3;
+    private static final float RAIL_FULL_TEXT_SCALE_STEP = 0.34f;
+    private static final int RAIL_HEADLINE_MAX_LINE_COUNT = 4;
     // A panel meaningfully taller than wide reads as a page: media belongs
     // stacked on top of it, not beside it. Side media only suits panels near
     // screen proportions, where a portrait creative would otherwise sit in a
@@ -536,10 +552,21 @@ final class OverlayAdContentView extends FrameLayout {
             rail.setGravity(Gravity.CENTER_VERTICAL);
             // The corner controls and AdChoices live over the rail's top, so
             // the rail alone keeps the strip inset; the media needs none.
+            // Side padding follows the rail's width - a narrow column keeps
+            // its ground for content.
+            int railOuterWidth = Math.max(
+                    0
+                  , displayMetrics.widthPixels - sideMediaWidth);
+            int railPad = Math.max(
+                    Math.round(RAIL_MIN_SIDE_PADDING_DP * density)
+                  , Math.min(
+                        horizontalPadding
+                      , Math.round(
+                            railOuterWidth * RAIL_SIDE_PADDING_RATIO)));
             rail.setPadding(
-                    horizontalPadding
+                    railPad
                   , controlStripHeight
-                  , horizontalPadding
+                  , railPad
                   , 0);
             // The rail is narrow, so the icon never shares a line with text
             // here: it stands alone and the identity stack follows below at
@@ -547,9 +574,7 @@ final class OverlayAdContentView extends FrameLayout {
             if (!iconHero) {
                 int railWidth = Math.max(
                         0
-                      , displayMetrics.widthPixels
-                                - sideMediaWidth
-                                - 2 * horizontalPadding);
+                      , railOuterWidth - 2 * railPad);
                 int railIconSize = Math.max(
                         Math.round(MIN_ICON_SIZE_DP * density)
                       , Math.min(
@@ -562,7 +587,7 @@ final class OverlayAdContentView extends FrameLayout {
                               , railIconSize);
                 railIconParams.gravity = Gravity.CENTER_HORIZONTAL;
                 railIconParams.bottomMargin =
-                        Math.round(ICON_GAP_DP * density);
+                        Math.round(RAIL_ICON_GAP_DP * density);
                 rail.addView(icon, railIconParams);
             }
             rail.addView(identityRow);
@@ -1138,14 +1163,13 @@ final class OverlayAdContentView extends FrameLayout {
         body.setMaxLines(MAX_BODY_LINE_COUNT);
         body.setEllipsize(TextUtils.TruncateAt.END);
 
-        ApplyResponsiveContentScale(
+        ApplyRailContentScale(
                 0f
               , density
               , identityRow
               , headline
               , advertiser
               , body
-              , null
               , callToAction);
         boolean railFits = RailFits(rail, railOuterWidth, railHeight);
         while (!railFits
@@ -1168,31 +1192,40 @@ final class OverlayAdContentView extends FrameLayout {
         }
         if (!railFits) return;
 
-        ApplyResponsiveContentScale(
-                1f
+        // Text no larger than the rail can wear: the ceiling follows the
+        // rail's width, so a narrow column keeps modest sizes even with
+        // height to spare.
+        float railScaleCap = Math.max(
+                0f
+              , Math.min(
+                    1f
+                  , (railOuterWidth
+                            - RAIL_SCALE_CAP_MIN_WIDTH_DP * density)
+                            / (RAIL_SCALE_CAP_RANGE_DP * density)));
+        float railScale = railScaleCap;
+        ApplyRailContentScale(
+                railScale
               , density
               , identityRow
               , headline
               , advertiser
               , body
-              , null
               , callToAction);
         if (!RailFits(rail, railOuterWidth, railHeight)) {
             float minimumScale = 0f;
-            float maximumScale = 1f;
+            float maximumScale = railScaleCap;
             for (int iteration = 0;
                     iteration < RESPONSIVE_SCALE_SEARCH_ITERATIONS;
                     iteration++) {
                 float candidateScale =
                         (minimumScale + maximumScale) / 2f;
-                ApplyResponsiveContentScale(
+                ApplyRailContentScale(
                         candidateScale
                       , density
                       , identityRow
                       , headline
                       , advertiser
                       , body
-                      , null
                       , callToAction);
                 if (RailFits(rail, railOuterWidth, railHeight)) {
                     minimumScale = candidateScale;
@@ -1200,47 +1233,131 @@ final class OverlayAdContentView extends FrameLayout {
                     maximumScale = candidateScale;
                 }
             }
-            ApplyResponsiveContentScale(
-                    minimumScale
+            railScale = minimumScale;
+            ApplyRailContentScale(
+                    railScale
                   , density
                   , identityRow
                   , headline
                   , advertiser
                   , body
-                  , null
                   , callToAction);
         }
-        GrowSideRailIntoSlack(
-                rail
-              , railOuterWidth
-              , railHeight
-              , density
-              , body
-              , railIcon);
-    }
 
-    // Height that remains after the fit belongs to the content, not to the
-    // void: the body takes more whole lines while they fit - full text
-    // outranks a scrolling line - and the icon grows into what is left.
-    private void GrowSideRailIntoSlack(
-            LinearLayout rail
-          , int railOuterWidth
-          , int railHeight
-          , float density
-          , TextView body
-          , ImageView railIcon) {
-        if (!RailFits(rail, railOuterWidth, railHeight)) return;
-
-        while (body.getVisibility() == View.VISIBLE
-                && body.getMaxLines() < RAIL_BODY_MAX_LINE_COUNT) {
-            body.setMaxLines(body.getMaxLines() + 1);
-            if (!RailFits(rail, railOuterWidth, railHeight)) {
-                body.setMaxLines(body.getMaxLines() - 1);
+        // Whole text before size, size before scrolling: give lines while
+        // they fit, and when a text still cannot show itself whole, trade
+        // the scale down a step and try again. Only what survives this may
+        // ever scroll.
+        for (int attempt = 0; attempt <= RAIL_FULL_TEXT_STEPS; ++attempt) {
+            RailFits(rail, railOuterWidth, railHeight);
+            GrowTextLines(
+                    headline
+                  , RAIL_HEADLINE_MAX_LINE_COUNT
+                  , rail
+                  , railOuterWidth
+                  , railHeight);
+            GrowTextLines(
+                    body
+                  , RAIL_BODY_MAX_LINE_COUNT
+                  , rail
+                  , railOuterWidth
+                  , railHeight);
+            RailFits(rail, railOuterWidth, railHeight);
+            if (!RailTextTruncated(headline)
+                    && !RailTextTruncated(body)
+                    && !RailTextTruncated(advertiser)) {
                 break;
             }
+            if (railScale <= 0f) break;
+
+            railScale = Math.max(
+                    0f
+                  , railScale - RAIL_FULL_TEXT_SCALE_STEP);
+            ApplyRailContentScale(
+                    railScale
+                  , density
+                  , identityRow
+                  , headline
+                  , advertiser
+                  , body
+                  , callToAction);
         }
 
+        GrowRailIcon(railIcon, rail, railOuterWidth, railHeight, density);
+    }
+
+    // The rail's own dress code on top of the shared scale: the button keeps
+    // the avoidance floor and the rows drop their optional padding - a
+    // narrow column spends its ground on text and media, not on chrome.
+    private void ApplyRailContentScale(
+            float scale
+          , float density
+          , LinearLayout identityRow
+          , TextView headline
+          , TextView advertiser
+          , TextView body
+          , Button callToAction) {
+        ApplyResponsiveContentScale(
+                scale
+              , density
+              , identityRow
+              , headline
+              , advertiser
+              , body
+              , null
+              , callToAction);
+        int railCallToActionHeight =
+                Math.round(AVOID_CALL_TO_ACTION_HEIGHT_DP * density);
+        callToAction.setMinHeight(railCallToActionHeight);
+        callToAction.setMinimumHeight(railCallToActionHeight);
+        identityRow.setPadding(0, 0, 0, 0);
+        body.setPadding(0, 0, 0, 0);
+    }
+
+    private void GrowTextLines(
+            TextView text
+          , int maximumLineCount
+          , LinearLayout rail
+          , int railOuterWidth
+          , int railHeight) {
+        if (text == null || text.getVisibility() != View.VISIBLE) return;
+
+        while (text.getMaxLines() < maximumLineCount) {
+            text.setMaxLines(text.getMaxLines() + 1);
+            if (!RailFits(rail, railOuterWidth, railHeight)) {
+                text.setMaxLines(text.getMaxLines() - 1);
+                return;
+            }
+        }
+    }
+
+    // Valid right after a measure pass: the text's layout tells whether it
+    // shows everything it holds within the lines it was given.
+    private static boolean RailTextTruncated(TextView text) {
+        if (text == null || text.getVisibility() != View.VISIBLE) {
+            return false;
+        }
+        Layout layout = text.getLayout();
+        if (layout == null || layout.getLineCount() == 0) return false;
+
+        int lineCount = layout.getLineCount();
+        for (int line = 0; line < lineCount; ++line) {
+            if (layout.getEllipsisCount(line) > 0) return true;
+        }
+        return layout.getLineEnd(lineCount - 1)
+                < text.getText().length();
+    }
+
+    // Height that remains after the text has everything belongs to the
+    // icon: it grows into the slack, never past the rail's proportion.
+    private void GrowRailIcon(
+            ImageView railIcon
+          , LinearLayout rail
+          , int railOuterWidth
+          , int railHeight
+          , float density) {
         if (railIcon == null || railIcon.getParent() == null) return;
+        if (!RailFits(rail, railOuterWidth, railHeight)) return;
 
         LinearLayout.LayoutParams iconParams =
                 (LinearLayout.LayoutParams) railIcon.getLayoutParams();
