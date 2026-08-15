@@ -329,6 +329,14 @@ static UIColor *HBArgb(uint32_t argb) {
     _sideMediaLayout = _hasDisplayableMedia
             && [self ro_shouldUseSideMediaForPanelHeight:sidePanelHeight];
 
+    // One line per build: every layout decision and its inputs, so a
+    // screenshot of a wrong layout always arrives with its numbers.
+    NSLog(@"%@: Overlay layout: fullscreen=%d media=%d video=%d side=%d "
+            "ticker=%d iconHero=%d aspect=%g reported=%d panel=%g"
+          , kROTag, _fullscreen, _hasDisplayableMedia, hasVideoContent
+          , _sideMediaLayout, _tickerLayout, _iconHero
+          , _mediaAspectRatio, _mediaAspectReported, requestedPanelHeight);
+
     [self ro_configureBackground];
 
     _nativeAdView = [[GADNativeAdView alloc] init];
@@ -1488,6 +1496,11 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     CGFloat slack = _mediaAspectReported
             ? MAX(0, availableHeight - bestTop - bestBoxHeight)
             : 0;
+    NSLog(@"%@: Avoidance: panel=%gx%g lower=%g avail=%g box=%gx%g top=%g "
+            "intervalLeft=%g slack=%g edges=%d"
+          , kROTag, panelWidth, panelHeight, lowerContentHeight
+          , availableHeight, bestBoxWidth, bestBoxHeight, bestTop
+          , bestIntervalLeft, slack, bestAtEdges);
     _controlsAtEdgesBelowBadges = bestAtEdges;
     columnPadding.top = bestTop;
     columnPadding.bottom = slack / 2;

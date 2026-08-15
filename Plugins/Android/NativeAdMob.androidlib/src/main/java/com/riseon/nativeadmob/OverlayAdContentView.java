@@ -394,6 +394,17 @@ final class OverlayAdContentView extends FrameLayout {
                         displayMetrics
                       , mediaAspectRatio
                       , sidePanelHeight);
+        // One line per build: every layout decision and its inputs, so a
+        // screenshot of a wrong layout always arrives with its numbers.
+        Log.i(TAG, "Overlay layout: fullscreen=" + fullscreen
+                + " media=" + hasDisplayableMedia
+                + " video=" + hasVideoContent
+                + " side=" + sideMediaLayout
+                + " ticker=" + tickerLayout
+                + " iconHero=" + iconHero
+                + " aspect=" + mediaAspectRatio
+                + " reported=" + mediaAspectReported
+                + " panel=" + requestedPanelHeight);
 
         ConfigureBackground();
 
@@ -1864,6 +1875,14 @@ final class OverlayAdContentView extends FrameLayout {
                         0
                       , availableHeight - bestTop - bestBoxHeight)
                 : 0;
+        Log.i(TAG, "Avoidance: panel=" + panelWidth + "x" + panelHeight
+                + " lower=" + lowerContentHeight
+                + " avail=" + availableHeight
+                + " box=" + bestBoxWidth + "x" + bestBoxHeight
+                + " top=" + bestTop
+                + " intervalLeft=" + bestIntervalLeft
+                + " slack=" + slack
+                + " edges=" + bestEdges);
         controlsAtEdgesBelowBadges = bestEdges;
         avoidanceColumn.setPadding(
                 avoidanceColumn.getPaddingLeft()
