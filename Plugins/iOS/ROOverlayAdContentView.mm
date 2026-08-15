@@ -1390,22 +1390,32 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     BOOL numberLeft = _numberOpposite ? !_closeOnLeft : _closeOnLeft;
     BOOL leftOccupied = _closeOnLeft || numberLeft;
     BOOL rightOccupied = !_closeOnLeft || !numberLeft;
-    // The free interval runs from obstacle edge to obstacle edge with no
-    // buffer: touching without overlapping is the goal. Both control
-    // POSITIONS count as obstacles whatever is currently visible, so the
-    // media never re-anchors when the timer hands over to the close.
-    CGFloat topRowIntervalLeft = leftOccupied
-            ? kROAttributionWidth + controlGap + controlSize
-            : 0;
-    CGFloat topRowIntervalRight = rightOccupied
-            ? panelWidth - kRORightControlInset - controlSize
-            : panelWidth;
-    CGFloat edgeIntervalLeft = leftOccupied ? controlSize : 0;
-    CGFloat edgeIntervalRight = rightOccupied
-            ? panelWidth - controlSize
-            : panelWidth;
+    // The media's field: its sides NEVER pass the panel's side padding -
+    // the same 8pt every element below wears - its ceiling is the panel's
+    // top edge, and rising into the control band adds the two control
+    // columns as walls. Intervals run from wall to wall with no buffer:
+    // touching without overlapping is the goal. Both control POSITIONS
+    // count as walls whatever is currently visible, so the media never
+    // re-anchors when the timer hands over to the close.
+    CGFloat syncLeft = kROHorizontalPadding;
+    CGFloat syncRight = panelWidth - kROHorizontalPadding;
+    CGFloat topRowIntervalLeft = MAX(
+            syncLeft
+          , leftOccupied
+                    ? kROAttributionWidth + controlGap + controlSize
+                    : syncLeft);
+    CGFloat topRowIntervalRight = MIN(
+            syncRight
+          , rightOccupied
+                    ? panelWidth - kRORightControlInset - controlSize
+                    : syncRight);
+    CGFloat edgeIntervalLeft = MAX(
+            syncLeft
+          , leftOccupied ? controlSize : syncLeft);
+    CGFloat edgeIntervalRight = MIN(
+            syncRight
+          , rightOccupied ? panelWidth - controlSize : syncRight);
 
-    // Below the controls the media may bleed edge to edge.
     CGFloat candidateTops[4] = {
             0
           , controlSize
@@ -1413,14 +1423,14 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
           , badgeHeight + controlSize };
     CGFloat candidateLefts[4] = {
             topRowIntervalLeft
-          , 0
+          , syncLeft
           , edgeIntervalLeft
-          , 0 };
+          , syncLeft };
     CGFloat candidateRights[4] = {
             topRowIntervalRight
-          , panelWidth
+          , syncRight
           , edgeIntervalRight
-          , panelWidth };
+          , syncRight };
     BOOL candidateEdges[4] = { NO, NO, YES, YES };
     // A reported ratio sizes the box to the creative itself: it grows
     // until it touches whichever limit binds, and the band's slack splits

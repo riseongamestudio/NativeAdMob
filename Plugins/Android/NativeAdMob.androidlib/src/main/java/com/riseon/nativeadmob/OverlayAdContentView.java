@@ -1762,36 +1762,46 @@ final class OverlayAdContentView extends FrameLayout {
         boolean numberLeft = numberOpposite ? !closeOnLeft : closeOnLeft;
         boolean leftOccupied = closeOnLeft || numberLeft;
         boolean rightOccupied = !closeOnLeft || !numberLeft;
-        // The free interval runs from obstacle edge to obstacle edge with no
+        // The media's field: its sides NEVER pass the panel's side padding -
+        // the same 8dp every element below wears - its ceiling is the
+        // panel's top edge, and rising into the control band adds the two
+        // control columns as walls. Intervals run from wall to wall with no
         // buffer: touching without overlapping is the goal. Both control
-        // POSITIONS count as obstacles whatever is currently visible, so the
+        // POSITIONS count as walls whatever is currently visible, so the
         // media never re-anchors when the timer hands over to the close.
-        int topRowIntervalLeft = leftOccupied
-                ? (int) (ATTRIBUTION_WIDTH_DP * density)
-                        + controlGap + controlSize
-                : 0;
-        int topRowIntervalRight = rightOccupied
-                ? panelWidth
-                        - (int) (RIGHT_CONTROL_INSET_DP * density)
-                        - controlSize
-                : panelWidth;
-        int edgeIntervalLeft = leftOccupied ? controlSize : 0;
-        int edgeIntervalRight = rightOccupied
-                ? panelWidth - controlSize
-                : panelWidth;
+        int syncLeft = avoidanceHorizontalPadding;
+        int syncRight = panelWidth - avoidanceHorizontalPadding;
+        int topRowIntervalLeft = Math.max(
+                syncLeft
+              , leftOccupied
+                        ? (int) (ATTRIBUTION_WIDTH_DP * density)
+                                + controlGap + controlSize
+                        : syncLeft);
+        int topRowIntervalRight = Math.min(
+                syncRight
+              , rightOccupied
+                        ? panelWidth
+                                - (int) (RIGHT_CONTROL_INSET_DP * density)
+                                - controlSize
+                        : syncRight);
+        int edgeIntervalLeft = Math.max(
+                syncLeft
+              , leftOccupied ? controlSize : syncLeft);
+        int edgeIntervalRight = Math.min(
+                syncRight
+              , rightOccupied ? panelWidth - controlSize : syncRight);
 
         // {media top, interval left, interval right, controls at edges}.
-        // Below the controls the media may bleed edge to edge.
         int[][] candidates = {
                 { 0, topRowIntervalLeft, topRowIntervalRight, 0 }
-              , { controlSize, 0, panelWidth, 0 }
+              , { controlSize, syncLeft, syncRight, 0 }
               , { badgeHeight
                   , edgeIntervalLeft
                   , edgeIntervalRight
                   , 1 }
               , { badgeHeight + controlSize
-                  , 0
-                  , panelWidth
+                  , syncLeft
+                  , syncRight
                   , 1 }
         };
         // A reported ratio sizes the box to the creative itself: it grows
