@@ -1816,11 +1816,12 @@ final class OverlayAdContentView extends FrameLayout {
                   , panelWidth
                   , 1 }
         };
-        // The media takes the WHOLE chosen band - it always touches the
-        // band's edges, and what its creative cannot cover shows the black
-        // ground. A known ratio only decides WHICH band, by the creative
-        // area each one would display; an unreported ratio scores by the
-        // band itself, since no number exists to reason with.
+        // A reported ratio sizes the box to the creative itself: it grows
+        // until it touches whichever limit binds, and the band's slack
+        // splits so the block sits centred between the controls and the
+        // bottom edge. Only a creative that never reported its proportions
+        // is handed the whole band - no number exists to size or validate
+        // it - and renders inside as it pleases on the black ground.
         long bestScore = -1L;
         int bestBoxWidth = Math.max(panelWidth, avoidanceMinimumMediaSize);
         int bestBoxHeight = Math.max(
@@ -1836,33 +1837,45 @@ final class OverlayAdContentView extends FrameLayout {
             int bandHeight = availableHeight - top;
             if (bandHeight < avoidanceMinimumMediaSize) continue;
 
-            long score;
+            int boxWidth;
+            int boxHeight;
             if (mediaAspectReported) {
-                int fitHeight = Math.min(
+                boxHeight = Math.min(
                         bandHeight
                       , Math.round(widthCap / avoidanceMediaAspect));
-                int fitWidth = Math.min(
+                boxWidth = Math.min(
                         widthCap
-                      , Math.round(fitHeight * avoidanceMediaAspect));
-                score = (long) fitWidth * fitHeight;
+                      , Math.round(boxHeight * avoidanceMediaAspect));
+                if (boxWidth < avoidanceMinimumMediaSize
+                        || boxHeight < avoidanceMinimumMediaSize) {
+                    continue;
+                }
             } else {
-                score = (long) widthCap * bandHeight;
+                boxWidth = widthCap;
+                boxHeight = bandHeight;
             }
+
+            long score = (long) boxWidth * boxHeight;
             if (score > bestScore) {
                 bestScore = score;
-                bestBoxWidth = widthCap;
-                bestBoxHeight = bandHeight;
+                bestBoxWidth = boxWidth;
+                bestBoxHeight = boxHeight;
                 bestTop = top;
                 bestEdges = candidate[2] == 1;
             }
         }
 
+        int slack = mediaAspectReported
+                ? Math.max(
+                        0
+                      , availableHeight - bestTop - bestBoxHeight)
+                : 0;
         controlsAtEdgesBelowBadges = bestEdges;
         avoidanceColumn.setPadding(
                 avoidanceColumn.getPaddingLeft()
               , bestTop
               , avoidanceColumn.getPaddingRight()
-              , 0);
+              , slack / 2);
         mediaLayoutParams.width = bestBoxWidth;
         mediaLayoutParams.height = bestBoxHeight;
         mediaLayoutParams.gravity = Gravity.CENTER_HORIZONTAL;
