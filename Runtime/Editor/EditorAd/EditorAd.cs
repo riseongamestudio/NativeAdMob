@@ -358,14 +358,13 @@ namespace RiseOn.NativeAdMob.Editor {
             var content = contentObject.GetComponent<RectTransform>();
             content.anchorMin = Vector2.zero;
             content.anchorMax = Vector2.one;
-            // Full screen: the media may use the whole width and reach under
-            // the corner controls, the way the device centres its column
-            // over the full surface; only the text stack keeps an inset.
-            // Collapsible: everything sits inset below the control strip -
-            // the strip-avoiding layout the device prefers.
+            // Full screen: the stack hugs the bottom and the media takes the
+            // full width below the control band - the device's avoidance
+            // layout for a wide creative; only the text stack keeps an
+            // inset. Collapsible: everything sits inset below the strip.
             if (fullscreen) {
                 content.offsetMin = Vector2.zero;
-                content.offsetMax = Vector2.zero;
+                content.offsetMax = new(0f, -CONTROL_SIZE_DP);
             } else {
                 content.offsetMin = new(
                     CONTENT_HORIZONTAL_PADDING_DP
@@ -379,6 +378,9 @@ namespace RiseOn.NativeAdMob.Editor {
                     contentObject
                             .GetComponent<EditorAdaptiveLayoutGroup>();
             ConfigureContentLayout(contentLayout);
+            if (fullscreen) {
+                contentLayout.childAlignment = TextAnchor.LowerCenter;
+            }
 
             var mediaText = config.AllowsVideo
                     ? FLEXIBLE_MEDIA_TEXT
@@ -651,7 +653,22 @@ namespace RiseOn.NativeAdMob.Editor {
             var shortSide = Mathf.Min(cellWidth, cellHeight);
             var tier = ResolveInFeedTier(shortSide);
             var gap = ResolveInFeedGap(tier);
-            var scrimTemplate = tier == InFeedTier.Compact;
+            var headlineHeight =
+                    IN_FEED_COMPACT_FONT_SIZE * TEXT_HEIGHT_MULTIPLIER;
+            var callToActionBandHeight = Mathf.Clamp(
+                shortSide * IN_FEED_CTA_SHORT_SIDE_RATIO
+              , IN_FEED_CTA_MIN_HEIGHT_DP
+              , IN_FEED_CTA_MAX_HEIGHT_DP);
+            // The device rule: the scrim template is how media survives a
+            // cell that cannot host a dedicated media band; any cell that
+            // fits the band gets the media-top column.
+            var mediaBandEstimate =
+                    IN_FEED_MEDIA_FLOOR_DP
+                  + headlineHeight
+                  + callToActionBandHeight
+                  + 4 * gap;
+            var scrimTemplate = cellHeight < mediaBandEstimate
+                    || cellWidth < IN_FEED_MEDIA_FLOOR_DP;
 
             // The media: the whole cell on the scrim template, the top band
             // of the column otherwise.
@@ -700,6 +717,17 @@ namespace RiseOn.NativeAdMob.Editor {
                 scrimImage.color = new(0f, 0f, 0f, SCRIM_ALPHA);
                 scrimImage.raycastTarget = false;
             } else {
+                // The media absorbs whatever the text stack leaves free,
+                // the way the device's media-top column grows its picture
+                // instead of keeping an empty band.
+                var lowerEstimate =
+                        headlineHeight
+                      + (tier != InFeedTier.Compact
+                                ? BODY_FONT_SIZE * TEXT_HEIGHT_MULTIPLIER
+                                : 0f)
+                      + callToActionBandHeight
+                      + 4 * gap
+                      + 2 * Mathf.Max(gap, 2);
                 mediaRect.anchorMin = new(0f, 1f);
                 mediaRect.anchorMax = new(1f, 1f);
                 mediaRect.pivot = new(0.5f, 1f);
@@ -707,8 +735,8 @@ namespace RiseOn.NativeAdMob.Editor {
                 mediaRect.sizeDelta = new(
                     0f
                   , Mathf.Max(
-                        ResolveInFeedMediaHeight(tier)
-                      , cellHeight * 0.5f));
+                        IN_FEED_MEDIA_FLOOR_DP
+                      , cellHeight - lowerEstimate));
             }
 
             // The bottom stack: icon by the device's shared-line floor, the
@@ -727,8 +755,8 @@ namespace RiseOn.NativeAdMob.Editor {
             content.sizeDelta = new(0f, 0f);
 
             var stack = contentObject.GetComponent<VerticalLayoutGroup>();
-            var pad = Mathf.Max(gap, 4);
-            stack.padding = new(pad, pad, pad, pad);
+            var pad = Mathf.Max(gap, 2);
+            stack.padding = new(pad, pad, gap, gap);
             stack.spacing = gap;
             stack.childAlignment = TextAnchor.LowerLeft;
             stack.childControlWidth = true;
@@ -807,13 +835,20 @@ namespace RiseOn.NativeAdMob.Editor {
             headlineLayoutElement =
                     headlineText.GetComponent<LayoutElement>();
 
-            if (tier != InFeedTier.Compact) {
-                CreateText(
+            // The body rides along as a single clipped line even in the
+            // scrim cell - an element on screen beats padding, per the
+            // device's own priority ladder.
+            if (scrimTemplate || tier != InFeedTier.Compact) {
+                var bodyFontSize = tier == InFeedTier.Compact
+                        ? IN_FEED_COMPACT_FONT_SIZE
+                        : BODY_FONT_SIZE;
+                var body = CreateText(
                     contentObject.transform
                   , BODY_TEXT
-                  , BODY_FONT_SIZE
+                  , bodyFontSize
                   , TextAnchor.MiddleLeft
                   , SecondaryTextColor);
+                body.verticalOverflow = VerticalWrapMode.Truncate;
             }
 
             var callToActionHeight = Mathf.RoundToInt(
@@ -863,9 +898,9 @@ namespace RiseOn.NativeAdMob.Editor {
             };
         }
 
-        private static int ResolveInFeedMediaHeight(InFeedTier tier) {
-            return tier == InFeedTier.Roomy ? 120 : 88;
-        }
+        // The image policy floor the device applies to a registered
+        // MediaView; only a video creative demands the 120dp minimum.
+        private const int IN_FEED_MEDIA_FLOOR_DP = 48;
 
         // ------------------------------------------------------------------
         // Badges and controls
@@ -1211,11 +1246,13 @@ namespace RiseOn.NativeAdMob.Editor {
         private void ApplySafeTopInset(float safeTopInset) {
             if (config.Mode == EditorAdMode.InFeed) return;
 
-            // Full screen: only the cutout insets the content - the media
-            // may run under the corner controls, exactly as on device.
+            // Full screen: the content stays below the control band - the
+            // device's avoidance keeps close and timer off the media.
             // Collapsible: the content stays below the control strip.
             if (config.Mode == EditorAdMode.FullScreen) {
-                content.offsetMax = new(0f, -safeTopInset);
+                content.offsetMax = new(
+                    0f
+                  , -(CONTROL_SIZE_DP + safeTopInset));
             } else {
                 content.offsetMax = new(
                     -CONTENT_HORIZONTAL_PADDING_DP
