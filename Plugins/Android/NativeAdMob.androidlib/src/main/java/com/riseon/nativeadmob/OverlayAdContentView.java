@@ -921,12 +921,7 @@ final class OverlayAdContentView extends FrameLayout {
                   , icon
                   , callToAction);
             if (!contentFits) {
-                ApplyStripAvoidingFloors(
-                        density
-                      , icon
-                      , callToAction
-                      , identityRow
-                      , body);
+                ApplyStripAvoidingFloors(density, icon, callToAction);
                 contentFits = ContentFitsWithMinimumMedia(
                         displayMetrics
                       , horizontalPadding
@@ -940,12 +935,7 @@ final class OverlayAdContentView extends FrameLayout {
             if (contentFits) {
                 // The compact chrome is not a last resort but the standing
                 // dress: the height it frees goes straight to the media.
-                ApplyStripAvoidingFloors(
-                        density
-                      , icon
-                      , callToAction
-                      , identityRow
-                      , body);
+                ApplyStripAvoidingFloors(density, icon, callToAction);
                 // The half panel runs the same maximiser as the full
                 // screen: the media's band grows toward the controls and
                 // the controls move where the band grows largest.
@@ -1403,15 +1393,13 @@ final class OverlayAdContentView extends FrameLayout {
         return rail.getMeasuredHeight() <= railHeight;
     }
 
-    // The floors the strip-avoiding layout may fall to before it surrenders:
-    // a shorter call to action, a smaller icon and no optional padding, each
-    // a price worth paying to keep the corner controls off the media.
+    // The floors the strip-avoiding layout stands on: a shorter call to
+    // action and a smaller icon. The separating paddings between rows are
+    // never touched - they are the seams of the layout, not chrome.
     private static void ApplyStripAvoidingFloors(
             float density
           , ImageView icon
-          , Button callToAction
-          , LinearLayout identityRow
-          , TextView body) {
+          , Button callToAction) {
         int callToActionHeight =
                 Math.round(AVOID_CALL_TO_ACTION_HEIGHT_DP * density);
         callToAction.setMinHeight(callToActionHeight);
@@ -1424,8 +1412,6 @@ final class OverlayAdContentView extends FrameLayout {
             iconLayoutParams.height = iconSize;
             icon.setLayoutParams(iconLayoutParams);
         }
-        identityRow.setPadding(0, 0, 0, 0);
-        body.setPadding(0, 0, 0, 0);
     }
 
     private void RestoreOptionalRows(
@@ -1876,13 +1862,14 @@ final class OverlayAdContentView extends FrameLayout {
               , slack / 2);
         mediaLayoutParams.width = bestBoxWidth;
         mediaLayoutParams.height = bestBoxHeight;
-        // Centred within the free interval, not within the panel: the open
-        // side is used, not admired.
+        // Centred within the free interval. The margin is measured from
+        // the panel edge, so the column's own left padding is subtracted -
+        // negative means the media bleeds through it, as it may.
         mediaLayoutParams.gravity = Gravity.START;
-        mediaLayoutParams.leftMargin = Math.max(
-                0
-              , bestIntervalLeft
-                        + (bestIntervalWidth - bestBoxWidth) / 2);
+        mediaLayoutParams.leftMargin =
+                bestIntervalLeft
+                        + (bestIntervalWidth - bestBoxWidth) / 2
+                        - avoidanceColumn.getPaddingLeft();
         mediaLayoutParams.rightMargin = 0;
         avoidanceMediaView.setLayoutParams(mediaLayoutParams);
         requestLayout();

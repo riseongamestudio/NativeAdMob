@@ -1039,8 +1039,6 @@ static UIColor *HBArgb(uint32_t argb) {
         _icon.ro_layoutWidth = kROAvoidIconSize;
         _icon.ro_layoutHeight = kROAvoidIconSize;
     }
-    _identityRow.ro_padding = UIEdgeInsetsZero;
-    _body.ro_padding = UIEdgeInsetsZero;
 }
 
 - (void)ro_restoreOptionalRows {
@@ -1487,13 +1485,14 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     _mediaView.ro_layoutWidth = bestBoxWidth;
     _mediaView.ro_layoutHeight = bestBoxHeight;
     _mediaView.ro_layoutWeight = 0;
-    // Centred within the free interval, not within the panel: the open
-    // side is used, not admired.
+    // Centred within the free interval. The margin is measured from the
+    // panel edge, so the column's own left padding is subtracted - negative
+    // means the media bleeds through it, as it may.
     _mediaView.ro_layoutGravity = HBGravityLeft;
     UIEdgeInsets mediaMargins = UIEdgeInsetsZero;
-    mediaMargins.left = MAX(
-            0
-          , bestIntervalLeft + (bestIntervalWidth - bestBoxWidth) / 2);
+    mediaMargins.left = bestIntervalLeft
+            + (bestIntervalWidth - bestBoxWidth) / 2
+            - _contentColumn.ro_padding.left;
     _mediaView.ro_layoutMargins = mediaMargins;
 }
 
