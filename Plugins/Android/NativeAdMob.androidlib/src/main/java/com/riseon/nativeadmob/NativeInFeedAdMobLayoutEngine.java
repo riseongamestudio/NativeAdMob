@@ -1292,7 +1292,7 @@ final class NativeInFeedAdMobLayoutEngine {
         }
         if (existing.contains(reason)) return;
 
-        int kept = existing.split(" \| ", -1).length;
+        int kept = existing.split(" \\| ", -1).length;
         if (kept >= MAX_REJECTION_REASONS_PER_TEMPLATE) return;
 
         rejectionReasons[template] = existing + " | " + entry;
