@@ -123,9 +123,13 @@ namespace RiseOn.NativeAdMob.Editor {
                 new(0f, 0f, 0f, 0.7f);
         private static readonly Color AttributionColor =
                 new(1f, 0.76f, 0.03f, 1f);
-        // The device call to action verbatim: #2196F3.
+        // The device call to action verbatim: #2196F3, bordered #1565C0.
         private static readonly Color CallToActionColor =
                 new(0x21 / 255f, 0x96 / 255f, 0xF3 / 255f, 1f);
+        private static readonly Color CallToActionBorderColor =
+                new(0x15 / 255f, 0x65 / 255f, 0xC0 / 255f, 1f);
+        private static readonly Color ElementOutlineColor =
+                new(0f, 0f, 0f, 0.35f);
 
         private Action onDismissed;
         private EditorAdConfig config;
@@ -525,6 +529,7 @@ namespace RiseOn.NativeAdMob.Editor {
 
             var image = iconObject.GetComponent<Image>();
             image.color = CallToActionColor;
+            AddOutline(image, ElementOutlineColor);
 
             var button = iconObject.GetComponent<Button>();
             button.targetGraphic = image;
@@ -566,6 +571,7 @@ namespace RiseOn.NativeAdMob.Editor {
             var graphic =
                     mediaObject.GetComponent<EditorMediaGraphic>();
             graphic.raycastTarget = true;
+            AddOutline(graphic, ElementOutlineColor);
 
             var button = mediaObject.GetComponent<Button>();
             button.targetGraphic = graphic;
@@ -604,6 +610,7 @@ namespace RiseOn.NativeAdMob.Editor {
 
             var image = buttonObject.GetComponent<Image>();
             image.color = CallToActionColor;
+            AddOutline(image, CallToActionBorderColor);
 
             var button = buttonObject.GetComponent<Button>();
             button.targetGraphic = image;
@@ -672,6 +679,7 @@ namespace RiseOn.NativeAdMob.Editor {
             var mediaGraphic =
                     mediaObject.GetComponent<EditorMediaGraphic>();
             mediaGraphic.raycastTarget = true;
+            AddOutline(mediaGraphic, ElementOutlineColor);
             var mediaButton = mediaObject.GetComponent<Button>();
             mediaButton.targetGraphic = mediaGraphic;
             mediaButton.onClick.AddListener(
@@ -1180,6 +1188,14 @@ namespace RiseOn.NativeAdMob.Editor {
             label.color = color;
             label.raycastTarget = false;
             return label;
+        }
+
+        // The border the device buttons carry: a thin dark rim so a solid
+        // element reads as a control against any background.
+        private static void AddOutline(Graphic graphic, Color color) {
+            var outline = graphic.gameObject.AddComponent<Outline>();
+            outline.effectColor = color;
+            outline.effectDistance = new(1.5f, -1.5f);
         }
 
         private static void Stretch(RectTransform rect) {
