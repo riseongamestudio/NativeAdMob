@@ -69,6 +69,9 @@ final class InFeedAdSlot {
         }
     }
 
+    private final InFeedAd owner;
+    private final int index;
+
     private final Runnable refreshRunnable = this::HandleRefresh;
     private final Runnable layoutRetryRunnable = this::HandleLayoutRetry;
     private final Runnable entryExpiryRunnable = this::HandleEntryExpiry;
@@ -80,10 +83,7 @@ final class InFeedAdSlot {
     // frame's traversal and draw, which is the earliest point where the hide
     // is actually on screen.
     private final Choreographer.FrameCallback hiddenSwapFrameCallback =
-            frameTimeNanos -> owner.main.post(hiddenSwapRunnable);
-
-    private final InFeedAd owner;
-    private final int index;
+            frameTimeNanos -> PostHiddenSwap();
     private SlotRect rect;
     private DisplayEntry activeEntry;
     private DisplayEntry materializingEntry;
@@ -97,6 +97,10 @@ final class InFeedAdSlot {
     InFeedAdSlot(InFeedAd owner, int index) {
         this.owner = owner;
         this.index = index;
+    }
+
+    private void PostHiddenSwap() {
+        owner.main.post(hiddenSwapRunnable);
     }
 
     // ---- operations; the owner already hopped to main and vetted the
