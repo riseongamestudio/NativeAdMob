@@ -28,9 +28,6 @@ static const CGFloat kRORightControlInset = 18;
 // never reported its ratio (which reads as 1.0) is not locked out of the
 // layout that suits portrait video best.
 static const CGFloat kROSideMediaMaxAspect = 1.05f;
-// The dimming over the ambient backdrop - dark enough that the fitted
-// creative in front stays the one that reads as the picture.
-static const CGFloat kROAmbientDimAlpha = 0.55f;
 static const CGFloat kROSideMediaMaxWidthShare = 0.62f;
 static const CGFloat kROSideMediaMinRail = 120;
 // A panel meaningfully taller than wide reads as a page: media belongs
@@ -153,7 +150,6 @@ static UIColor *HBArgb(uint32_t argb) {
     BOOL _controlAvoidanceActive;
     BOOL _controlsAtEdgesBelowBadges;
     CGFloat _avoidancePanelHeight;
-    HBFrameLayoutView *_avoidanceBoxView;
     HBLinearLayoutView *_sideRail;
     BOOL _iconHero;
     BOOL _tickerLayout;
@@ -1260,56 +1256,6 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     _contentColumn.ro_gravity =
             HBGravityBottom | HBGravityCenterHorizontal;
     _mediaView.ro_layoutMargins = UIEdgeInsetsZero;
-
-    // The media moves into its own box with the ambient backdrop as a
-    // sibling BEHIND it - never inside the GADMediaView, whose subviews
-    // belong to the SDK and do not survive binding.
-    _avoidanceBoxView = [[HBFrameLayoutView alloc] init];
-    NSInteger mediaIndex =
-            [_contentColumn.subviews indexOfObject:_mediaView];
-    _avoidanceBoxView.ro_layoutWidth = _mediaView.ro_layoutWidth;
-    _avoidanceBoxView.ro_layoutHeight = _mediaView.ro_layoutHeight;
-    _avoidanceBoxView.ro_layoutWeight = _mediaView.ro_layoutWeight;
-    _avoidanceBoxView.ro_layoutGravity = _mediaView.ro_layoutGravity;
-    [_mediaView removeFromSuperview];
-    UIView *ambientBackdrop = [self ro_createAmbientBackdrop];
-    if (ambientBackdrop != nil) {
-        ambientBackdrop.ro_layoutWidth = ROLayoutMatchParent;
-        ambientBackdrop.ro_layoutHeight = ROLayoutMatchParent;
-        [_avoidanceBoxView addSubview:ambientBackdrop];
-    }
-    _mediaView.ro_layoutWidth = ROLayoutMatchParent;
-    _mediaView.ro_layoutHeight = ROLayoutMatchParent;
-    _mediaView.ro_layoutWeight = 0;
-    _mediaView.ro_layoutGravity = 0;
-    [_avoidanceBoxView addSubview:_mediaView];
-    if (mediaIndex == NSNotFound) {
-        [_contentColumn addSubview:_avoidanceBoxView];
-    } else {
-        [_contentColumn insertSubview:_avoidanceBoxView
-                              atIndex:mediaIndex];
-    }
-}
-
-// Ambient fill: the creative's own picture, cropped to cover and dimmed,
-// so an aspect mismatch shows the creative's colours running to the edges
-// instead of dead bars or blank panel. Video paints its own stage over it;
-// the backdrop then simply never shows.
-- (UIView *)ro_createAmbientBackdrop {
-    UIImage *source = _nativeAd.mediaContent.mainImage;
-    if (source == nil) source = _fallbackMediaImage;
-    if (source == nil) return nil;
-
-    UIImageView *backdrop = [[UIImageView alloc] initWithImage:source];
-    backdrop.contentMode = UIViewContentModeScaleAspectFill;
-    backdrop.clipsToBounds = YES;
-    UIView *dim = [[UIView alloc] initWithFrame:backdrop.bounds];
-    dim.backgroundColor =
-            [UIColor colorWithWhite:0 alpha:kROAmbientDimAlpha];
-    dim.autoresizingMask = UIViewAutoresizingFlexibleWidth
-            | UIViewAutoresizingFlexibleHeight;
-    [backdrop addSubview:dim];
-    return backdrop;
 }
 
 // Control avoidance, the Android transcription: the stack hugs the bottom,
@@ -1329,14 +1275,13 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     CGFloat controlGap = kROControlGap;
     CGFloat contentWidth = MAX(0, panelWidth - 2 * kROHorizontalPadding);
 
-    if (_avoidanceBoxView == nil) return;
-
     // The lower stack's height, measured with the media collapsed.
-    _avoidanceBoxView.ro_layoutWidth = 0;
-    _avoidanceBoxView.ro_layoutHeight = 0;
-    _avoidanceBoxView.ro_layoutWeight = 0;
+    _mediaView.ro_layoutWidth = 0;
+    _mediaView.ro_layoutHeight = 0;
+    _mediaView.ro_layoutWeight = 0;
     UIEdgeInsets columnPadding = _contentColumn.ro_padding;
     columnPadding.top = 0;
+    columnPadding.bottom = 0;
     _contentColumn.ro_padding = columnPadding;
     [_contentColumn ro_measureWithWidthSpec:
                     HBMeasureSpecMake(HBMeasureSpecExactly, panelWidth)
@@ -1387,7 +1332,8 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
           , contentWidth };
     BOOL candidateEdges[4] = { NO, NO, YES, YES };
     CGFloat bestArea = -1;
-    CGFloat bestBoxWidth = MAX(contentWidth, _minimumMediaSize);
+    CGFloat bestWidth = 0;
+    CGFloat bestHeight = 0;
     CGFloat bestTop = controlSize + controlGap;
     BOOL bestAtEdges = NO;
     for (NSInteger index = 0; index < 4; ++index) {
@@ -1410,7 +1356,8 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
         CGFloat area = width * height;
         if (area > bestArea) {
             bestArea = area;
-            bestBoxWidth = widthCap;
+            bestWidth = width;
+            bestHeight = height;
             bestTop = top;
             bestAtEdges = candidateEdges[index];
         }
@@ -1420,19 +1367,31 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
         // the controls; they overlay it, as they always could.
         bestTop = 0;
         bestAtEdges = NO;
-        bestBoxWidth = MAX(contentWidth, _minimumMediaSize);
+        bestHeight = MAX(_minimumMediaSize, availableHeight);
+        bestWidth = MIN(
+                MAX(contentWidth, _minimumMediaSize)
+              , MAX(
+                    _minimumMediaSize
+                  , round(bestHeight * _mediaAspectRatio)));
+        bestHeight = MIN(
+                bestHeight
+              , MAX(
+                    _minimumMediaSize
+                  , round(bestWidth / _mediaAspectRatio)));
     }
 
-    CGFloat bandHeight = MAX(
-            _minimumMediaSize
-          , availableHeight - bestTop);
+    // The media keeps the creative's exact size; the slack the band has
+    // left splits evenly, so the whole block sits centred between the
+    // controls and the panel's bottom edge.
+    CGFloat slack = MAX(0, availableHeight - bestTop - bestHeight);
     _controlsAtEdgesBelowBadges = bestAtEdges;
     columnPadding.top = bestTop;
+    columnPadding.bottom = slack / 2;
     _contentColumn.ro_padding = columnPadding;
-    _avoidanceBoxView.ro_layoutWidth = bestBoxWidth;
-    _avoidanceBoxView.ro_layoutHeight = bandHeight;
-    _avoidanceBoxView.ro_layoutWeight = 0;
-    _avoidanceBoxView.ro_layoutGravity = HBGravityCenterHorizontal;
+    _mediaView.ro_layoutWidth = bestWidth;
+    _mediaView.ro_layoutHeight = bestHeight;
+    _mediaView.ro_layoutWeight = 0;
+    _mediaView.ro_layoutGravity = HBGravityCenterHorizontal;
 }
 
 - (void)ro_matchIconSizeToIdentityText {

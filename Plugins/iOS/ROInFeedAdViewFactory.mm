@@ -1166,17 +1166,15 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
     ROInFeedMediaView *mediaView = [[ROInFeedMediaView alloc] init];
     BOOL backgroundTemplate =
             plan.layoutTemplate == ROInFeedTemplateMediaBackground;
-    // A background media covers its cell by cropping - it has no band to
-    // letterbox in, and dead fill at its edges is exactly what a background
-    // must never show. A band media letterboxes against the panel colour
-    // instead of black; only video keeps the black stage its player paints.
+    // The picture is always shown whole; a band media letterboxes against
+    // the panel colour instead of black, and only video keeps the black
+    // stage its player paints. The background template fills what the
+    // fitted picture leaves with the ambient backdrop below.
     mediaView.backgroundColor = plan.renderVideo
             ? UIColor.blackColor
             : UIColor.clearColor;
     mediaView.clipsToBounds = YES;
-    mediaView.contentMode = backgroundTemplate
-            ? UIViewContentModeScaleAspectFill
-            : UIViewContentModeScaleAspectFit;
+    mediaView.contentMode = UIViewContentModeScaleAspectFit;
     views.media = mediaView;
     views.mediaSlot = mediaView;
     if (probe) return mediaView;
@@ -1199,10 +1197,11 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
                     format:@"Main image is required for an image fallback "
                             "layout"];
     }
-    // Ambient fill for a band media: the same picture, cropped to cover and
-    // dimmed, stands behind the fitted one so an aspect mismatch shows the
-    // creative's own colours instead of dead bars.
-    if (!backgroundTemplate) {
+    // Ambient fill for the background template only: the same picture,
+    // cropped to cover and dimmed, stands behind the fitted one so the
+    // cell's background is the creative's own colours expanded to the
+    // edges - never dead fill, never a cropped-away creative.
+    if (backgroundTemplate) {
         UIImageView *ambientBackdrop =
                 [[UIImageView alloc] initWithImage:mainImage];
         ambientBackdrop.contentMode = UIViewContentModeScaleAspectFill;
@@ -1220,9 +1219,7 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
 
     UIImageView *fallbackImageView =
             [[UIImageView alloc] initWithImage:mainImage];
-    fallbackImageView.contentMode = backgroundTemplate
-            ? UIViewContentModeScaleAspectFill
-            : UIViewContentModeScaleAspectFit;
+    fallbackImageView.contentMode = UIViewContentModeScaleAspectFit;
     fallbackImageView.clipsToBounds = YES;
     [mediaView addSubview:fallbackImageView];
     mediaView.fallbackImageView = fallbackImageView;

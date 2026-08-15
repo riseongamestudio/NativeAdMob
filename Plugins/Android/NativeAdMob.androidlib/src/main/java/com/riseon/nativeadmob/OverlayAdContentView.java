@@ -127,9 +127,6 @@ final class OverlayAdContentView extends FrameLayout {
     // the rail, and a video that never reported its ratio (which reads as
     // 1.0) is not locked out of the layout that suits portrait video best.
     private static final float SIDE_MEDIA_MAX_ASPECT = 1.05f;
-    // The veil of dimming over the ambient backdrop - dark enough that the
-    // fitted creative in front stays the one that reads as the picture.
-    private static final int AMBIENT_DIM_COLOR = 0x8C000000;
     private static final float SIDE_MEDIA_MAX_WIDTH_SHARE = 0.62f;
     private static final int SIDE_MEDIA_MIN_RAIL_DP = 120;
     // A panel meaningfully taller than wide reads as a page: media belongs
@@ -170,7 +167,7 @@ final class OverlayAdContentView extends FrameLayout {
     private boolean controlAvoidanceActive;
     private boolean controlsAtEdgesBelowBadges;
     private LinearLayout avoidanceColumn;
-    private FrameLayout avoidanceBoxView;
+    private MediaView avoidanceMediaView;
     private float avoidanceMediaAspect;
     private int avoidanceMinimumMediaSize;
     private int avoidanceHorizontalPadding;
@@ -1573,6 +1570,7 @@ final class OverlayAdContentView extends FrameLayout {
           , int panelHeight) {
         controlAvoidanceActive = true;
         avoidanceColumn = contentColumn;
+        avoidanceMediaView = mediaView;
         avoidanceMediaAspect = mediaAspectRatio;
         avoidanceMinimumMediaSize = minimumMediaSize;
         avoidanceHorizontalPadding = horizontalPadding;
@@ -1580,60 +1578,9 @@ final class OverlayAdContentView extends FrameLayout {
         contentColumn.setGravity(
                 Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         SetMediaSideBleed(mediaView, 0);
-
-        // The media moves into its own box with the ambient backdrop as a
-        // sibling BEHIND it - never inside the MediaView, whose children
-        // belong to the SDK and do not survive binding.
-        avoidanceBoxView = new FrameLayout(getContext());
-        int mediaIndex = contentColumn.indexOfChild(mediaView);
-        LinearLayout.LayoutParams boxParams =
-                (LinearLayout.LayoutParams) mediaView.getLayoutParams();
-        contentColumn.removeView(mediaView);
-        ImageView ambientBackdrop = CreateAmbientBackdrop();
-        if (ambientBackdrop != null) {
-            avoidanceBoxView.addView(
-                    ambientBackdrop
-                  , new FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                      , ViewGroup.LayoutParams.MATCH_PARENT));
-        }
-        avoidanceBoxView.addView(
-                mediaView
-              , new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                  , ViewGroup.LayoutParams.MATCH_PARENT));
-        contentColumn.addView(
-                avoidanceBoxView
-              , Math.max(0, mediaIndex)
-              , boxParams);
-
         RecomputeMediaControlAvoidance(
                 displayMetrics.widthPixels
               , panelHeight);
-    }
-
-    // Ambient fill: the creative's own picture, cropped to cover and dimmed,
-    // so an aspect mismatch shows the creative's colours running to the
-    // edges instead of dead bars or blank panel. Video paints its own stage
-    // over it; the backdrop then simply never shows.
-    private ImageView CreateAmbientBackdrop() {
-        Drawable source = null;
-        com.google.android.gms.ads.MediaContent mediaContent =
-                nativeAd.getMediaContent();
-        if (mediaContent != null) source = mediaContent.getMainImage();
-        if (source == null) source = FindFallbackMediaImage();
-        if (source == null) return null;
-
-        Drawable backdropDrawable = source.getConstantState() != null
-                ? source.getConstantState().newDrawable().mutate()
-                : source;
-        ImageView backdrop = new ImageView(getContext());
-        backdrop.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        backdrop.setImageDrawable(backdropDrawable);
-        backdrop.setColorFilter(
-                AMBIENT_DIM_COLOR
-              , android.graphics.PorterDuff.Mode.SRC_ATOP);
-        return backdrop;
     }
 
     @Override
@@ -1657,7 +1604,7 @@ final class OverlayAdContentView extends FrameLayout {
           , int panelHeight) {
         if (!controlAvoidanceActive
                 || avoidanceColumn == null
-                || avoidanceBoxView == null
+                || avoidanceMediaView == null
                 || panelWidth <= 0
                 || panelHeight <= 0) {
             return;
@@ -1676,11 +1623,15 @@ final class OverlayAdContentView extends FrameLayout {
         // The lower stack's height, measured with the media collapsed.
         LinearLayout.LayoutParams mediaLayoutParams =
                 (LinearLayout.LayoutParams)
-                        avoidanceBoxView.getLayoutParams();
+                        avoidanceMediaView.getLayoutParams();
         mediaLayoutParams.width = 0;
         mediaLayoutParams.height = 0;
-        avoidanceBoxView.setLayoutParams(mediaLayoutParams);
-        SetTopInset(avoidanceColumn, 0);
+        avoidanceMediaView.setLayoutParams(mediaLayoutParams);
+        avoidanceColumn.setPadding(
+                avoidanceColumn.getPaddingLeft()
+              , 0
+              , avoidanceColumn.getPaddingRight()
+              , 0);
         avoidanceColumn.measure(
                 View.MeasureSpec.makeMeasureSpec(
                         panelWidth
@@ -1737,7 +1688,8 @@ final class OverlayAdContentView extends FrameLayout {
                   , 1 }
         };
         long bestArea = -1L;
-        int bestBoxWidth = Math.max(contentWidth, avoidanceMinimumMediaSize);
+        int bestWidth = 0;
+        int bestHeight = 0;
         int bestTop = controlSize + controlGap;
         boolean bestEdges = false;
         for (int[] candidate : candidates) {
@@ -1763,7 +1715,8 @@ final class OverlayAdContentView extends FrameLayout {
             long area = (long) width * height;
             if (area > bestArea) {
                 bestArea = area;
-                bestBoxWidth = widthCap;
+                bestWidth = width;
+                bestHeight = height;
                 bestTop = top;
                 bestEdges = candidate[2] == 1;
             }
@@ -1773,21 +1726,33 @@ final class OverlayAdContentView extends FrameLayout {
             // avoiding the controls; they overlay it, as they always could.
             bestTop = 0;
             bestEdges = false;
-            bestBoxWidth = Math.max(contentWidth, avoidanceMinimumMediaSize);
+            bestHeight = Math.max(avoidanceMinimumMediaSize, availableHeight);
+            bestWidth = Math.min(
+                    Math.max(contentWidth, avoidanceMinimumMediaSize)
+                  , Math.max(
+                        avoidanceMinimumMediaSize
+                      , Math.round(bestHeight * avoidanceMediaAspect)));
+            bestHeight = Math.min(
+                    bestHeight
+                  , Math.max(
+                        avoidanceMinimumMediaSize
+                      , Math.round(bestWidth / avoidanceMediaAspect)));
         }
 
-        // The media takes the whole chosen band as its box: the creative
-        // fits centred inside it and the ambient backdrop carries its
-        // colours to the edges, so no gap is left above or beside it.
-        int bandHeight = Math.max(
-                avoidanceMinimumMediaSize
-              , availableHeight - bestTop);
+        // The media keeps the creative's exact size; the slack the band has
+        // left splits evenly, so the whole block sits centred between the
+        // controls and the panel's bottom edge.
+        int slack = Math.max(0, availableHeight - bestTop - bestHeight);
         controlsAtEdgesBelowBadges = bestEdges;
-        SetTopInset(avoidanceColumn, bestTop);
-        mediaLayoutParams.width = bestBoxWidth;
-        mediaLayoutParams.height = bandHeight;
+        avoidanceColumn.setPadding(
+                avoidanceColumn.getPaddingLeft()
+              , bestTop
+              , avoidanceColumn.getPaddingRight()
+              , slack / 2);
+        mediaLayoutParams.width = bestWidth;
+        mediaLayoutParams.height = bestHeight;
         mediaLayoutParams.gravity = Gravity.CENTER_HORIZONTAL;
-        avoidanceBoxView.setLayoutParams(mediaLayoutParams);
+        avoidanceMediaView.setLayoutParams(mediaLayoutParams);
         requestLayout();
     }
 

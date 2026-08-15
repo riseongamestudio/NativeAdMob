@@ -1508,17 +1508,14 @@ final class InFeedAdViewFactory {
         MediaView mediaView = new MediaView(activity);
         boolean backgroundTemplate = plan.template
                 == InFeedAdLayoutEngine.TEMPLATE_MEDIA_BACKGROUND;
-        // A background media covers its cell by cropping - it has no band to
-        // letterbox in, and dead fill at its edges is exactly what a
-        // background must never show. A band media letterboxes against the
-        // panel colour instead of black; only video keeps the black stage its
-        // player paints anyway.
+        // The picture is always shown whole; a band media letterboxes
+        // against the panel colour instead of black, and only video keeps
+        // the black stage its player paints anyway. The background template
+        // fills what the fitted picture leaves with the ambient backdrop
+        // below.
         mediaView.setBackgroundColor(
                 plan.renderVideo ? Color.BLACK : Color.TRANSPARENT);
-        mediaView.setImageScaleType(
-                backgroundTemplate
-                        ? ImageView.ScaleType.CENTER_CROP
-                        : ImageView.ScaleType.FIT_CENTER);
+        mediaView.setImageScaleType(ImageView.ScaleType.FIT_CENTER);
         views.media = mediaView;
         views.mediaSlot = mediaView;
         if (probe) return mediaView;
@@ -1540,10 +1537,11 @@ final class InFeedAdViewFactory {
             throw new IllegalStateException(
                     "Main image is required for an image fallback layout");
         }
-        // Ambient fill for a band media: the same picture, cropped to cover
-        // and dimmed, stands behind the fitted one so an aspect mismatch
-        // shows the creative's own colours instead of dead bars.
-        if (!backgroundTemplate) {
+        // Ambient fill for the background template only: the same picture,
+        // cropped to cover and dimmed, stands behind the fitted one so the
+        // cell's background is the creative's own colours expanded to the
+        // edges - never dead fill, never a cropped-away creative.
+        if (backgroundTemplate) {
             Drawable ambientDrawable = mainImage.getConstantState() != null
                     ? mainImage.getConstantState().newDrawable().mutate()
                     : mainImage;
@@ -1561,10 +1559,7 @@ final class InFeedAdViewFactory {
         }
 
         ImageView fallbackImageView = new ImageView(activity);
-        fallbackImageView.setScaleType(
-                backgroundTemplate
-                        ? ImageView.ScaleType.CENTER_CROP
-                        : ImageView.ScaleType.FIT_CENTER);
+        fallbackImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
         fallbackImageView.setAdjustViewBounds(false);
         fallbackImageView.setImageDrawable(mainImage);
         mediaView.addView(
