@@ -40,6 +40,11 @@ static const CGFloat kROSideMediaMaxPanelHeightRatio = 1.3f;
 // The rail is narrow by construction, so the icon never shares a line with
 // text there: it stands alone and the identity stack follows below.
 static const CGFloat kROSideRailIconWidthRatio = 0.3f;
+// Slack absorption in the rail: how many whole body lines it may take, and
+// how far the icon may grow, before free height is left alone.
+static const NSInteger kRORailBodyMaxLineCount = 6;
+static const CGFloat kRORailIconGrowthStep = 8;
+static const CGFloat kRORailIconMaxWidthRatio = 0.6f;
 // Extra ground the strip-avoiding layout may give before it surrenders and
 // lets the corner controls overlay the media instead.
 static const CGFloat kROAvoidCallToActionHeight = 36;
@@ -148,6 +153,7 @@ static UIColor *HBArgb(uint32_t argb) {
     BOOL _controlAvoidanceActive;
     BOOL _controlsAtEdgesBelowBadges;
     CGFloat _avoidancePanelHeight;
+    HBFrameLayoutView *_avoidanceBoxView;
     HBLinearLayoutView *_sideRail;
     BOOL _iconHero;
     BOOL _tickerLayout;
@@ -322,7 +328,9 @@ static UIColor *HBArgb(uint32_t argb) {
           , kROHorizontalPadding);
 
     _mediaView = [[GADMediaView alloc] init];
-    _mediaView.backgroundColor = UIColor.blackColor;
+    _mediaView.backgroundColor = hasVideoContent
+            ? UIColor.blackColor
+            : UIColor.clearColor;
     _mediaView.contentMode = UIViewContentModeScaleAspectFit;
     _mediaView.ro_minimumSize =
             CGSizeMake(_minimumMediaSize, _minimumMediaSize);
@@ -459,6 +467,7 @@ static UIColor *HBArgb(uint32_t argb) {
                       , round(railWidth * kROSideRailIconWidthRatio)));
             _icon.ro_layoutWidth = railIconSize;
             _icon.ro_layoutHeight = railIconSize;
+            _icon.ro_layoutGravity = HBGravityCenterHorizontal;
             _icon.ro_layoutMargins =
                     UIEdgeInsetsMake(0, 0, kROIconGap, 0);
             [rail addSubview:_icon];
@@ -861,22 +870,56 @@ static UIColor *HBArgb(uint32_t argb) {
     if (!railFits) return;
 
     [self ro_applyResponsiveContentScale:1];
-    if ([self ro_sideRailFitsWithPanelHeight:panelHeight]) return;
+    if (![self ro_sideRailFitsWithPanelHeight:panelHeight]) {
+        CGFloat minimumScale = 0;
+        CGFloat maximumScale = 1;
+        for (NSInteger iteration = 0;
+             iteration < kROResponsiveScaleSearchIterations;
+             ++iteration) {
+            CGFloat candidateScale = (minimumScale + maximumScale) / 2;
+            [self ro_applyResponsiveContentScale:candidateScale];
+            if ([self ro_sideRailFitsWithPanelHeight:panelHeight]) {
+                minimumScale = candidateScale;
+            } else {
+                maximumScale = candidateScale;
+            }
+        }
+        [self ro_applyResponsiveContentScale:minimumScale];
+    }
+    [self ro_growSideRailIntoSlackWithPanelHeight:panelHeight];
+}
 
-    CGFloat minimumScale = 0;
-    CGFloat maximumScale = 1;
-    for (NSInteger iteration = 0;
-         iteration < kROResponsiveScaleSearchIterations;
-         ++iteration) {
-        CGFloat candidateScale = (minimumScale + maximumScale) / 2;
-        [self ro_applyResponsiveContentScale:candidateScale];
-        if ([self ro_sideRailFitsWithPanelHeight:panelHeight]) {
-            minimumScale = candidateScale;
-        } else {
-            maximumScale = candidateScale;
+// Height that remains after the fit belongs to the content, not to the
+// void: the body takes more whole lines while they fit - full text
+// outranks a scrolling line - and the icon grows into what is left.
+- (void)ro_growSideRailIntoSlackWithPanelHeight:(CGFloat)panelHeight {
+    if (![self ro_sideRailFitsWithPanelHeight:panelHeight]) return;
+
+    while (!_body.ro_gone
+            && _body.maxLines < kRORailBodyMaxLineCount) {
+        _body.maxLines = _body.maxLines + 1;
+        if (![self ro_sideRailFitsWithPanelHeight:panelHeight]) {
+            _body.maxLines = _body.maxLines - 1;
+            break;
         }
     }
-    [self ro_applyResponsiveContentScale:minimumScale];
+
+    if (_iconHero || _icon.ro_gone || _icon.superview != _sideRail) return;
+
+    CGFloat railOuterWidth = MAX(
+            0
+          , UIScreen.mainScreen.bounds.size.width - _sideMediaWidthPx);
+    CGFloat maximumIconSize = railOuterWidth * kRORailIconMaxWidthRatio;
+    while (_icon.ro_layoutWidth + kRORailIconGrowthStep
+            <= maximumIconSize) {
+        _icon.ro_layoutWidth += kRORailIconGrowthStep;
+        _icon.ro_layoutHeight += kRORailIconGrowthStep;
+        if (![self ro_sideRailFitsWithPanelHeight:panelHeight]) {
+            _icon.ro_layoutWidth -= kRORailIconGrowthStep;
+            _icon.ro_layoutHeight -= kRORailIconGrowthStep;
+            break;
+        }
+    }
 }
 
 - (BOOL)ro_sideRailFitsWithPanelHeight:(CGFloat)panelHeight {
@@ -1155,19 +1198,24 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
                                heightSpec:
                     HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
     CGSize attributionSize = _attribution.ro_measuredSize;
+    // In the side-media layout even the badge steps off the picture: it
+    // hugs the media's right edge, and the left corner control then lines
+    // up beside it.
+    CGFloat attributionX = _sideMediaLayout
+            ? _sideMediaWidthPx + kROControlGap
+            : 0;
     _attribution.frame = CGRectMake(
-            0, 0, attributionSize.width, attributionSize.height);
+            attributionX, 0, attributionSize.width, attributionSize.height);
 
     CGFloat adChoicesSize = MAX(kROAdChoicesReserveSize, kROMinBadgeSize);
     _adChoicesReserve.frame = CGRectMake(
             adFrame.size.width - adChoicesSize, 0, adChoicesSize, adChoicesSize);
 
     CGFloat controlSize = kROControlStripHeight;
-    // In the side-media layout the left corner belongs to the media, so a
-    // left control clears the media's edge instead of hugging the
-    // attribution badge over the picture. When the avoidance pass chose the
-    // edge placement, the controls hug the panel's sides just below the
-    // badges instead of the top row.
+    // The left control follows the attribution badge - which in the
+    // side-media layout already stepped off the picture to the media's
+    // edge. When the avoidance pass chose the edge placement, the controls
+    // hug the panel's sides just below the badges instead of the top row.
     CGFloat leftControlInset;
     CGFloat rightControlInset;
     CGFloat controlY;
@@ -1179,10 +1227,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
                 + kROControlGap;
     } else {
         leftControlInset =
-                (_sideMediaLayout
-                        ? _sideMediaWidthPx
-                        : CGRectGetMaxX(_attribution.frame))
-                        + kROControlGap;
+                CGRectGetMaxX(_attribution.frame) + kROControlGap;
         rightControlInset = kRORightControlInset;
         controlY = cutoutInset;
     }
@@ -1215,31 +1260,56 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     _contentColumn.ro_gravity =
             HBGravityBottom | HBGravityCenterHorizontal;
     _mediaView.ro_layoutMargins = UIEdgeInsetsZero;
-    [self ro_installAmbientBackdrop];
+
+    // The media moves into its own box with the ambient backdrop as a
+    // sibling BEHIND it - never inside the GADMediaView, whose subviews
+    // belong to the SDK and do not survive binding.
+    _avoidanceBoxView = [[HBFrameLayoutView alloc] init];
+    NSInteger mediaIndex =
+            [_contentColumn.subviews indexOfObject:_mediaView];
+    _avoidanceBoxView.ro_layoutWidth = _mediaView.ro_layoutWidth;
+    _avoidanceBoxView.ro_layoutHeight = _mediaView.ro_layoutHeight;
+    _avoidanceBoxView.ro_layoutWeight = _mediaView.ro_layoutWeight;
+    _avoidanceBoxView.ro_layoutGravity = _mediaView.ro_layoutGravity;
+    [_mediaView removeFromSuperview];
+    UIView *ambientBackdrop = [self ro_createAmbientBackdrop];
+    if (ambientBackdrop != nil) {
+        ambientBackdrop.ro_layoutWidth = ROLayoutMatchParent;
+        ambientBackdrop.ro_layoutHeight = ROLayoutMatchParent;
+        [_avoidanceBoxView addSubview:ambientBackdrop];
+    }
+    _mediaView.ro_layoutWidth = ROLayoutMatchParent;
+    _mediaView.ro_layoutHeight = ROLayoutMatchParent;
+    _mediaView.ro_layoutWeight = 0;
+    _mediaView.ro_layoutGravity = 0;
+    [_avoidanceBoxView addSubview:_mediaView];
+    if (mediaIndex == NSNotFound) {
+        [_contentColumn addSubview:_avoidanceBoxView];
+    } else {
+        [_contentColumn insertSubview:_avoidanceBoxView
+                              atIndex:mediaIndex];
+    }
 }
 
 // Ambient fill: the creative's own picture, cropped to cover and dimmed,
-// stands behind the fitted media so an aspect mismatch shows the creative's
-// colours running to the edges instead of dead bars or blank panel. Video
-// paints its own stage over it; the backdrop then simply never shows.
-- (void)ro_installAmbientBackdrop {
+// so an aspect mismatch shows the creative's colours running to the edges
+// instead of dead bars or blank panel. Video paints its own stage over it;
+// the backdrop then simply never shows.
+- (UIView *)ro_createAmbientBackdrop {
     UIImage *source = _nativeAd.mediaContent.mainImage;
     if (source == nil) source = _fallbackMediaImage;
-    if (source == nil) return;
+    if (source == nil) return nil;
 
     UIImageView *backdrop = [[UIImageView alloc] initWithImage:source];
     backdrop.contentMode = UIViewContentModeScaleAspectFill;
     backdrop.clipsToBounds = YES;
-    backdrop.autoresizingMask = UIViewAutoresizingFlexibleWidth
-            | UIViewAutoresizingFlexibleHeight;
-    backdrop.frame = _mediaView.bounds;
     UIView *dim = [[UIView alloc] initWithFrame:backdrop.bounds];
     dim.backgroundColor =
             [UIColor colorWithWhite:0 alpha:kROAmbientDimAlpha];
     dim.autoresizingMask = UIViewAutoresizingFlexibleWidth
             | UIViewAutoresizingFlexibleHeight;
     [backdrop addSubview:dim];
-    [_mediaView insertSubview:backdrop atIndex:0];
+    return backdrop;
 }
 
 // Control avoidance, the Android transcription: the stack hugs the bottom,
@@ -1259,10 +1329,12 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     CGFloat controlGap = kROControlGap;
     CGFloat contentWidth = MAX(0, panelWidth - 2 * kROHorizontalPadding);
 
+    if (_avoidanceBoxView == nil) return;
+
     // The lower stack's height, measured with the media collapsed.
-    _mediaView.ro_layoutWidth = 0;
-    _mediaView.ro_layoutHeight = 0;
-    _mediaView.ro_layoutWeight = 0;
+    _avoidanceBoxView.ro_layoutWidth = 0;
+    _avoidanceBoxView.ro_layoutHeight = 0;
+    _avoidanceBoxView.ro_layoutWeight = 0;
     UIEdgeInsets columnPadding = _contentColumn.ro_padding;
     columnPadding.top = 0;
     _contentColumn.ro_padding = columnPadding;
@@ -1357,10 +1429,10 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     _controlsAtEdgesBelowBadges = bestAtEdges;
     columnPadding.top = bestTop;
     _contentColumn.ro_padding = columnPadding;
-    _mediaView.ro_layoutWidth = bestBoxWidth;
-    _mediaView.ro_layoutHeight = bandHeight;
-    _mediaView.ro_layoutWeight = 0;
-    _mediaView.ro_layoutGravity = HBGravityCenterHorizontal;
+    _avoidanceBoxView.ro_layoutWidth = bestBoxWidth;
+    _avoidanceBoxView.ro_layoutHeight = bandHeight;
+    _avoidanceBoxView.ro_layoutWeight = 0;
+    _avoidanceBoxView.ro_layoutGravity = HBGravityCenterHorizontal;
 }
 
 - (void)ro_matchIconSizeToIdentityText {

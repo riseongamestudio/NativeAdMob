@@ -141,6 +141,11 @@ final class OverlayAdContentView extends FrameLayout {
     // with text there: it stands alone and the identity stack follows below
     // at the rail's full width.
     private static final float SIDE_RAIL_ICON_WIDTH_RATIO = 0.3f;
+    // Slack absorption in the rail: how many whole body lines it may take,
+    // and how far the icon may grow, before free height is left alone.
+    private static final int RAIL_BODY_MAX_LINE_COUNT = 6;
+    private static final int RAIL_ICON_GROWTH_STEP_DP = 8;
+    private static final float RAIL_ICON_MAX_WIDTH_RATIO = 0.6f;
     // Extra ground the strip-avoiding layout may give before it surrenders
     // and lets the corner controls overlay the media instead.
     private static final int AVOID_CALL_TO_ACTION_HEIGHT_DP = 36;
@@ -165,7 +170,7 @@ final class OverlayAdContentView extends FrameLayout {
     private boolean controlAvoidanceActive;
     private boolean controlsAtEdgesBelowBadges;
     private LinearLayout avoidanceColumn;
-    private MediaView avoidanceMediaView;
+    private FrameLayout avoidanceBoxView;
     private float avoidanceMediaAspect;
     private int avoidanceMinimumMediaSize;
     private int avoidanceHorizontalPadding;
@@ -392,7 +397,8 @@ final class OverlayAdContentView extends FrameLayout {
         MediaView mediaView = new MediaView(context);
         mediaView.setMinimumWidth(minimumMediaSize);
         mediaView.setMinimumHeight(minimumMediaSize);
-        mediaView.setBackgroundColor(Color.BLACK);
+        mediaView.setBackgroundColor(
+                hasVideoContent ? Color.BLACK : Color.TRANSPARENT);
         mediaView.setImageScaleType(ImageView.ScaleType.FIT_CENTER);
         LinearLayout.LayoutParams mediaCreateParams =
                 new LinearLayout.LayoutParams(
@@ -555,6 +561,7 @@ final class OverlayAdContentView extends FrameLayout {
                         new LinearLayout.LayoutParams(
                                 railIconSize
                               , railIconSize);
+                railIconParams.gravity = Gravity.CENTER_HORIZONTAL;
                 railIconParams.bottomMargin =
                         Math.round(ICON_GAP_DP * density);
                 rail.addView(icon, railIconParams);
@@ -650,6 +657,14 @@ final class OverlayAdContentView extends FrameLayout {
                         ViewGroup.LayoutParams.WRAP_CONTENT
                       , ViewGroup.LayoutParams.WRAP_CONTENT
                       , Gravity.TOP | Gravity.START);
+        // In the side-media layout even the badge steps off the picture:
+        // it hugs the media's right edge, and the left corner control then
+        // lines up beside it.
+        if (sideMediaLayout) {
+            attributionLayoutParams.leftMargin =
+                    sideMediaWidthPx
+                            + Math.max(1, (int) (CONTROL_GAP_DP * density));
+        }
         nativeAdView.addView(attribution, attributionLayoutParams);
 
         int adChoicesReserveWidth = Math.max(
@@ -699,6 +714,7 @@ final class OverlayAdContentView extends FrameLayout {
                       , advertiser
                       , starRating
                       , body
+                      , iconHero ? null : icon
                       , callToAction);
             } else {
                 ConfigureResponsiveCollapsibleContent(
@@ -1114,6 +1130,7 @@ final class OverlayAdContentView extends FrameLayout {
           , TextView advertiser
           , NativeAdStarRatingView starRating
           , TextView body
+          , ImageView railIcon
           , Button callToAction) {
         if (rail == null) return;
 
@@ -1161,17 +1178,31 @@ final class OverlayAdContentView extends FrameLayout {
               , body
               , null
               , callToAction);
-        if (RailFits(rail, railOuterWidth, railHeight)) return;
-
-        float minimumScale = 0f;
-        float maximumScale = 1f;
-        for (int iteration = 0;
-                iteration < RESPONSIVE_SCALE_SEARCH_ITERATIONS;
-                iteration++) {
-            float candidateScale =
-                    (minimumScale + maximumScale) / 2f;
+        if (!RailFits(rail, railOuterWidth, railHeight)) {
+            float minimumScale = 0f;
+            float maximumScale = 1f;
+            for (int iteration = 0;
+                    iteration < RESPONSIVE_SCALE_SEARCH_ITERATIONS;
+                    iteration++) {
+                float candidateScale =
+                        (minimumScale + maximumScale) / 2f;
+                ApplyResponsiveContentScale(
+                        candidateScale
+                      , density
+                      , identityRow
+                      , headline
+                      , advertiser
+                      , body
+                      , null
+                      , callToAction);
+                if (RailFits(rail, railOuterWidth, railHeight)) {
+                    minimumScale = candidateScale;
+                } else {
+                    maximumScale = candidateScale;
+                }
+            }
             ApplyResponsiveContentScale(
-                    candidateScale
+                    minimumScale
                   , density
                   , identityRow
                   , headline
@@ -1179,21 +1210,55 @@ final class OverlayAdContentView extends FrameLayout {
                   , body
                   , null
                   , callToAction);
-            if (RailFits(rail, railOuterWidth, railHeight)) {
-                minimumScale = candidateScale;
-            } else {
-                maximumScale = candidateScale;
+        }
+        GrowSideRailIntoSlack(
+                rail
+              , railOuterWidth
+              , railHeight
+              , density
+              , body
+              , railIcon);
+    }
+
+    // Height that remains after the fit belongs to the content, not to the
+    // void: the body takes more whole lines while they fit - full text
+    // outranks a scrolling line - and the icon grows into what is left.
+    private void GrowSideRailIntoSlack(
+            LinearLayout rail
+          , int railOuterWidth
+          , int railHeight
+          , float density
+          , TextView body
+          , ImageView railIcon) {
+        if (!RailFits(rail, railOuterWidth, railHeight)) return;
+
+        while (body.getVisibility() == View.VISIBLE
+                && body.getMaxLines() < RAIL_BODY_MAX_LINE_COUNT) {
+            body.setMaxLines(body.getMaxLines() + 1);
+            if (!RailFits(rail, railOuterWidth, railHeight)) {
+                body.setMaxLines(body.getMaxLines() - 1);
+                break;
             }
         }
-        ApplyResponsiveContentScale(
-                minimumScale
-              , density
-              , identityRow
-              , headline
-              , advertiser
-              , body
-              , null
-              , callToAction);
+
+        if (railIcon == null || railIcon.getParent() == null) return;
+
+        LinearLayout.LayoutParams iconParams =
+                (LinearLayout.LayoutParams) railIcon.getLayoutParams();
+        int growthStep = Math.round(RAIL_ICON_GROWTH_STEP_DP * density);
+        int maximumIconSize = Math.round(
+                railOuterWidth * RAIL_ICON_MAX_WIDTH_RATIO);
+        while (iconParams.width + growthStep <= maximumIconSize) {
+            iconParams.width += growthStep;
+            iconParams.height += growthStep;
+            railIcon.setLayoutParams(iconParams);
+            if (!RailFits(rail, railOuterWidth, railHeight)) {
+                iconParams.width -= growthStep;
+                iconParams.height -= growthStep;
+                railIcon.setLayoutParams(iconParams);
+                break;
+            }
+        }
     }
 
     private static boolean RailFits(
@@ -1508,7 +1573,6 @@ final class OverlayAdContentView extends FrameLayout {
           , int panelHeight) {
         controlAvoidanceActive = true;
         avoidanceColumn = contentColumn;
-        avoidanceMediaView = mediaView;
         avoidanceMediaAspect = mediaAspectRatio;
         avoidanceMinimumMediaSize = minimumMediaSize;
         avoidanceHorizontalPadding = horizontalPadding;
@@ -1516,24 +1580,49 @@ final class OverlayAdContentView extends FrameLayout {
         contentColumn.setGravity(
                 Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         SetMediaSideBleed(mediaView, 0);
-        InstallAmbientBackdrop(mediaView);
+
+        // The media moves into its own box with the ambient backdrop as a
+        // sibling BEHIND it - never inside the MediaView, whose children
+        // belong to the SDK and do not survive binding.
+        avoidanceBoxView = new FrameLayout(getContext());
+        int mediaIndex = contentColumn.indexOfChild(mediaView);
+        LinearLayout.LayoutParams boxParams =
+                (LinearLayout.LayoutParams) mediaView.getLayoutParams();
+        contentColumn.removeView(mediaView);
+        ImageView ambientBackdrop = CreateAmbientBackdrop();
+        if (ambientBackdrop != null) {
+            avoidanceBoxView.addView(
+                    ambientBackdrop
+                  , new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                      , ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+        avoidanceBoxView.addView(
+                mediaView
+              , new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                  , ViewGroup.LayoutParams.MATCH_PARENT));
+        contentColumn.addView(
+                avoidanceBoxView
+              , Math.max(0, mediaIndex)
+              , boxParams);
+
         RecomputeMediaControlAvoidance(
                 displayMetrics.widthPixels
               , panelHeight);
     }
 
     // Ambient fill: the creative's own picture, cropped to cover and dimmed,
-    // stands behind the fitted media so an aspect mismatch shows the
-    // creative's colours running to the edges instead of dead bars or blank
-    // panel. Video paints its own stage over it; the backdrop then simply
-    // never shows.
-    private void InstallAmbientBackdrop(MediaView mediaView) {
+    // so an aspect mismatch shows the creative's colours running to the
+    // edges instead of dead bars or blank panel. Video paints its own stage
+    // over it; the backdrop then simply never shows.
+    private ImageView CreateAmbientBackdrop() {
         Drawable source = null;
         com.google.android.gms.ads.MediaContent mediaContent =
                 nativeAd.getMediaContent();
         if (mediaContent != null) source = mediaContent.getMainImage();
         if (source == null) source = FindFallbackMediaImage();
-        if (source == null) return;
+        if (source == null) return null;
 
         Drawable backdropDrawable = source.getConstantState() != null
                 ? source.getConstantState().newDrawable().mutate()
@@ -1544,12 +1633,7 @@ final class OverlayAdContentView extends FrameLayout {
         backdrop.setColorFilter(
                 AMBIENT_DIM_COLOR
               , android.graphics.PorterDuff.Mode.SRC_ATOP);
-        mediaView.addView(
-                backdrop
-              , 0
-              , new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                  , ViewGroup.LayoutParams.MATCH_PARENT));
+        return backdrop;
     }
 
     @Override
@@ -1573,7 +1657,7 @@ final class OverlayAdContentView extends FrameLayout {
           , int panelHeight) {
         if (!controlAvoidanceActive
                 || avoidanceColumn == null
-                || avoidanceMediaView == null
+                || avoidanceBoxView == null
                 || panelWidth <= 0
                 || panelHeight <= 0) {
             return;
@@ -1592,10 +1676,10 @@ final class OverlayAdContentView extends FrameLayout {
         // The lower stack's height, measured with the media collapsed.
         LinearLayout.LayoutParams mediaLayoutParams =
                 (LinearLayout.LayoutParams)
-                        avoidanceMediaView.getLayoutParams();
+                        avoidanceBoxView.getLayoutParams();
         mediaLayoutParams.width = 0;
         mediaLayoutParams.height = 0;
-        avoidanceMediaView.setLayoutParams(mediaLayoutParams);
+        avoidanceBoxView.setLayoutParams(mediaLayoutParams);
         SetTopInset(avoidanceColumn, 0);
         avoidanceColumn.measure(
                 View.MeasureSpec.makeMeasureSpec(
@@ -1703,7 +1787,7 @@ final class OverlayAdContentView extends FrameLayout {
         mediaLayoutParams.width = bestBoxWidth;
         mediaLayoutParams.height = bandHeight;
         mediaLayoutParams.gravity = Gravity.CENTER_HORIZONTAL;
-        avoidanceMediaView.setLayoutParams(mediaLayoutParams);
+        avoidanceBoxView.setLayoutParams(mediaLayoutParams);
         requestLayout();
     }
 
@@ -2221,11 +2305,11 @@ final class OverlayAdContentView extends FrameLayout {
           , int controlGap
           , int rightControlInset) {
         Runnable alignControlsToBadges = () -> {
-            // In the side-media layout the left corner belongs to the media,
-            // so a left control clears the media's edge instead of hugging
-            // the attribution badge over the picture. When the avoidance
-            // pass chose the edge placement, the controls hug the panel's
-            // sides just below the badges instead of the top row.
+            // The left control follows the attribution badge - which in the
+            // side-media layout already stepped off the picture to the
+            // media's edge. When the avoidance pass chose the edge
+            // placement, the controls hug the panel's sides just below the
+            // badges instead of the top row.
             int measuredLeftInset;
             int measuredRightInset;
             int measuredTopInset;
@@ -2234,11 +2318,7 @@ final class OverlayAdContentView extends FrameLayout {
                 measuredRightInset = 0;
                 measuredTopInset = attribution.getBottom() + controlGap;
             } else {
-                measuredLeftInset =
-                        (sideMediaLayout
-                                ? sideMediaWidthPx
-                                : attribution.getRight())
-                                + controlGap;
+                measuredLeftInset = attribution.getRight() + controlGap;
                 measuredRightInset = rightControlInset;
                 measuredTopInset = 0;
             }
