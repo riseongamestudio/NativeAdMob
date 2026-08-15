@@ -1,6 +1,6 @@
 {
     "name": "RiseOn.NativeAdMob.Android",
-    "rootNamespace": "RiseOn.NativeAdMob",
+    "rootNamespace": "RiseOn.NativeAdMob.Android",
     "references": [
         "RiseOn.NativeAdMob"
     ],

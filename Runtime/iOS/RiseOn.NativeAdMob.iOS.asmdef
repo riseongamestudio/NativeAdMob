@@ -1,6 +1,6 @@
 {
     "name": "RiseOn.NativeAdMob.iOS",
-    "rootNamespace": "RiseOn.NativeAdMob",
+    "rootNamespace": "RiseOn.NativeAdMob.iOS",
     "references": [
         "RiseOn.NativeAdMob"
     ],

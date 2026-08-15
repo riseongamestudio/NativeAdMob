@@ -1,6 +1,6 @@
 {
     "name": "RiseOn.NativeAdMob.Editor",
-    "rootNamespace": "RiseOn.NativeAdMob",
+    "rootNamespace": "RiseOn.NativeAdMob.Editor",
     "references": [
         "RiseOn.NativeAdMob"
     ],
