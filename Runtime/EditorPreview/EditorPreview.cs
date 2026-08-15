@@ -1713,7 +1713,7 @@ namespace RiseOn.NativeAdMob {
         private static readonly Color SunColor =
                 new(1f, 0.76f, 0.24f, 0.95f);
 
-        private protected override void OnPopulateMesh(VertexHelper vertexHelper) {
+        protected override void OnPopulateMesh(VertexHelper vertexHelper) {
             vertexHelper.Clear();
             var rect = GetPixelAdjustedRect();
             EditorPreviewGraphicUtility.AddGradientQuad(
@@ -1793,7 +1793,7 @@ namespace RiseOn.NativeAdMob {
         private static readonly Color InfoColor =
                 Color.white;
 
-        private protected override void OnPopulateMesh(VertexHelper vertexHelper) {
+        protected override void OnPopulateMesh(VertexHelper vertexHelper) {
             vertexHelper.Clear();
             var rect = GetPixelAdjustedRect();
             EditorPreviewGraphicUtility.AddSolidQuad(
