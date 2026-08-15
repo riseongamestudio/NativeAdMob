@@ -1392,29 +1392,27 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     BOOL numberLeft = _numberOpposite ? !_closeOnLeft : _closeOnLeft;
     BOOL leftOccupied = _closeOnLeft || numberLeft;
     BOOL rightOccupied = !_closeOnLeft || !numberLeft;
-    // The free interval is real, not symmetric: a control occupies only its
-    // own side, and a side with no control is free to its edge - so the
-    // media may sit off-centre inside the interval instead of wasting the
-    // open side on centring.
+    // The free interval runs from obstacle edge to obstacle edge with no
+    // buffer: touching without overlapping is the goal. Both control
+    // POSITIONS count as obstacles whatever is currently visible, so the
+    // media never re-anchors when the timer hands over to the close.
     CGFloat topRowIntervalLeft = leftOccupied
-            ? kROAttributionWidth + controlGap + controlSize + controlGap
+            ? kROAttributionWidth + controlGap + controlSize
             : 0;
     CGFloat topRowIntervalRight = rightOccupied
-            ? panelWidth - kRORightControlInset - controlSize - controlGap
+            ? panelWidth - kRORightControlInset - controlSize
             : panelWidth;
-    CGFloat edgeIntervalLeft = leftOccupied
-            ? controlSize + controlGap
-            : 0;
+    CGFloat edgeIntervalLeft = leftOccupied ? controlSize : 0;
     CGFloat edgeIntervalRight = rightOccupied
-            ? panelWidth - controlSize - controlGap
+            ? panelWidth - controlSize
             : panelWidth;
 
     // Below the controls the media may bleed edge to edge.
     CGFloat candidateTops[4] = {
             0
-          , controlSize + controlGap
-          , badgeHeight + controlGap
-          , badgeHeight + controlSize + 2 * controlGap };
+          , controlSize
+          , badgeHeight
+          , badgeHeight + controlSize };
     CGFloat candidateLefts[4] = {
             topRowIntervalLeft
           , 0

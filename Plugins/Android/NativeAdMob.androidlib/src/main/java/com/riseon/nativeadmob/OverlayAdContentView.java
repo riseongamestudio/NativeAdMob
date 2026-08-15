@@ -1776,37 +1776,34 @@ final class OverlayAdContentView extends FrameLayout {
         boolean numberLeft = numberOpposite ? !closeOnLeft : closeOnLeft;
         boolean leftOccupied = closeOnLeft || numberLeft;
         boolean rightOccupied = !closeOnLeft || !numberLeft;
-        // The free interval is real, not symmetric: a control occupies only
-        // its own side, and a side with no control is free to its edge - so
-        // the media may sit off-centre inside the interval instead of
-        // wasting the open side on centring.
+        // The free interval runs from obstacle edge to obstacle edge with no
+        // buffer: touching without overlapping is the goal. Both control
+        // POSITIONS count as obstacles whatever is currently visible, so the
+        // media never re-anchors when the timer hands over to the close.
         int topRowIntervalLeft = leftOccupied
                 ? (int) (ATTRIBUTION_WIDTH_DP * density)
-                        + controlGap + controlSize + controlGap
+                        + controlGap + controlSize
                 : 0;
         int topRowIntervalRight = rightOccupied
                 ? panelWidth
                         - (int) (RIGHT_CONTROL_INSET_DP * density)
                         - controlSize
-                        - controlGap
                 : panelWidth;
-        int edgeIntervalLeft = leftOccupied
-                ? controlSize + controlGap
-                : 0;
+        int edgeIntervalLeft = leftOccupied ? controlSize : 0;
         int edgeIntervalRight = rightOccupied
-                ? panelWidth - controlSize - controlGap
+                ? panelWidth - controlSize
                 : panelWidth;
 
         // {media top, interval left, interval right, controls at edges}.
         // Below the controls the media may bleed edge to edge.
         int[][] candidates = {
                 { 0, topRowIntervalLeft, topRowIntervalRight, 0 }
-              , { controlSize + controlGap, 0, panelWidth, 0 }
-              , { badgeHeight + controlGap
+              , { controlSize, 0, panelWidth, 0 }
+              , { badgeHeight
                   , edgeIntervalLeft
                   , edgeIntervalRight
                   , 1 }
-              , { badgeHeight + controlSize + 2 * controlGap
+              , { badgeHeight + controlSize
                   , 0
                   , panelWidth
                   , 1 }
