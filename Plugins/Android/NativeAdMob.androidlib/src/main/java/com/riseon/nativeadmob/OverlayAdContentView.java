@@ -156,6 +156,13 @@ final class OverlayAdContentView extends FrameLayout {
     private boolean sideMediaLayout;
     private int sideMediaWidthPx;
     private boolean mediaAvoidsControlStrip;
+    private boolean fullscreenAvoidsControls;
+    private boolean controlsAtEdgesBelowBadges;
+    private LinearLayout avoidanceColumn;
+    private MediaView avoidanceMediaView;
+    private float avoidanceMediaAspect;
+    private int avoidanceMinimumMediaSize;
+    private int avoidanceHorizontalPadding;
     private final boolean closeOnLeft;
     private final boolean numberOpposite;
     private final boolean fullscreen;
@@ -713,6 +720,15 @@ final class OverlayAdContentView extends FrameLayout {
                   , identityRow
                   , density);
         }
+        if (fullscreen && hasDisplayableMedia && !sideMediaLayout) {
+            EnableFullscreenControlAvoidance(
+                    displayMetrics
+                  , horizontalPadding
+                  , minimumMediaSize
+                  , mediaAspectRatio
+                  , contentColumn
+                  , mediaView);
+        }
         nativeAdView.setNativeAd(nativeAd);
         nativeAdContainer = new SingleClickNativeAdContainer(context);
         nativeAdContainer.addView(
@@ -793,7 +809,8 @@ final class OverlayAdContentView extends FrameLayout {
               , requestedPanelHeight
               , contentColumn
               , mediaView);
-        if (hasDisplayableMedia && !sideMediaLayout) {
+        if (hasDisplayableMedia && !sideMediaLayout
+                && !fullscreenAvoidsControls) {
             ObserveMediaSize(
                     minimumMediaSize
                   , contentColumn
@@ -1451,6 +1468,190 @@ final class OverlayAdContentView extends FrameLayout {
                 });
     }
 
+    // ------------------------------------------------------------------
+    // Full-screen control avoidance. The stack hugs the bottom and the
+    // media grows until it touches the close and timer controls - through
+    // the gap between them when it is narrow enough to fit. Two control
+    // placements compete: the top row beside the badges, and the panel's
+    // edges just below the badges; whichever placement lets the media end
+    // up largest wins. Badges may sit over media; controls avoid it.
+    // ------------------------------------------------------------------
+
+    private void EnableFullscreenControlAvoidance(
+            DisplayMetrics displayMetrics
+          , int horizontalPadding
+          , int minimumMediaSize
+          , float mediaAspectRatio
+          , LinearLayout contentColumn
+          , MediaView mediaView) {
+        fullscreenAvoidsControls = true;
+        avoidanceColumn = contentColumn;
+        avoidanceMediaView = mediaView;
+        avoidanceMediaAspect = mediaAspectRatio;
+        avoidanceMinimumMediaSize = minimumMediaSize;
+        avoidanceHorizontalPadding = horizontalPadding;
+        contentColumn.setGravity(
+                Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        SetMediaSideBleed(mediaView, 0);
+        RecomputeFullscreenMediaAvoidance(
+                displayMetrics.widthPixels
+              , displayMetrics.heightPixels);
+    }
+
+    @Override
+    protected void onSizeChanged(
+            int width
+          , int height
+          , int oldWidth
+          , int oldHeight) {
+        super.onSizeChanged(width, height, oldWidth, oldHeight);
+        if (fullscreenAvoidsControls && width > 0 && height > 0) {
+            RecomputeFullscreenMediaAvoidance(
+                    width
+                  , height - getPaddingTop());
+        }
+    }
+
+    private void RecomputeFullscreenMediaAvoidance(
+            int panelWidth
+          , int panelHeight) {
+        if (!fullscreenAvoidsControls
+                || avoidanceColumn == null
+                || avoidanceMediaView == null
+                || panelWidth <= 0
+                || panelHeight <= 0) {
+            return;
+        }
+
+        float density = getResources().getDisplayMetrics().density;
+        int controlSize = (int) (CONTROL_STRIP_HEIGHT_DP * density);
+        int badgeHeight = (int) (ATTRIBUTION_HEIGHT_DP * density);
+        int controlGap = Math.max(
+                1
+              , (int) (CONTROL_GAP_DP * density));
+        int contentWidth = Math.max(
+                0
+              , panelWidth - 2 * avoidanceHorizontalPadding);
+
+        // The lower stack's height, measured with the media collapsed.
+        LinearLayout.LayoutParams mediaLayoutParams =
+                (LinearLayout.LayoutParams)
+                        avoidanceMediaView.getLayoutParams();
+        mediaLayoutParams.width = 0;
+        mediaLayoutParams.height = 0;
+        avoidanceMediaView.setLayoutParams(mediaLayoutParams);
+        SetTopInset(avoidanceColumn, 0);
+        avoidanceColumn.measure(
+                View.MeasureSpec.makeMeasureSpec(
+                        panelWidth
+                      , View.MeasureSpec.EXACTLY)
+              , View.MeasureSpec.makeMeasureSpec(
+                        0
+                      , View.MeasureSpec.UNSPECIFIED));
+        int lowerContentHeight = avoidanceColumn.getMeasuredHeight();
+        int availableHeight = Math.max(
+                0
+              , panelHeight - lowerContentHeight);
+
+        // Both corner controls share one spot until the countdown ends, so
+        // a side is an obstacle when either of them lives there.
+        boolean numberLeft = numberOpposite ? !closeOnLeft : closeOnLeft;
+        boolean leftOccupied = closeOnLeft || numberLeft;
+        boolean rightOccupied = !closeOnLeft || !numberLeft;
+        int half = panelWidth / 2;
+        int topRowLeftLimit = leftOccupied
+                ? Math.max(
+                        0
+                      , half
+                            - (int) (ATTRIBUTION_WIDTH_DP * density)
+                            - controlGap
+                            - controlSize
+                            - controlGap)
+                : half;
+        int topRowRightLimit = rightOccupied
+                ? Math.max(
+                        0
+                      , panelWidth
+                            - (int) (RIGHT_CONTROL_INSET_DP * density)
+                            - controlSize
+                            - controlGap
+                            - half)
+                : half;
+        int topRowGapWidth = Math.min(
+                contentWidth
+              , 2 * Math.min(topRowLeftLimit, topRowRightLimit));
+        int edgeLimit = Math.max(0, half - controlSize - controlGap);
+        int edgeGapWidth = Math.min(
+                contentWidth
+              , 2 * Math.min(
+                    leftOccupied ? edgeLimit : half
+                  , rightOccupied ? edgeLimit : half));
+
+        // {media top, media width cap, controls at edges}
+        int[][] candidates = {
+                { 0, topRowGapWidth, 0 }
+              , { controlSize + controlGap, contentWidth, 0 }
+              , { badgeHeight + controlGap, edgeGapWidth, 1 }
+              , { badgeHeight + controlSize + 2 * controlGap
+                  , contentWidth
+                  , 1 }
+        };
+        long bestArea = -1L;
+        int bestWidth = 0;
+        int bestHeight = 0;
+        int bestTop = controlSize + controlGap;
+        boolean bestEdges = false;
+        for (int[] candidate : candidates) {
+            int top = candidate[0];
+            int widthCap = candidate[1];
+            if (widthCap < avoidanceMinimumMediaSize) continue;
+
+            int height = availableHeight - top;
+            if (height < avoidanceMinimumMediaSize) continue;
+
+            int width = Math.round(height * avoidanceMediaAspect);
+            if (width > widthCap) {
+                width = widthCap;
+                height = Math.min(
+                        height
+                      , Math.round(width / avoidanceMediaAspect));
+            }
+            if (width < avoidanceMinimumMediaSize
+                    || height < avoidanceMinimumMediaSize) {
+                continue;
+            }
+
+            long area = (long) width * height;
+            if (area > bestArea) {
+                bestArea = area;
+                bestWidth = width;
+                bestHeight = height;
+                bestTop = top;
+                bestEdges = candidate[2] == 1;
+            }
+        }
+        if (bestArea < 0L) {
+            // No placement hosts the media at its policy floor while
+            // avoiding the controls; they overlay it, as they always could.
+            bestTop = 0;
+            bestEdges = false;
+            bestHeight = Math.max(avoidanceMinimumMediaSize, availableHeight);
+            bestWidth = Math.min(
+                    Math.max(contentWidth, avoidanceMinimumMediaSize)
+                  , Math.max(
+                        avoidanceMinimumMediaSize
+                      , Math.round(bestHeight * avoidanceMediaAspect)));
+        }
+
+        controlsAtEdgesBelowBadges = bestEdges;
+        SetTopInset(avoidanceColumn, bestTop);
+        mediaLayoutParams.width = bestWidth;
+        mediaLayoutParams.height = bestHeight;
+        mediaLayoutParams.gravity = Gravity.CENTER_HORIZONTAL;
+        avoidanceMediaView.setLayoutParams(mediaLayoutParams);
+        requestLayout();
+    }
+
     private void ConfigureBackground() {
         int backgroundRgb = fullscreen
                 ? FULL_SCREEN_BACKGROUND_RGB
@@ -1729,7 +1930,8 @@ final class OverlayAdContentView extends FrameLayout {
         // underneath them. Either way the inset's height belongs to the media.
         // Only a media-free layout keeps it, because there the top row is
         // text.
-        if (hasDisplayableMedia && !sideMediaLayout) {
+        if (hasDisplayableMedia && !sideMediaLayout
+                && !fullscreenAvoidsControls) {
             if (!mediaAvoidsControlStrip) SetTopInset(contentColumn, 0);
             SizeMediaForBudget(
                     displayMetrics
@@ -1966,20 +2168,35 @@ final class OverlayAdContentView extends FrameLayout {
         Runnable alignControlsToBadges = () -> {
             // In the side-media layout the left corner belongs to the media,
             // so a left control clears the media's edge instead of hugging
-            // the attribution badge over the picture.
-            int measuredLeftInset =
-                    (sideMediaLayout
-                            ? sideMediaWidthPx
-                            : attribution.getRight())
-                            + controlGap;
+            // the attribution badge over the picture. When the avoidance
+            // pass chose the edge placement, the controls hug the panel's
+            // sides just below the badges instead of the top row.
+            int measuredLeftInset;
+            int measuredRightInset;
+            int measuredTopInset;
+            if (controlsAtEdgesBelowBadges) {
+                measuredLeftInset = 0;
+                measuredRightInset = 0;
+                measuredTopInset = attribution.getBottom() + controlGap;
+            } else {
+                measuredLeftInset =
+                        (sideMediaLayout
+                                ? sideMediaWidthPx
+                                : attribution.getRight())
+                                + controlGap;
+                measuredRightInset = rightControlInset;
+                measuredTopInset = 0;
+            }
             UpdateControlInsets(
                     countdown
                   , measuredLeftInset
-                  , rightControlInset);
+                  , measuredRightInset
+                  , measuredTopInset);
             UpdateControlInsets(
                     close
                   , measuredLeftInset
-                  , rightControlInset);
+                  , measuredRightInset
+                  , measuredTopInset);
         };
         addOnLayoutChangeListener(
                 (view
@@ -2096,14 +2313,16 @@ final class OverlayAdContentView extends FrameLayout {
     private static void UpdateControlInsets(
             View control
           , int leftInset
-          , int rightInset) {
+          , int rightInset
+          , int topInset) {
         FrameLayout.LayoutParams layoutParams =
                 (FrameLayout.LayoutParams) control.getLayoutParams();
         if (layoutParams.leftMargin == leftInset
-                && layoutParams.rightMargin == rightInset) {
+                && layoutParams.rightMargin == rightInset
+                && layoutParams.topMargin == topInset) {
             return;
         }
-        layoutParams.setMargins(leftInset, 0, rightInset, 0);
+        layoutParams.setMargins(leftInset, topInset, rightInset, 0);
         control.setLayoutParams(layoutParams);
     }
 }

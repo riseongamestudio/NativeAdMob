@@ -139,6 +139,8 @@ static UIColor *HBArgb(uint32_t argb) {
     BOOL _sideMediaLayout;
     CGFloat _sideMediaWidthPx;
     BOOL _mediaAvoidsControlStrip;
+    BOOL _fullscreenAvoidsControls;
+    BOOL _controlsAtEdgesBelowBadges;
     HBLinearLayoutView *_sideRail;
     BOOL _iconHero;
     BOOL _tickerLayout;
@@ -527,6 +529,15 @@ static UIColor *HBArgb(uint32_t argb) {
             [self ro_configureResponsiveCollapsibleContentWithPanelHeight:
                     requestedPanelHeight];
         }
+    }
+    if (_fullscreen && _hasDisplayableMedia && !_sideMediaLayout) {
+        // The stack hugs the bottom and the media grows toward the corner
+        // controls; the exact fit runs in the layout pass, where the true
+        // frame is known.
+        _fullscreenAvoidsControls = YES;
+        _contentColumn.ro_gravity =
+                HBGravityBottom | HBGravityCenterHorizontal;
+        _mediaView.ro_layoutMargins = UIEdgeInsetsZero;
     }
     _nativeAdView.nativeAd = _nativeAd;
     [self addSubview:_nativeAdView];
@@ -1036,7 +1047,8 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
                     HBMeasureSpecMake(HBMeasureSpecExactly, screen.width)
                                  heightSpec:
                     HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
-    if (_hasDisplayableMedia && !_sideMediaLayout) {
+    if (_hasDisplayableMedia && !_sideMediaLayout
+            && !_fullscreenAvoidsControls) {
         // Controls and badges draw on top with their own opaque backgrounds,
         // and with media as the first child the strip can only ever cover
         // media, never text - so the inset's height belongs to the media.
@@ -1113,6 +1125,11 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
           , bounds.size.height - cutoutInset);
     _nativeAdView.frame = adFrame;
 
+    if (_fullscreenAvoidsControls) {
+        [self ro_recomputeFullscreenAvoidanceWithWidth:adFrame.size.width
+                                                height:adFrame.size.height];
+    }
+
     [_contentColumn ro_measureWithWidthSpec:
                     HBMeasureSpecMake(HBMeasureSpecExactly, adFrame.size.width)
                                  heightSpec:
@@ -1138,27 +1155,41 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     CGFloat controlSize = kROControlStripHeight;
     // In the side-media layout the left corner belongs to the media, so a
     // left control clears the media's edge instead of hugging the
-    // attribution badge over the picture.
-    CGFloat leftControlInset =
-            (_sideMediaLayout
-                    ? _sideMediaWidthPx
-                    : CGRectGetMaxX(_attribution.frame))
-                    + kROControlGap;
-    CGFloat rightControlInset = kRORightControlInset;
+    // attribution badge over the picture. When the avoidance pass chose the
+    // edge placement, the controls hug the panel's sides just below the
+    // badges instead of the top row.
+    CGFloat leftControlInset;
+    CGFloat rightControlInset;
+    CGFloat controlY;
+    if (_controlsAtEdgesBelowBadges) {
+        leftControlInset = 0;
+        rightControlInset = 0;
+        controlY = cutoutInset
+                + _attribution.frame.size.height
+                + kROControlGap;
+    } else {
+        leftControlInset =
+                (_sideMediaLayout
+                        ? _sideMediaWidthPx
+                        : CGRectGetMaxX(_attribution.frame))
+                        + kROControlGap;
+        rightControlInset = kRORightControlInset;
+        controlY = cutoutInset;
+    }
     BOOL closeLeft = _closeOnLeft;
     BOOL numberLeft = _numberOpposite ? !closeLeft : closeLeft;
     _close.frame = CGRectMake(
             closeLeft
                     ? leftControlInset
                     : bounds.size.width - rightControlInset - controlSize
-          , cutoutInset
+          , controlY
           , controlSize
           , controlSize);
     _countdown.frame = CGRectMake(
             numberLeft
                     ? leftControlInset
                     : bounds.size.width - rightControlInset - controlSize
-          , cutoutInset
+          , controlY
           , controlSize
           , controlSize);
 
@@ -1166,6 +1197,129 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     [self ro_keepTextWholeOrScrolling:_headline];
     [self ro_keepTextWholeOrScrolling:_body];
     [self ro_keepTextWholeOrScrolling:_advertiser];
+}
+
+// Full-screen control avoidance, the Android transcription: the stack hugs
+// the bottom, four candidates compete - the media rising through the gap of
+// the top control row, sitting below that row, rising between edge-hugging
+// controls below the badges, or sitting below those - and the placement
+// that leaves the media largest wins. Badges may sit over media; the close
+// and timer controls avoid it.
+- (void)ro_recomputeFullscreenAvoidanceWithWidth:(CGFloat)panelWidth
+                                          height:(CGFloat)panelHeight {
+    if (panelWidth <= 0 || panelHeight <= 0) return;
+
+    CGFloat controlSize = kROControlStripHeight;
+    CGFloat badgeHeight = kROAttributionHeight;
+    CGFloat controlGap = kROControlGap;
+    CGFloat contentWidth = MAX(0, panelWidth - 2 * kROHorizontalPadding);
+
+    // The lower stack's height, measured with the media collapsed.
+    _mediaView.ro_layoutWidth = 0;
+    _mediaView.ro_layoutHeight = 0;
+    _mediaView.ro_layoutWeight = 0;
+    UIEdgeInsets columnPadding = _contentColumn.ro_padding;
+    columnPadding.top = 0;
+    _contentColumn.ro_padding = columnPadding;
+    [_contentColumn ro_measureWithWidthSpec:
+                    HBMeasureSpecMake(HBMeasureSpecExactly, panelWidth)
+                                 heightSpec:
+                    HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
+    CGFloat lowerContentHeight = _contentColumn.ro_measuredSize.height;
+    CGFloat availableHeight = MAX(0, panelHeight - lowerContentHeight);
+
+    // Both corner controls share one spot until the countdown ends, so a
+    // side is an obstacle when either of them lives there.
+    BOOL numberLeft = _numberOpposite ? !_closeOnLeft : _closeOnLeft;
+    BOOL leftOccupied = _closeOnLeft || numberLeft;
+    BOOL rightOccupied = !_closeOnLeft || !numberLeft;
+    CGFloat half = panelWidth / 2;
+    CGFloat topRowLeftLimit = leftOccupied
+            ? MAX(0, half
+                    - kROAttributionWidth
+                    - controlGap
+                    - controlSize
+                    - controlGap)
+            : half;
+    CGFloat topRowRightLimit = rightOccupied
+            ? MAX(0, panelWidth
+                    - kRORightControlInset
+                    - controlSize
+                    - controlGap
+                    - half)
+            : half;
+    CGFloat topRowGapWidth = MIN(
+            contentWidth
+          , 2 * MIN(topRowLeftLimit, topRowRightLimit));
+    CGFloat edgeLimit = MAX(0, half - controlSize - controlGap);
+    CGFloat edgeGapWidth = MIN(
+            contentWidth
+          , 2 * MIN(
+                leftOccupied ? edgeLimit : half
+              , rightOccupied ? edgeLimit : half));
+
+    CGFloat candidateTops[4] = {
+            0
+          , controlSize + controlGap
+          , badgeHeight + controlGap
+          , badgeHeight + controlSize + 2 * controlGap };
+    CGFloat candidateCaps[4] = {
+            topRowGapWidth
+          , contentWidth
+          , edgeGapWidth
+          , contentWidth };
+    BOOL candidateEdges[4] = { NO, NO, YES, YES };
+    CGFloat bestArea = -1;
+    CGFloat bestWidth = 0;
+    CGFloat bestHeight = 0;
+    CGFloat bestTop = controlSize + controlGap;
+    BOOL bestAtEdges = NO;
+    for (NSInteger index = 0; index < 4; ++index) {
+        CGFloat top = candidateTops[index];
+        CGFloat widthCap = candidateCaps[index];
+        if (widthCap < _minimumMediaSize) continue;
+
+        CGFloat height = availableHeight - top;
+        if (height < _minimumMediaSize) continue;
+
+        CGFloat width = round(height * _mediaAspectRatio);
+        if (width > widthCap) {
+            width = widthCap;
+            height = MIN(height, round(width / _mediaAspectRatio));
+        }
+        if (width < _minimumMediaSize || height < _minimumMediaSize) {
+            continue;
+        }
+
+        CGFloat area = width * height;
+        if (area > bestArea) {
+            bestArea = area;
+            bestWidth = width;
+            bestHeight = height;
+            bestTop = top;
+            bestAtEdges = candidateEdges[index];
+        }
+    }
+    if (bestArea < 0) {
+        // No placement hosts the media at its policy floor while avoiding
+        // the controls; they overlay it, as they always could.
+        bestTop = 0;
+        bestAtEdges = NO;
+        bestHeight = MAX(_minimumMediaSize, availableHeight);
+        bestWidth = MIN(
+                MAX(contentWidth, _minimumMediaSize)
+              , MAX(
+                    _minimumMediaSize
+                  , round(bestHeight * _mediaAspectRatio)));
+    }
+
+    _controlsAtEdgesBelowBadges = bestAtEdges;
+    columnPadding.top = bestTop;
+    _contentColumn.ro_padding = columnPadding;
+    _mediaView.ro_layoutWidth = bestWidth;
+    _mediaView.ro_layoutHeight = bestHeight;
+    _mediaView.ro_layoutWeight = 0;
+    _mediaView.ro_layoutGravity = HBGravityCenterHorizontal;
 }
 
 - (void)ro_matchIconSizeToIdentityText {
