@@ -72,7 +72,9 @@ final class OverlayAdContentView extends FrameLayout {
     // The 120dp floor is video's; a creative with no video keeps its picture
     // in shorter panels instead of handing the band to the icon.
     private static final float MIN_IMAGE_MEDIA_SIZE_DP = 48f;
-    private static final float DEFAULT_MEDIA_ASPECT_RATIO = 1f;
+    // When a creative never reports its ratio, assume landscape video -
+    // the common case - rather than a square frame nothing fills.
+    private static final float DEFAULT_MEDIA_ASPECT_RATIO = 16f / 9f;
     private static final float DEFAULT_HEIGHT_RATIO = 0.5f;
     private static final float MAX_COLOR_CHANNEL = 255f;
     private static final float FULL_SCREEN_DEFAULT_ALPHA = 0.80f;
@@ -934,6 +936,14 @@ final class OverlayAdContentView extends FrameLayout {
                       , mediaView);
             }
             if (contentFits) {
+                // The compact chrome is not a last resort but the standing
+                // dress: the height it frees goes straight to the media.
+                ApplyStripAvoidingFloors(
+                        density
+                      , icon
+                      , callToAction
+                      , identityRow
+                      , body);
                 // The half panel runs the same maximiser as the full
                 // screen: the media's band grows toward the controls and
                 // the controls move where the band grows largest.
@@ -1735,10 +1745,6 @@ final class OverlayAdContentView extends FrameLayout {
         int controlGap = Math.max(
                 1
               , (int) (CONTROL_GAP_DP * density));
-        int contentWidth = Math.max(
-                0
-              , panelWidth - 2 * avoidanceHorizontalPadding);
-
         // The lower stack's height, measured with the media collapsed.
         LinearLayout.LayoutParams mediaLayoutParams =
                 (LinearLayout.LayoutParams)
@@ -1788,22 +1794,24 @@ final class OverlayAdContentView extends FrameLayout {
                             - half)
                 : half;
         int topRowGapWidth = Math.min(
-                contentWidth
+                panelWidth
               , 2 * Math.min(topRowLeftLimit, topRowRightLimit));
         int edgeLimit = Math.max(0, half - controlSize - controlGap);
         int edgeGapWidth = Math.min(
-                contentWidth
+                panelWidth
               , 2 * Math.min(
                     leftOccupied ? edgeLimit : half
                   , rightOccupied ? edgeLimit : half));
 
-        // {media top, media width cap, controls at edges}
+        // {media top, media width cap, controls at edges}. Below the
+        // controls the media may bleed edge to edge - the panel's full
+        // width, not the inset content width.
         int[][] candidates = {
                 { 0, topRowGapWidth, 0 }
-              , { controlSize + controlGap, contentWidth, 0 }
+              , { controlSize + controlGap, panelWidth, 0 }
               , { badgeHeight + controlGap, edgeGapWidth, 1 }
               , { badgeHeight + controlSize + 2 * controlGap
-                  , contentWidth
+                  , panelWidth
                   , 1 }
         };
         long bestArea = -1L;
@@ -1847,7 +1855,7 @@ final class OverlayAdContentView extends FrameLayout {
             bestEdges = false;
             bestHeight = Math.max(avoidanceMinimumMediaSize, availableHeight);
             bestWidth = Math.min(
-                    Math.max(contentWidth, avoidanceMinimumMediaSize)
+                    Math.max(panelWidth, avoidanceMinimumMediaSize)
                   , Math.max(
                         avoidanceMinimumMediaSize
                       , Math.round(bestHeight * avoidanceMediaAspect)));

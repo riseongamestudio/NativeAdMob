@@ -10,7 +10,9 @@ static const CGFloat kROMinVideoMediaSize = 120;
 // The 120pt floor is video's; a creative with no video keeps its picture
 // in shorter panels instead of handing the band to the icon.
 static const CGFloat kROMinImageMediaSize = 48;
-static const CGFloat kRODefaultMediaAspectRatio = 1;
+// When a creative never reports its ratio, assume landscape video - the
+// common case - rather than a square frame nothing fills.
+static const CGFloat kRODefaultMediaAspectRatio = 16.0 / 9.0;
 static const float kRODefaultHeightRatio = 0.5f;
 static const float kROOverlayDefaultAlpha = 0.80f;
 static const float kROCollapsibleDefaultAlpha = 0.95f;
@@ -774,9 +776,10 @@ static UIColor *HBArgb(uint32_t argb) {
                     ro_contentFitsWithMinimumMediaForPanelHeight:panelHeight];
         }
         if (contentFits) {
-            // The half panel runs the same maximiser as the full screen:
-            // the media's band grows toward the controls and the controls
-            // move where the band grows largest.
+            // The compact chrome is not a last resort but the standing
+            // dress: the height it frees goes straight to the media. The
+            // half panel then runs the same maximiser as the full screen.
+            [self ro_applyStripAvoidingFloors];
             [self ro_enableControlAvoidanceWithPanelHeight:panelHeight];
             return;
         }
@@ -1362,7 +1365,6 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     CGFloat controlSize = kROControlStripHeight;
     CGFloat badgeHeight = kROAttributionHeight;
     CGFloat controlGap = kROControlGap;
-    CGFloat contentWidth = MAX(0, panelWidth - 2 * kROHorizontalPadding);
 
     // The lower stack's height, measured with the media collapsed.
     _mediaView.ro_layoutWidth = 0;
@@ -1400,15 +1402,17 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
                     - half)
             : half;
     CGFloat topRowGapWidth = MIN(
-            contentWidth
+            panelWidth
           , 2 * MIN(topRowLeftLimit, topRowRightLimit));
     CGFloat edgeLimit = MAX(0, half - controlSize - controlGap);
     CGFloat edgeGapWidth = MIN(
-            contentWidth
+            panelWidth
           , 2 * MIN(
                 leftOccupied ? edgeLimit : half
               , rightOccupied ? edgeLimit : half));
 
+    // Below the controls the media may bleed edge to edge - the panel's
+    // full width, not the inset content width.
     CGFloat candidateTops[4] = {
             0
           , controlSize + controlGap
@@ -1416,9 +1420,9 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
           , badgeHeight + controlSize + 2 * controlGap };
     CGFloat candidateCaps[4] = {
             topRowGapWidth
-          , contentWidth
+          , panelWidth
           , edgeGapWidth
-          , contentWidth };
+          , panelWidth };
     BOOL candidateEdges[4] = { NO, NO, YES, YES };
     CGFloat bestArea = -1;
     CGFloat bestWidth = 0;
@@ -1458,7 +1462,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
         bestAtEdges = NO;
         bestHeight = MAX(_minimumMediaSize, availableHeight);
         bestWidth = MIN(
-                MAX(contentWidth, _minimumMediaSize)
+                MAX(panelWidth, _minimumMediaSize)
               , MAX(
                     _minimumMediaSize
                   , round(bestHeight * _mediaAspectRatio)));
