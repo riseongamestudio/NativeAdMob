@@ -1,6 +1,7 @@
 package com.riseon.nativeadmob;
 
-// Adapter chung de controller base khong phai biet renderer la Dialog hay View.
+// Shared adapter so the controllers never need to know whether the
+// renderer is a Dialog or a plain View.
 public interface AdPresentation {
 
     interface Listener {
@@ -17,9 +18,9 @@ public interface AdPresentation {
     boolean IsShowing();
     default void OnAdClicked() {}
 
-    // Dong binh thuong: renderer phai phat OnDismissed.
+    // The ordinary close path: the renderer must emit OnDismissed.
     void Dismiss();
 
-    // Dong im lang khi Release/controller cleanup.
+    // The silent close used by Release and controller cleanup.
     void Release();
 }

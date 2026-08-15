@@ -1,9 +1,9 @@
-#import "RONativeAdMobFullScreenContentView.h"
+#import "RONativeAdMobOverlayContentView.h"
 
 #import "ROAdTextLabel.h"
 #import "RONativeAdMobStarRatingView.h"
 
-static NSString *const kROTag = @"FullScreen";
+static NSString *const kROTag = @"Overlay";
 static NSString *const kROAttributionText = @"Ad";
 
 static const CGFloat kROMinVideoMediaSize = 120;
@@ -12,9 +12,9 @@ static const CGFloat kROMinVideoMediaSize = 120;
 static const CGFloat kROMinImageMediaSize = 48;
 static const CGFloat kRODefaultMediaAspectRatio = 1;
 static const float kRODefaultHeightRatio = 0.5f;
-static const float kROFullScreenDefaultAlpha = 0.80f;
+static const float kROOverlayDefaultAlpha = 0.80f;
 static const float kROCollapsibleDefaultAlpha = 0.95f;
-static const uint32_t kROFullScreenBackgroundRgb = 0x000000;
+static const uint32_t kROOverlayBackgroundRgb = 0x000000;
 static const uint32_t kROCollapsibleBackgroundRgb = 0x1B2029;
 // 20pt a side spent 40pt of every screen on nothing the ad needed.
 static const CGFloat kROHorizontalPadding = 8;
@@ -98,7 +98,7 @@ static UIColor *HBArgb(uint32_t argb) {
 
 @end
 
-@implementation RONativeAdMobFullScreenContentView {
+@implementation RONativeAdMobOverlayContentView {
     GADNativeAd *_nativeAd;
     int64_t _countDownRemainingMs;
     BOOL _closeOnLeft;
@@ -512,10 +512,10 @@ static UIColor *HBArgb(uint32_t argb) {
 
 - (void)ro_configureBackground {
     uint32_t backgroundRgb = _fullscreen
-            ? kROFullScreenBackgroundRgb
+            ? kROOverlayBackgroundRgb
             : kROCollapsibleBackgroundRgb;
     float defaultAlpha = _fullscreen
-            ? kROFullScreenDefaultAlpha
+            ? kROOverlayDefaultAlpha
             : kROCollapsibleDefaultAlpha;
     float alpha = _backgroundAlpha;
     if (isnan(alpha) || isinf(alpha)) {
@@ -1053,11 +1053,11 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
 
     NSDate *finishAt =
             [NSDate dateWithTimeIntervalSinceNow:remainingMs / 1000.0];
-    __weak RONativeAdMobFullScreenContentView *weakSelf = self;
+    __weak RONativeAdMobOverlayContentView *weakSelf = self;
     _timer = [NSTimer scheduledTimerWithTimeInterval:kROCountdownInterval
                                              repeats:YES
                                                block:^(NSTimer *timer) {
-        RONativeAdMobFullScreenContentView *strongSelf = weakSelf;
+        RONativeAdMobOverlayContentView *strongSelf = weakSelf;
         if (strongSelf == nil) {
             [timer invalidate];
             return;

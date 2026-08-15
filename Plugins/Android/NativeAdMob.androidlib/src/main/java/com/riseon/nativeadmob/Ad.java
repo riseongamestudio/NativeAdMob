@@ -11,8 +11,9 @@ import com.google.android.gms.ads.nativead.NativeAdOptions;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 
-// Bridge chung: main-thread dispatch, listener, load generation va request
-// options. Lifecycle show/hide cua tung format nam trong subclass.
+// Shared base of every ad format: main-thread dispatch, load generations,
+// request options, and the paid-event binding. The show/hide lifecycle of
+// each format lives in its subclass.
 public abstract class Ad {
     protected static final String TAG = "NativeAdMob";
     protected static final int INTERNAL_LOAD_ERROR = -1;

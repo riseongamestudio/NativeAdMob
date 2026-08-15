@@ -3,20 +3,20 @@ using UnityEngine;
 using UnityEngine.UI;
 
 namespace RiseOn.NativeAdMob {
-    internal enum EditorPreviewMode {
+    internal enum EditorAdMode {
         FullScreen
       , Collapsible
       , InFeed
     }
 
-    internal sealed class EditorPreviewConfig {
+    internal sealed class EditorAdConfig {
         private const float FULL_SCREEN_DEFAULT_ALPHA = 0.8f;
         private const float COLLAPSIBLE_DEFAULT_ALPHA = 0.95f;
         private const float IN_FEED_DEFAULT_ALPHA     = 1f;
         private const float DEFAULT_HEIGHT_RATIO      = 0.5f;
 
         internal string                    AdUnitId          { get; }
-        internal EditorPreviewMode Mode              { get; }
+        internal EditorAdMode Mode              { get; }
         internal bool                      PausesGame        { get; }
         internal bool                      RandomCloseSide   { get; }
         internal bool                      NumberOpposite    { get; }
@@ -27,9 +27,9 @@ namespace RiseOn.NativeAdMob {
         internal bool                      AllowsVideo       { get; }
         internal int                       CountdownSec      { get; private set; }
 
-        private EditorPreviewConfig(
+        private EditorAdConfig(
             string adUnitId
-          , EditorPreviewMode mode
+          , EditorAdMode mode
           , bool pausesGame
           , int countdownSec
           , bool randomCloseSide
@@ -52,7 +52,7 @@ namespace RiseOn.NativeAdMob {
             AllowsVideo     = allowsVideo;
         }
 
-        internal static EditorPreviewConfig CreateFullScreen(
+        internal static EditorAdConfig CreateFullScreen(
             string adUnitId
           , bool fullscreen
           , int countdownSec
@@ -63,8 +63,8 @@ namespace RiseOn.NativeAdMob {
             return new(
                 adUnitId
               , fullscreen
-                    ? EditorPreviewMode.FullScreen
-                    : EditorPreviewMode.Collapsible
+                    ? EditorAdMode.FullScreen
+                    : EditorAdMode.Collapsible
               , fullscreen
               , countdownSec
               , randomCloseSide
@@ -80,14 +80,14 @@ namespace RiseOn.NativeAdMob {
               , true);
         }
 
-        internal static EditorPreviewConfig CreateInFeed(
+        internal static EditorAdConfig CreateInFeed(
             string adUnitId
           , Vector2Int positionPx
           , Vector2Int sizePx
           , float backgroundAlpha) {
             return new(
                 adUnitId
-              , EditorPreviewMode.InFeed
+              , EditorAdMode.InFeed
               , false
               , default
               , false
@@ -107,7 +107,7 @@ namespace RiseOn.NativeAdMob {
             PositionPx = positionPx;
         }
 
-        internal EditorPreviewConfig Snapshot() {
+        internal EditorAdConfig Snapshot() {
             return new(
                 AdUnitId
               , Mode
@@ -145,7 +145,7 @@ namespace RiseOn.NativeAdMob {
         }
     }
 
-    internal sealed class EditorPreviewAdaptiveLayoutGroup
+    internal sealed class EditorAdaptiveLayoutGroup
         : HorizontalOrVerticalLayoutGroup {
         private bool isVertical = true;
 
@@ -177,7 +177,7 @@ namespace RiseOn.NativeAdMob {
         }
     }
 
-    internal sealed class EditorPreview : MonoBehaviour {
+    internal sealed class EditorAd : MonoBehaviour {
         private enum InFeedTier {
             Compact
           , Regular
@@ -190,11 +190,11 @@ namespace RiseOn.NativeAdMob {
           , Video
         }
 
-        private const string PREVIEW_OBJECT_NAME      = "Native Ad Editor Preview";
+        private const string AD_OBJECT_NAME      = "Native Editor Ad";
         private const string BUILT_IN_FONT_NAME       = "LegacyRuntime.ttf";
         private const string AD_ATTRIBUTION_TEXT      = "Ad";
         private const string AD_CHOICES_TEXT          = "AdChoices";
-        private const string HEADLINE_TEXT            = "Native Ad Editor Preview";
+        private const string HEADLINE_TEXT            = "Native Editor Ad";
         private const string ADVERTISER_TEXT          = "Google Mobile Ads placeholder";
         private const string STAR_RATING_TEXT         = "★★★★☆  4.0";
         private const string BODY_TEXT                = "This GameObject simulates the native ad lifecycle in the Unity Editor.";
@@ -204,7 +204,7 @@ namespace RiseOn.NativeAdMob {
         private const string FLEXIBLE_MEDIA_TEXT      = "IMAGE / VIDEO MEDIA";
         private const string CLICK_LOG_TEXT           = "Native ad preview click";
         private const string TEST_AD_CLICK_URL         = "https://google.com";
-        private const string AD_CHOICES_PREVIEW_URL   = "https://support.google.com/My-Ad-Center-Help/answer/12155764";
+        private const string AD_CHOICES_URL   = "https://support.google.com/My-Ad-Center-Help/answer/12155764";
         private const string AD_CHOICES_CLICK_LOG_TEXT = "Native AdChoices preview click";
         private const string PANEL_OBJECT_NAME        = "Native Ad Panel";
         private const string CONTENT_OBJECT_NAME      = "Content";
@@ -227,9 +227,9 @@ namespace RiseOn.NativeAdMob {
         private const int CONTENT_SPACING_DP               = 4;
         private const int CONTROL_SIZE_DP                  = 34;
         private const int CONTROL_BADGE_SPACING_DP         = 2;
-        private const int AD_CHOICES_PREVIEW_SIZE_DP       = 18;
+        private const int AD_CHOICES_SIZE_DP       = 18;
         private const int CONTROL_RIGHT_INSET_DP =
-                AD_CHOICES_PREVIEW_SIZE_DP
+                AD_CHOICES_SIZE_DP
               + CONTROL_BADGE_SPACING_DP;
         private const int ATTRIBUTION_WIDTH_DP             = 24;
         private const int CONTROL_LEFT_INSET_DP =
@@ -300,14 +300,14 @@ namespace RiseOn.NativeAdMob {
                 new(0.16f, 0.54f, 0.92f, 1f);
 
         private Action onDismissed;
-        private EditorPreviewConfig config;
+        private EditorAdConfig config;
         private CanvasScaler canvasScaler;
         private RectTransform panel;
         private RectTransform content;
         private RectTransform attributionRect;
         private RectTransform adChoicesRect;
         private Image panelGraphic;
-        private EditorPreviewAdaptiveLayoutGroup contentLayout;
+        private EditorAdaptiveLayoutGroup contentLayout;
         private LayoutElement mediaLayoutElement;
         private LayoutElement detailsLayoutElement;
         private VerticalLayoutGroup detailsLayout;
@@ -338,17 +338,17 @@ namespace RiseOn.NativeAdMob {
         private bool externalUrlOpening;
         private bool externalUrlFocusLost;
 
-        internal static EditorPreview Show(
-            EditorPreviewConfig config
+        internal static EditorAd Show(
+            EditorAdConfig config
           , Action onDismissed) {
             var previewObject = new GameObject(
-                PREVIEW_OBJECT_NAME
+                AD_OBJECT_NAME
               , typeof(RectTransform)
               , typeof(Canvas)
               , typeof(CanvasScaler)
               , typeof(GraphicRaycaster)
-              , typeof(EditorPreview));
-            var preview = previewObject.GetComponent<EditorPreview>();
+              , typeof(EditorAd));
+            var preview = previewObject.GetComponent<EditorAd>();
             preview.Initialize(config, onDismissed);
             return preview;
         }
@@ -375,7 +375,7 @@ namespace RiseOn.NativeAdMob {
         }
 
         private void Initialize(
-            EditorPreviewConfig config
+            EditorAdConfig config
           , Action dismissedCallback) {
             this.config = config;
             onDismissed = dismissedCallback;
@@ -401,18 +401,18 @@ namespace RiseOn.NativeAdMob {
         }
 
         private static int ResolveCanvasSortingOrder(
-            EditorPreviewMode mode) {
+            EditorAdMode mode) {
             return mode switch {
-                EditorPreviewMode.FullScreen =>
+                EditorAdMode.FullScreen =>
                         FULLSCREEN_CANVAS_SORTING_ORDER
-              , EditorPreviewMode.Collapsible =>
+              , EditorAdMode.Collapsible =>
                         NON_FULLSCREEN_CANVAS_SORTING_ORDER
               , _ => IN_FEED_CANVAS_SORTING_ORDER
             };
         }
 
         private RectTransform CreatePanel(
-            EditorPreviewConfig config) {
+            EditorAdConfig config) {
             var panelObject = new GameObject(
                 PANEL_OBJECT_NAME
               , typeof(RectTransform)
@@ -430,7 +430,7 @@ namespace RiseOn.NativeAdMob {
 
             panelGraphic = panelObject.GetComponent<Image>();
             var panelColor =
-                    config.Mode == EditorPreviewMode.FullScreen
+                    config.Mode == EditorAdMode.FullScreen
                             ? FullScreenPanelColor
                             : CompactPanelColor;
             panelGraphic.color = new(
@@ -439,7 +439,7 @@ namespace RiseOn.NativeAdMob {
               , panelColor.b
               , config.BackgroundAlpha);
             var backgroundIsClickable =
-                    config.Mode != EditorPreviewMode.InFeed;
+                    config.Mode != EditorAdMode.InFeed;
             panelGraphic.raycastTarget = backgroundIsClickable;
 
             var panelButton = panelObject.GetComponent<Button>();
@@ -448,7 +448,7 @@ namespace RiseOn.NativeAdMob {
             panelButton.interactable = backgroundIsClickable;
             if (backgroundIsClickable) {
                 panelButton.onClick.AddListener(
-                    () => TryOpenPreviewUrl(
+                    () => TryOpenUrl(
                         TEST_AD_CLICK_URL
                       , CLICK_LOG_TEXT));
             }
@@ -457,10 +457,10 @@ namespace RiseOn.NativeAdMob {
 
         private static void ApplyPanelRect(
             RectTransform panel
-          , EditorPreviewConfig config
+          , EditorAdConfig config
           , float uiScale
           , float minimumPanelHeight) {
-            if (config.Mode == EditorPreviewMode.FullScreen) {
+            if (config.Mode == EditorAdMode.FullScreen) {
                 panel.anchorMin = Vector2.zero;
                 panel.anchorMax = Vector2.one;
                 panel.pivot = new(0.5f, 0.5f);
@@ -471,7 +471,7 @@ namespace RiseOn.NativeAdMob {
                 return;
             }
 
-            if (config.Mode == EditorPreviewMode.Collapsible) {
+            if (config.Mode == EditorAdMode.Collapsible) {
                 var heightRatio = config.HeightRatio;
                 var logicalScreenHeight = Screen.height / uiScale;
                 var resolvedHeight = Mathf.Min(
@@ -514,11 +514,11 @@ namespace RiseOn.NativeAdMob {
 
         private RectTransform CreateContent(
             RectTransform panel
-          , EditorPreviewConfig config) {
+          , EditorAdConfig config) {
             var contentObject = new GameObject(
                 CONTENT_OBJECT_NAME
               , typeof(RectTransform)
-              , typeof(EditorPreviewAdaptiveLayoutGroup));
+              , typeof(EditorAdaptiveLayoutGroup));
             contentObject.transform.SetParent(panel, false);
 
             var content = contentObject.GetComponent<RectTransform>();
@@ -533,14 +533,14 @@ namespace RiseOn.NativeAdMob {
 
             contentLayout =
                     contentObject
-                            .GetComponent<EditorPreviewAdaptiveLayoutGroup>();
+                            .GetComponent<EditorAdaptiveLayoutGroup>();
             ConfigureContentLayout(contentLayout);
 
             var mediaText = config.AllowsVideo
                     ? FLEXIBLE_MEDIA_TEXT
                     : IMAGE_MEDIA_TEXT;
             var mediaMinHeight =
-                    config.Mode == EditorPreviewMode.InFeed
+                    config.Mode == EditorAdMode.InFeed
                             ? 0f
                             : MEDIA_MIN_SIZE_DP;
             mediaLayoutElement =
@@ -569,11 +569,11 @@ namespace RiseOn.NativeAdMob {
             detailsLayout.childForceExpandHeight = false;
 
             var identityTextParent =
-                    config.Mode == EditorPreviewMode.InFeed
+                    config.Mode == EditorAdMode.InFeed
                             ? detailsObject.transform
                             : CreateIdentityRow(detailsObject.transform);
             var headlineFontSize =
-                    config.Mode == EditorPreviewMode.FullScreen
+                    config.Mode == EditorAdMode.FullScreen
                             ? FULLSCREEN_HEADLINE_FONT_SIZE
                             : COMPACT_HEADLINE_FONT_SIZE;
             headlineText = CreateText(
@@ -585,7 +585,7 @@ namespace RiseOn.NativeAdMob {
             headlineLayoutElement =
                     headlineText.GetComponent<LayoutElement>();
 
-            if (config.Mode == EditorPreviewMode.FullScreen) {
+            if (config.Mode == EditorAdMode.FullScreen) {
                 CreateText(
                     identityTextParent
                   , ADVERTISER_TEXT
@@ -614,7 +614,7 @@ namespace RiseOn.NativeAdMob {
         }
 
         private static void ConfigureContentLayout(
-            EditorPreviewAdaptiveLayoutGroup layout) {
+            EditorAdaptiveLayoutGroup layout) {
             layout.IsVertical = true;
             layout.spacing = CONTENT_SPACING_DP;
             layout.childAlignment = TextAnchor.MiddleCenter;
@@ -690,7 +690,7 @@ namespace RiseOn.NativeAdMob {
             var button = iconObject.GetComponent<Button>();
             button.targetGraphic = image;
             button.onClick.AddListener(
-                () => TryOpenPreviewUrl(
+                () => TryOpenUrl(
                     TEST_AD_CLICK_URL
                   , CLICK_LOG_TEXT));
 
@@ -719,19 +719,19 @@ namespace RiseOn.NativeAdMob {
                 MEDIA_OBJECT_NAME
               , typeof(RectTransform)
               , typeof(CanvasRenderer)
-              , typeof(EditorPreviewMediaGraphic)
+              , typeof(EditorMediaGraphic)
               , typeof(Button)
               , typeof(LayoutElement));
             mediaObject.transform.SetParent(parent, false);
 
             var graphic =
-                    mediaObject.GetComponent<EditorPreviewMediaGraphic>();
+                    mediaObject.GetComponent<EditorMediaGraphic>();
             graphic.raycastTarget = true;
 
             var button = mediaObject.GetComponent<Button>();
             button.targetGraphic = graphic;
             button.onClick.AddListener(
-                () => TryOpenPreviewUrl(
+                () => TryOpenUrl(
                     TEST_AD_CLICK_URL
                   , CLICK_LOG_TEXT));
 
@@ -767,7 +767,7 @@ namespace RiseOn.NativeAdMob {
             var button = buttonObject.GetComponent<Button>();
             button.targetGraphic = image;
             button.onClick.AddListener(
-                () => TryOpenPreviewUrl(
+                () => TryOpenUrl(
                     TEST_AD_CLICK_URL
                   , $"{CLICK_LOG_TEXT}. Ad unit ID: {adUnitId}"));
 
@@ -817,7 +817,7 @@ namespace RiseOn.NativeAdMob {
                 AD_CHOICES_TEXT
               , typeof(RectTransform)
               , typeof(CanvasRenderer)
-              , typeof(EditorPreviewAdChoicesGraphic)
+              , typeof(EditorAdChoicesGraphic)
               , typeof(Button));
             adChoicesObject.transform.SetParent(panel, false);
             var adChoicesRect =
@@ -826,25 +826,25 @@ namespace RiseOn.NativeAdMob {
                 adChoicesRect
               , Vector2.zero
               , new(
-                    AD_CHOICES_PREVIEW_SIZE_DP
-                  , AD_CHOICES_PREVIEW_SIZE_DP));
+                    AD_CHOICES_SIZE_DP
+                  , AD_CHOICES_SIZE_DP));
             var graphic =
                     adChoicesObject
-                            .GetComponent<EditorPreviewAdChoicesGraphic>();
+                            .GetComponent<EditorAdChoicesGraphic>();
             graphic.raycastTarget = true;
             var button = adChoicesObject.GetComponent<Button>();
             button.targetGraphic = graphic;
             button.onClick.AddListener(
-                () => TryOpenPreviewUrl(
-                    AD_CHOICES_PREVIEW_URL
+                () => TryOpenUrl(
+                    AD_CHOICES_URL
                   , AD_CHOICES_CLICK_LOG_TEXT));
             return adChoicesRect;
         }
 
         private void CreateControls(
             RectTransform panel
-          , EditorPreviewConfig config) {
-            if (config.Mode == EditorPreviewMode.InFeed) return;
+          , EditorAdConfig config) {
+            if (config.Mode == EditorAdMode.InFeed) return;
 
             var closeOnLeft =
                     config.RandomCloseSide && UnityEngine.Random.value < 0.5f;
@@ -1024,7 +1024,7 @@ namespace RiseOn.NativeAdMob {
         private void LateUpdate() {
             var forceInFeedRetry =
                     config != null
-                 && config.Mode == EditorPreviewMode.InFeed
+                 && config.Mode == EditorAdMode.InFeed
                  && inFeedLayoutUnavailable
                  && inFeedLayoutRetryFramesRemaining > 0;
             if (forceInFeedRetry) {
@@ -1061,7 +1061,7 @@ namespace RiseOn.NativeAdMob {
             if (MatchIconSizeToIdentityText()) {
                 LayoutRebuilder.ForceRebuildLayoutImmediate(content);
             }
-            if (config.Mode != EditorPreviewMode.InFeed) {
+            if (config.Mode != EditorAdMode.InFeed) {
                 var minimumPanelHeight =
                         CONTROL_SIZE_DP + LayoutUtility.GetMinHeight(content);
                 ApplyPanelRect(
@@ -1087,7 +1087,7 @@ namespace RiseOn.NativeAdMob {
         }
 
         private bool MatchIconSizeToIdentityText() {
-            if (config.Mode == EditorPreviewMode.InFeed
+            if (config.Mode == EditorAdMode.InFeed
                     || identityRowRect == null
                     || identityTextRect == null
                     || iconLayoutElement == null) {
@@ -1122,7 +1122,7 @@ namespace RiseOn.NativeAdMob {
         }
 
         private float ResolveSafeTopInset(float uiScale) {
-            if (config.Mode != EditorPreviewMode.FullScreen) {
+            if (config.Mode != EditorAdMode.FullScreen) {
                 return 0f;
             }
 
@@ -1132,7 +1132,7 @@ namespace RiseOn.NativeAdMob {
         }
 
         private void ApplySafeTopInset(float safeTopInset) {
-            if (config.Mode == EditorPreviewMode.InFeed) {
+            if (config.Mode == EditorAdMode.InFeed) {
                 content.offsetMin = default;
                 content.offsetMax = default;
                 return;
@@ -1175,7 +1175,7 @@ namespace RiseOn.NativeAdMob {
                 return;
             }
 
-            if (config.Mode != EditorPreviewMode.InFeed) {
+            if (config.Mode != EditorAdMode.InFeed) {
                 mediaLayoutElement.gameObject.SetActive(true);
                 contentLayout.IsVertical = true;
                 contentLayout.spacing = CONTENT_SPACING_DP;
@@ -1440,7 +1440,7 @@ namespace RiseOn.NativeAdMob {
 
             inFeedLayoutWarningIssued = true;
             Debug.LogWarning(
-                $"{nameof(EditorPreview)} cannot prove a "
+                $"{nameof(EditorAd)} cannot prove a "
               + "policy-safe native in-feed layout inside "
               + $"{config.SizePx.x}x{config.SizePx.y}px. "
               + "Showing an editor-only image fallback; Android runtime "
@@ -1546,7 +1546,7 @@ namespace RiseOn.NativeAdMob {
         private void ApplyBadgeRects(
             float safeTopInset
           , float uiScale) {
-            if (config.Mode == EditorPreviewMode.InFeed) {
+            if (config.Mode == EditorAdMode.InFeed) {
                 var minimumBadgeSize = MIN_BADGE_SIZE_PX / uiScale;
                 var badgeSize = ResolveInFeedBadgeSize(uiScale);
                 var availableAttributionWidth = Mathf.Max(
@@ -1587,8 +1587,8 @@ namespace RiseOn.NativeAdMob {
                     adChoicesRect
                   , new(0f, -safeTopInset)
                   , new(
-                        AD_CHOICES_PREVIEW_SIZE_DP
-                      , AD_CHOICES_PREVIEW_SIZE_DP));
+                        AD_CHOICES_SIZE_DP
+                      , AD_CHOICES_SIZE_DP));
             }
         }
 
@@ -1600,7 +1600,7 @@ namespace RiseOn.NativeAdMob {
             return Mathf.Clamp(
                 shortSide * IN_FEED_BADGE_SHORT_SIDE_RATIO
               , minimumBadgeSize
-              , AD_CHOICES_PREVIEW_SIZE_DP);
+              , AD_CHOICES_SIZE_DP);
         }
 
         private static float ResolveInFeedVideoMinimumMediaSize(
@@ -1638,7 +1638,7 @@ namespace RiseOn.NativeAdMob {
                       , CANVAS_MATCH_WIDTH_OR_HEIGHT)));
         }
 
-        private void TryOpenPreviewUrl(string url, string logMessage) {
+        private void TryOpenUrl(string url, string logMessage) {
             if (externalUrlOpening) return;
 
             externalUrlOpening = true;
@@ -1690,7 +1690,7 @@ namespace RiseOn.NativeAdMob {
         }
     }
 
-    internal sealed class EditorPreviewMediaGraphic : MaskableGraphic {
+    internal sealed class EditorMediaGraphic : MaskableGraphic {
         private const int SUN_SEGMENTS = 18;
         private const float SUN_RADIUS_RATIO = 0.09f;
         private const float SUN_X_RATIO = 0.78f;
@@ -1716,7 +1716,7 @@ namespace RiseOn.NativeAdMob {
         protected override void OnPopulateMesh(VertexHelper vertexHelper) {
             vertexHelper.Clear();
             var rect = GetPixelAdjustedRect();
-            EditorPreviewGraphicUtility.AddGradientQuad(
+            EditorGraphicUtility.AddGradientQuad(
                 vertexHelper
               , rect
               , BottomColor
@@ -1725,7 +1725,7 @@ namespace RiseOn.NativeAdMob {
             var sunRadius =
                     Mathf.Min(rect.width, rect.height)
                             * SUN_RADIUS_RATIO;
-            EditorPreviewGraphicUtility.AddCircle(
+            EditorGraphicUtility.AddCircle(
                 vertexHelper
               , new(
                     Mathf.Lerp(rect.xMin, rect.xMax, SUN_X_RATIO)
@@ -1734,7 +1734,7 @@ namespace RiseOn.NativeAdMob {
               , SunColor
               , SUN_SEGMENTS);
 
-            EditorPreviewGraphicUtility.AddTriangle(
+            EditorGraphicUtility.AddTriangle(
                 vertexHelper
               , new(rect.xMin, rect.yMin)
               , new(
@@ -1753,7 +1753,7 @@ namespace RiseOn.NativeAdMob {
                       , BACK_END_X_RATIO)
                   , rect.yMin)
               , BackMountainColor);
-            EditorPreviewGraphicUtility.AddTriangle(
+            EditorGraphicUtility.AddTriangle(
                 vertexHelper
               , new(
                     Mathf.Lerp(
@@ -1775,7 +1775,7 @@ namespace RiseOn.NativeAdMob {
         }
     }
 
-    internal sealed class EditorPreviewAdChoicesGraphic : MaskableGraphic {
+    internal sealed class EditorAdChoicesGraphic : MaskableGraphic {
         private const int INFO_DOT_SEGMENTS = 12;
         private const float ICON_SIZE_RATIO = 0.72f;
         private const float HALF = 0.5f;
@@ -1796,7 +1796,7 @@ namespace RiseOn.NativeAdMob {
         protected override void OnPopulateMesh(VertexHelper vertexHelper) {
             vertexHelper.Clear();
             var rect = GetPixelAdjustedRect();
-            EditorPreviewGraphicUtility.AddSolidQuad(
+            EditorGraphicUtility.AddSolidQuad(
                 vertexHelper
               , rect
               , BackgroundColor);
@@ -1806,7 +1806,7 @@ namespace RiseOn.NativeAdMob {
                             * ICON_SIZE_RATIO;
             var center = rect.center;
             var half = size * HALF;
-            EditorPreviewGraphicUtility.AddTriangle(
+            EditorGraphicUtility.AddTriangle(
                 vertexHelper
               , new(center.x - half, center.y - half)
               , new(center.x + half, center.y)
@@ -1815,7 +1815,7 @@ namespace RiseOn.NativeAdMob {
 
             var barWidth = size * INFO_BAR_WIDTH_RATIO;
             var barHeight = size * INFO_BAR_HEIGHT_RATIO;
-            EditorPreviewGraphicUtility.AddSolidQuad(
+            EditorGraphicUtility.AddSolidQuad(
                 vertexHelper
               , new Rect(
                     center.x
@@ -1826,7 +1826,7 @@ namespace RiseOn.NativeAdMob {
                   , barWidth
                   , barHeight)
               , InfoColor);
-            EditorPreviewGraphicUtility.AddCircle(
+            EditorGraphicUtility.AddCircle(
                 vertexHelper
               , new(
                     center.x - half * INFO_X_OFFSET_RATIO
@@ -1838,7 +1838,7 @@ namespace RiseOn.NativeAdMob {
         }
     }
 
-    internal static class EditorPreviewGraphicUtility {
+    internal static class EditorGraphicUtility {
         internal static void AddSolidQuad(
             VertexHelper vertexHelper
           , Rect rect

@@ -10,8 +10,8 @@ namespace RiseOn.NativeAdMob {
         private const string AD_NOT_READY_ERROR = "Ad not ready";
 
         private readonly IOverlayCallbacks callbacks;
-        private readonly EditorPreviewConfig config;
-        private EditorPreview preview;
+        private readonly EditorAdConfig config;
+        private EditorAd preview;
         private bool adReady;
         private bool adLoading;
 
@@ -19,7 +19,7 @@ namespace RiseOn.NativeAdMob {
             OverlaySettings settings
           , IOverlayCallbacks callbacks) {
             this.callbacks = callbacks;
-            config = EditorPreviewConfig.CreateFullScreen(
+            config = EditorAdConfig.CreateFullScreen(
                 settings.AdUnitId
               , settings.CoversFullScreen
               , settings.CountdownSec
@@ -55,7 +55,7 @@ namespace RiseOn.NativeAdMob {
             adReady = false;
             callbacks.OnStateChanged(false, adLoading);
             try {
-                preview = EditorPreview.Show(
+                preview = EditorAd.Show(
                     config.Snapshot()
                   , () => {
                         preview = null;

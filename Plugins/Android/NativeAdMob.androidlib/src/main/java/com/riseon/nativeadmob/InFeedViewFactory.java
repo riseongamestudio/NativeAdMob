@@ -271,7 +271,7 @@ final class InFeedViewFactory {
         boolean completed = false;
         try {
             // Left clickable so a tap anywhere in the slot reaches the
-            // advertiser, matching FullScreenContentView, which never
+            // advertiser, matching OverlayContentView, which never
             // takes the click off its own NativeAdView.
             AssetViews views = new AssetViews();
             View content = BuildContent(plan, false, views, mainImage);
@@ -1333,7 +1333,7 @@ final class InFeedViewFactory {
         String callToActionValue = nativeAd.getCallToAction();
         if (TextUtils.isEmpty(callToActionValue)) return;
 
-        // FullScreenActivity uses Theme.Translucent.NoTitleBar.
+        // OverlayActivity uses Theme.Translucent.NoTitleBar.
         // Create the in-feed CTA with the same theme instead of applying a
         // separate color or corner radius.
         views.callToAction = new CallToActionButton(
@@ -1421,7 +1421,7 @@ final class InFeedViewFactory {
         }
 
         // Still fallback, drawn through a child of the MediaView exactly as
-        // FullScreenContentView does. Handing MediaContent to this view
+        // OverlayContentView does. Handing MediaContent to this view
         // instead would let a video creative auto-play in a slot that is below
         // the video size minimum.
         if (mainImage == null) {

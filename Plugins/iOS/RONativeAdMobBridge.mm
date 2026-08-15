@@ -6,7 +6,7 @@
 
 #import <UIKit/UIKit.h>
 
-#import "RONativeAdMobFullScreen.h"
+#import "RONativeAdMobOverlay.h"
 #import "RONativeAdMobInFeed.h"
 
 static CGFloat HBPointsFromPixels(int32_t px) {
@@ -125,16 +125,16 @@ void RONativeAdMobInFeed_Release(void* handle) {
 // Full screen
 // ---------------------------------------------------------------------------
 
-void* RONativeAdMobFullScreen_Create(const char* adUnitId, int32_t instanceId) {
+void* RONativeAdMobOverlay_Create(const char* adUnitId, int32_t instanceId) {
     NSString *unit = HBStringFromUtf8(adUnitId);
     if (unit.length == 0) return NULL;
-    RONativeAdMobFullScreen *ad =
-            [[RONativeAdMobFullScreen alloc] initWithAdUnitId:unit
+    RONativeAdMobOverlay *ad =
+            [[RONativeAdMobOverlay alloc] initWithAdUnitId:unit
                                                 instanceId:instanceId];
     return (void *)CFBridgingRetain(ad);
 }
 
-void RONativeAdMobFullScreen_SetListener(
+void RONativeAdMobOverlay_SetListener(
         void* handle
       , RONativeAdMobLoadingStartedCallback loadingStarted
       , RONativeAdMobLoadingCompletedCallback loadingCompleted
@@ -144,7 +144,7 @@ void RONativeAdMobFullScreen_SetListener(
       , RONativeAdMobStateChangedCallback stateChanged
       , RONativeAdMobShowNotReadyCallback showNotReady) {
     if (handle == NULL) return;
-    RONativeAdMobFullScreen *ad = (__bridge RONativeAdMobFullScreen *)handle;
+    RONativeAdMobOverlay *ad = (__bridge RONativeAdMobOverlay *)handle;
     [ad setListenerCallbacks:HBMakeCallbacks(
             loadingStarted
           , loadingCompleted
@@ -155,7 +155,7 @@ void RONativeAdMobFullScreen_SetListener(
           , showNotReady)];
 }
 
-void RONativeAdMobFullScreen_Configure(
+void RONativeAdMobOverlay_Configure(
         void* handle
       , bool fullscreen
       , int32_t countdownSec
@@ -164,7 +164,7 @@ void RONativeAdMobFullScreen_Configure(
       , float heightRatio
       , float backgroundAlpha) {
     if (handle == NULL) return;
-    [(__bridge RONativeAdMobFullScreen *)handle
+    [(__bridge RONativeAdMobOverlay *)handle
             configureWithFullscreen:fullscreen
                        countdownSec:countdownSec
                         xRandomSide:xRandomSide
@@ -173,17 +173,17 @@ void RONativeAdMobFullScreen_Configure(
                     backgroundAlpha:backgroundAlpha];
 }
 
-void RONativeAdMobFullScreen_SetCountdownSec(void* handle, int32_t countdownSec) {
+void RONativeAdMobOverlay_SetCountdownSec(void* handle, int32_t countdownSec) {
     if (handle == NULL) return;
-    [(__bridge RONativeAdMobFullScreen *)handle setCountdownSec:countdownSec];
+    [(__bridge RONativeAdMobOverlay *)handle setCountdownSec:countdownSec];
 }
 
-void RONativeAdMobFullScreen_LoadAd(void* handle) {
+void RONativeAdMobOverlay_LoadAd(void* handle) {
     if (handle == NULL) return;
-    [(__bridge RONativeAdMobFullScreen *)handle loadAd];
+    [(__bridge RONativeAdMobOverlay *)handle loadAd];
 }
 
-void RONativeAdMobFullScreen_ShowAd(
+void RONativeAdMobOverlay_ShowAd(
         void* handle
       , int32_t showId
       , RONativeAdMobShowCompletedCallback onCompleted) {
@@ -193,18 +193,18 @@ void RONativeAdMobFullScreen_ShowAd(
         }
         return;
     }
-    [(__bridge RONativeAdMobFullScreen *)handle showAdWithShowId:showId
+    [(__bridge RONativeAdMobOverlay *)handle showAdWithShowId:showId
                                                   onCompleted:onCompleted];
 }
 
-void RONativeAdMobFullScreen_HideAd(void* handle) {
+void RONativeAdMobOverlay_HideAd(void* handle) {
     if (handle == NULL) return;
-    [(__bridge RONativeAdMobFullScreen *)handle hideAd];
+    [(__bridge RONativeAdMobOverlay *)handle hideAd];
 }
 
-void RONativeAdMobFullScreen_Release(void* handle) {
+void RONativeAdMobOverlay_Release(void* handle) {
     if (handle == NULL) return;
-    RONativeAdMobFullScreen *ad =
-            (RONativeAdMobFullScreen *)CFBridgingRelease(handle);
+    RONativeAdMobOverlay *ad =
+            (RONativeAdMobOverlay *)CFBridgingRelease(handle);
     [ad releaseAd];
 }

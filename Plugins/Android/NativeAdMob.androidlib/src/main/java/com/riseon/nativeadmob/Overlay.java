@@ -9,9 +9,9 @@ import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.nativead.NativeAdOptions;
 
-public final class FullScreen extends Ad {
+public final class Overlay extends Ad {
 
-    static final class FullScreenStyle {
+    static final class OverlayStyle {
         final boolean fullscreen;
         final int countdownSec;
         final boolean xRandomSide;
@@ -19,7 +19,7 @@ public final class FullScreen extends Ad {
         final float heightRatio;
         final float backgroundAlpha;
 
-        FullScreenStyle(
+        OverlayStyle(
                 boolean fullscreen
               , int countdownSec
               , boolean xRandomSide
@@ -34,8 +34,8 @@ public final class FullScreen extends Ad {
             this.backgroundAlpha = backgroundAlpha;
         }
 
-        FullScreenStyle WithCountdownSec(int newCountdownSec) {
-            return new FullScreenStyle(
+        OverlayStyle WithCountdownSec(int newCountdownSec) {
+            return new OverlayStyle(
                     fullscreen
                   , newCountdownSec
                   , xRandomSide
@@ -50,24 +50,24 @@ public final class FullScreen extends Ad {
     }
 
     private final String adUnitId;
-    private volatile FullScreenStyle configuredStyle;
+    private volatile OverlayStyle configuredStyle;
 
     private volatile com.google.android.gms.ads.nativead.NativeAd nativeAd;
     private volatile com.google.android.gms.ads.nativead.NativeAd activeNativeAd;
     private volatile boolean configured;
     private volatile boolean isAdLoading;
-    private FullScreenPresentation presentation;
-    private FullScreenPresentation preparedPresentation;
+    private OverlayPresentation presentation;
+    private OverlayPresentation preparedPresentation;
     private Activity preparedActivity;
     private com.google.android.gms.ads.nativead.NativeAd preparedNativeAd;
-    private FullScreenStyle preparedStyle;
+    private OverlayStyle preparedStyle;
     private AdCompletedListener activeShowCompleted;
     private String activeActivitySessionId;
 
-    public FullScreen(String adUnitId) {
+    public Overlay(String adUnitId) {
         if (adUnitId == null || adUnitId.trim().isEmpty()) {
             throw new IllegalArgumentException(
-                    "FullScreen requires a non-empty adUnitId");
+                    "Overlay requires a non-empty adUnitId");
         }
         this.adUnitId = adUnitId;
     }
@@ -193,7 +193,7 @@ public final class FullScreen extends Ad {
             return;
         }
 
-        configuredStyle = new FullScreenStyle(
+        configuredStyle = new OverlayStyle(
                 fullscreen
               , countdownSec
               , xRandomSide
@@ -204,12 +204,12 @@ public final class FullScreen extends Ad {
     }
 
     public void SetCountdownSec(int countdownSec) {
-        FullScreenStyle currentStyle = configuredStyle;
+        OverlayStyle currentStyle = configuredStyle;
         if (!configured || released || currentStyle == null) {
             Log.e(TAG, "SetCountdownSec ignored before Configure or after Release");
             return;
         }
-        FullScreenStyle updatedStyle =
+        OverlayStyle updatedStyle =
                 currentStyle.WithCountdownSec(countdownSec);
         configuredStyle = updatedStyle;
         RequestPreparedPresentationRebuild(updatedStyle);
@@ -228,7 +228,7 @@ public final class FullScreen extends Ad {
         // LoadAd chi snapshot phan style can cho request (hien tai la mute
         // policy). Presentation style se duoc snapshot muon hon tai ShowAd.
         final String requestAdUnitId = adUnitId;
-        final FullScreenStyle loadStyle = configuredStyle;
+        final OverlayStyle loadStyle = configuredStyle;
 
         RunOnMainThread(() -> {
             if (released || !configured || isAdLoading
@@ -248,7 +248,7 @@ public final class FullScreen extends Ad {
     private void DoLoadAd(
             final Activity activity
           , final String requestAdUnitId
-          , final FullScreenStyle loadStyle) {
+          , final OverlayStyle loadStyle) {
         isAdLoading = true;
         final int generation = NextLoadGeneration();
         NotifyCurrentState();
@@ -271,7 +271,7 @@ public final class FullScreen extends Ad {
                                 ad
                               , requestAdUnitId
                               , () -> IsCurrentLoadGeneration(generation));
-                        FullScreenStyle presentationStyle =
+                        OverlayStyle presentationStyle =
                                 configuredStyle;
                         if (presentationStyle != null
                                 && !presentationStyle.fullscreen) {
@@ -309,7 +309,7 @@ public final class FullScreen extends Ad {
                             String activitySessionId =
                                     activeActivitySessionId;
                             if (activitySessionId != null) {
-                                FullScreenActivity.CommitAdClick(
+                                OverlayActivity.CommitAdClick(
                                         activitySessionId);
                                 return;
                             }
@@ -340,9 +340,9 @@ public final class FullScreen extends Ad {
     public void ShowAd(
             final Activity activity
           , final AdCompletedListener onCompleted) {
-        // Day la ranh gioi config cua mot lan show: update hoan tat truoc
-        // loi goi ShowAd nay se duoc ap dung; update sau do danh cho lan sau.
-        final FullScreenStyle requestedShowStyle = configuredStyle;
+        // The config boundary of one show: updates completed before this
+        // ShowAd call apply to it, later updates belong to the next one.
+        final OverlayStyle requestedShowStyle = configuredStyle;
 
         RunOnMainThread(() -> {
             if (released) {
@@ -375,18 +375,18 @@ public final class FullScreen extends Ad {
             if (requestedShowStyle.fullscreen) {
                 ReleasePreparedPresentation();
                 String sessionId =
-                        FullScreenActivity.RegisterSession(
+                        OverlayActivity.RegisterSession(
                                 activity
                               , this
                               , shownAd
                               , requestedShowStyle);
                 activeActivitySessionId = sessionId;
                 if (sessionId == null
-                        || !FullScreenActivity.StartSession(
+                        || !OverlayActivity.StartSession(
                                 activity
                               , sessionId)) {
                     activeActivitySessionId = null;
-                    FullScreenActivity.CancelSession(sessionId);
+                    OverlayActivity.CancelSession(sessionId);
                     CompletePresentation(
                             shownAd
                           , "Failed to start native full-screen Activity");
@@ -395,7 +395,7 @@ public final class FullScreen extends Ad {
             }
 
             try {
-                FullScreenPresentation createdPresentation =
+                OverlayPresentation createdPresentation =
                         TakePreparedPresentation(
                                 activity
                               , shownAd
@@ -439,12 +439,12 @@ public final class FullScreen extends Ad {
         RunOnMainThread(() -> {
             String activitySessionId = activeActivitySessionId;
             if (activitySessionId != null) {
-                FullScreenActivity.DismissSession(
+                OverlayActivity.DismissSession(
                         activitySessionId);
                 return;
             }
 
-            FullScreenPresentation currentPresentation =
+            OverlayPresentation currentPresentation =
                     presentation;
             if (currentPresentation != null
                     && currentPresentation.IsShowing()) {
@@ -477,10 +477,10 @@ public final class FullScreen extends Ad {
 
             String activitySessionId = activeActivitySessionId;
             activeActivitySessionId = null;
-            FullScreenActivity.CancelSession(
+            OverlayActivity.CancelSession(
                     activitySessionId);
 
-            FullScreenPresentation currentPresentation =
+            OverlayPresentation currentPresentation =
                     presentation;
             presentation = null;
             if (currentPresentation != null) {
@@ -506,12 +506,12 @@ public final class FullScreen extends Ad {
         });
     }
 
-    private FullScreenPresentation CreatePresentation(
+    private OverlayPresentation CreatePresentation(
             Activity activity
           , com.google.android.gms.ads.nativead.NativeAd ad
-          , FullScreenStyle style) {
-        FullScreenPresentation createdPresentation =
-                new FullScreenPresentation(
+          , OverlayStyle style) {
+        OverlayPresentation createdPresentation =
+                new OverlayPresentation(
                 activity
               , ad
               , style.countdownSec
@@ -531,7 +531,7 @@ public final class FullScreen extends Ad {
     private boolean PreparePresentation(
             Activity activity
           , com.google.android.gms.ads.nativead.NativeAd ad
-          , FullScreenStyle style) {
+          , OverlayStyle style) {
         ReleasePreparedPresentation();
         if (released
                 || ad == null
@@ -541,7 +541,7 @@ public final class FullScreen extends Ad {
             return false;
         }
 
-        FullScreenPresentation createdPresentation = null;
+        OverlayPresentation createdPresentation = null;
         try {
             createdPresentation = CreatePresentation(activity, ad, style);
             if (!createdPresentation.Prepare()
@@ -574,9 +574,10 @@ public final class FullScreen extends Ad {
     }
 
     private void RequestPreparedPresentationRebuild(
-            FullScreenStyle requestedStyle) {
-        // Moi setter presentation runtime phai publish mot style snapshot moi
-        // va di qua day de prepared UI khong giu config cu.
+            OverlayStyle requestedStyle) {
+        // Every runtime presentation setter must publish a fresh style
+        // snapshot and pass through here, so a prepared UI never keeps
+        // stale config.
         RunOnMainThread(() -> {
             if (released
                     || requestedStyle == null
@@ -596,10 +597,10 @@ public final class FullScreen extends Ad {
         });
     }
 
-    private FullScreenPresentation TakePreparedPresentation(
+    private OverlayPresentation TakePreparedPresentation(
             Activity activity
           , com.google.android.gms.ads.nativead.NativeAd ad
-          , FullScreenStyle style) {
+          , OverlayStyle style) {
         if (preparedPresentation == null
                 || preparedActivity != activity
                 || preparedNativeAd != ad
@@ -608,7 +609,7 @@ public final class FullScreen extends Ad {
             return null;
         }
 
-        FullScreenPresentation result = preparedPresentation;
+        OverlayPresentation result = preparedPresentation;
         preparedPresentation = null;
         preparedActivity = null;
         preparedNativeAd = null;
@@ -617,7 +618,7 @@ public final class FullScreen extends Ad {
     }
 
     private void ReleasePreparedPresentation() {
-        FullScreenPresentation prepared = preparedPresentation;
+        OverlayPresentation prepared = preparedPresentation;
         preparedPresentation = null;
         preparedActivity = null;
         preparedNativeAd = null;
@@ -670,9 +671,9 @@ public final class FullScreen extends Ad {
         if (shownAd != null) shownAd.destroy();
         presentation = null;
 
-        // Unity se thuc thi callback game tren Unity main thread truoc, sau do
-        // moi goi LoadAd. Co adConsumed giup phan biet completion cua mot
-        // presentation da consume ad voi cac loi ShowAd bi tu choi som.
+        // Unity runs the game callback on its main thread first, then the
+        // replacement LoadAd. adConsumed distinguishes a completion that
+        // spent the cached ad from a ShowAd rejected early.
         NotifyCompleted(
                 onCompleted
               , errorMessage == null ? "" : errorMessage
@@ -680,7 +681,7 @@ public final class FullScreen extends Ad {
     }
 
     private void CleanupFailedPresentation() {
-        FullScreenPresentation failedPresentation = presentation;
+        OverlayPresentation failedPresentation = presentation;
         presentation = null;
         if (failedPresentation == null) return;
         try {
@@ -694,10 +695,10 @@ public final class FullScreen extends Ad {
     private boolean IsShowingInternal() {
         String activitySessionId = activeActivitySessionId;
         if (activitySessionId != null) {
-            return FullScreenActivity.IsSessionActive(
+            return OverlayActivity.IsSessionActive(
                     activitySessionId);
         }
-        FullScreenPresentation currentPresentation = presentation;
+        OverlayPresentation currentPresentation = presentation;
         return currentPresentation != null
                 && currentPresentation.IsShowing();
     }

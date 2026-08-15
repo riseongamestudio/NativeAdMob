@@ -1,13 +1,13 @@
-#import "RONativeAdMobFullScreen.h"
+#import "RONativeAdMobOverlay.h"
 
-#import "RONativeAdMobFullScreenPresentation.h"
+#import "RONativeAdMobOverlayPresentation.h"
 
-static NSString *const kROTag = @"FullScreen";
+static NSString *const kROTag = @"Overlay";
 static const int32_t kROLoadSuccessCode = 0;
 
 // The style snapshot Configure publishes and every show reads - the same
-// immutable FullScreenStyle the Java side passes around.
-@interface HBFullScreenStyle : NSObject
+// immutable OverlayStyle the Java side passes around.
+@interface HBOverlayStyle : NSObject
 @property (nonatomic, readonly) BOOL fullscreen;
 @property (nonatomic, readonly) int32_t countdownSec;
 @property (nonatomic, readonly) BOOL xRandomSide;
@@ -16,7 +16,7 @@ static const int32_t kROLoadSuccessCode = 0;
 @property (nonatomic, readonly) float backgroundAlpha;
 @end
 
-@implementation HBFullScreenStyle
+@implementation HBOverlayStyle
 
 - (instancetype)initWithFullscreen:(BOOL)fullscreen
                       countdownSec:(int32_t)countdownSec
@@ -35,8 +35,8 @@ static const int32_t kROLoadSuccessCode = 0;
     return self;
 }
 
-- (HBFullScreenStyle *)styleWithCountdownSec:(int32_t)countdownSec {
-    return [[HBFullScreenStyle alloc]
+- (HBOverlayStyle *)styleWithCountdownSec:(int32_t)countdownSec {
+    return [[HBOverlayStyle alloc]
             initWithFullscreen:self.fullscreen
                   countdownSec:countdownSec
                    xRandomSide:self.xRandomSide
@@ -51,22 +51,22 @@ static const int32_t kROLoadSuccessCode = 0;
 
 @end
 
-@interface RONativeAdMobFullScreen () <GADNativeAdLoaderDelegate, GADNativeAdDelegate>
+@interface RONativeAdMobOverlay () <GADNativeAdLoaderDelegate, GADNativeAdDelegate>
 @end
 
-@implementation RONativeAdMobFullScreen {
+@implementation RONativeAdMobOverlay {
     NSString *_adUnitId;
-    HBFullScreenStyle *_configuredStyle;
+    HBOverlayStyle *_configuredStyle;
     BOOL _configured;
     BOOL _isAdLoading;
 
     GADAdLoader *_adLoader;
     GADNativeAd *_nativeAd;
     GADNativeAd *_activeNativeAd;
-    RONativeAdMobFullScreenPresentation *_presentation;
-    RONativeAdMobFullScreenPresentation *_preparedPresentation;
+    RONativeAdMobOverlayPresentation *_presentation;
+    RONativeAdMobOverlayPresentation *_preparedPresentation;
     GADNativeAd *_preparedNativeAd;
-    HBFullScreenStyle *_preparedStyle;
+    HBOverlayStyle *_preparedStyle;
     RONativeAdMobShowCompletedCallback _activeShowCompleted;
     int32_t _activeShowId;
 }
@@ -95,7 +95,7 @@ static const int32_t kROLoadSuccessCode = 0;
             return;
         }
 
-        self->_configuredStyle = [[HBFullScreenStyle alloc]
+        self->_configuredStyle = [[HBOverlayStyle alloc]
                 initWithFullscreen:fullscreen
                       countdownSec:countdownSec
                        xRandomSide:xRandomSide
@@ -108,13 +108,13 @@ static const int32_t kROLoadSuccessCode = 0;
 
 - (void)setCountdownSec:(int32_t)countdownSec {
     [RONativeAdMob runOnMainThread:^{
-        HBFullScreenStyle *currentStyle = self->_configuredStyle;
+        HBOverlayStyle *currentStyle = self->_configuredStyle;
         if (!self->_configured || self.released || currentStyle == nil) {
             NSLog(@"%@: SetCountdownSec ignored before Configure or after "
                     "Release", kROTag);
             return;
         }
-        HBFullScreenStyle *updatedStyle =
+        HBOverlayStyle *updatedStyle =
                 [currentStyle styleWithCountdownSec:countdownSec];
         self->_configuredStyle = updatedStyle;
         [self ro_rebuildPreparedPresentationForStyle:updatedStyle];
@@ -148,7 +148,7 @@ static const int32_t kROLoadSuccessCode = 0;
 }
 
 - (void)ro_doLoadAdWithHost:(UIViewController *)host
-                      style:(HBFullScreenStyle *)loadStyle {
+                      style:(HBOverlayStyle *)loadStyle {
     _isAdLoading = YES;
     [self nextLoadGeneration];
     [self ro_notifyCurrentState];
@@ -171,12 +171,12 @@ static const int32_t kROLoadSuccessCode = 0;
 
         self->_nativeAd = nativeAd;
         nativeAd.delegate = self;
-        __weak RONativeAdMobFullScreen *weakSelf = self;
+        __weak RONativeAdMobOverlay *weakSelf = self;
         __weak GADNativeAd *weakAd = nativeAd;
         [self bindPaidEventForAd:nativeAd
                     paidAdUnitId:self->_adUnitId
                      isCurrentAd:^BOOL{
-            RONativeAdMobFullScreen *strongSelf = weakSelf;
+            RONativeAdMobOverlay *strongSelf = weakSelf;
             GADNativeAd *strongAd = weakAd;
             return strongSelf != nil
                     && strongAd != nil
@@ -184,7 +184,7 @@ static const int32_t kROLoadSuccessCode = 0;
                             || strongSelf->_activeNativeAd == strongAd);
         }];
 
-        HBFullScreenStyle *presentationStyle = self->_configuredStyle;
+        HBOverlayStyle *presentationStyle = self->_configuredStyle;
         if (presentationStyle != nil && !presentationStyle.fullscreen) {
             [self ro_preparePresentationForAd:nativeAd
                                         style:presentationStyle];
@@ -240,7 +240,7 @@ static const int32_t kROLoadSuccessCode = 0;
             return;
         }
         UIViewController *host = [RONativeAdMob unityViewController];
-        HBFullScreenStyle *requestedStyle = self->_configuredStyle;
+        HBOverlayStyle *requestedStyle = self->_configuredStyle;
         if (self->_nativeAd == nil
                 || requestedStyle == nil
                 || ![RONativeAdMob isViewControllerUsable:host]) {
@@ -258,7 +258,7 @@ static const int32_t kROLoadSuccessCode = 0;
         self->_activeShowId = showId;
         [self ro_notifyCurrentState];
 
-        RONativeAdMobFullScreenPresentation *createdPresentation =
+        RONativeAdMobOverlayPresentation *createdPresentation =
                 [self ro_takePreparedPresentationForAd:shownAd
                                                  style:requestedStyle];
         if (createdPresentation == nil) {
@@ -287,7 +287,7 @@ static const int32_t kROLoadSuccessCode = 0;
 
 - (void)hideAd {
     [RONativeAdMob runOnMainThread:^{
-        RONativeAdMobFullScreenPresentation *currentPresentation =
+        RONativeAdMobOverlayPresentation *currentPresentation =
                 self->_presentation;
         if (currentPresentation != nil && currentPresentation.isShowing) {
             [currentPresentation dismiss];
@@ -303,7 +303,7 @@ static const int32_t kROLoadSuccessCode = 0;
         self->_isAdLoading = NO;
         [self ro_releasePreparedPresentation];
 
-        RONativeAdMobFullScreenPresentation *currentPresentation =
+        RONativeAdMobOverlayPresentation *currentPresentation =
                 self->_presentation;
         self->_presentation = nil;
         [currentPresentation releasePresentation];
@@ -325,12 +325,12 @@ static const int32_t kROLoadSuccessCode = 0;
     }];
 }
 
-- (RONativeAdMobFullScreenPresentation *)
+- (RONativeAdMobOverlayPresentation *)
         ro_createPresentationWithHost:(UIViewController *)host
                                    ad:(GADNativeAd *)ad
-                                style:(HBFullScreenStyle *)style {
-    RONativeAdMobFullScreenPresentation *createdPresentation =
-            [[RONativeAdMobFullScreenPresentation alloc]
+                                style:(HBOverlayStyle *)style {
+    RONativeAdMobOverlayPresentation *createdPresentation =
+            [[RONativeAdMobOverlayPresentation alloc]
                     initWithViewController:host
                                   nativeAd:ad
                               countdownSec:style.countdownSec
@@ -339,10 +339,10 @@ static const int32_t kROLoadSuccessCode = 0;
                                 fullscreen:style.fullscreen
                                heightRatio:style.heightRatio
                            backgroundAlpha:style.backgroundAlpha];
-    __weak RONativeAdMobFullScreen *weakSelf = self;
+    __weak RONativeAdMobOverlay *weakSelf = self;
     __weak GADNativeAd *weakAd = ad;
     createdPresentation.onShow = ^{
-        RONativeAdMobFullScreen *strongSelf = weakSelf;
+        RONativeAdMobOverlay *strongSelf = weakSelf;
         if (strongSelf != nil
                 && !strongSelf.released
                 && strongSelf->_activeNativeAd == weakAd) {
@@ -350,7 +350,7 @@ static const int32_t kROLoadSuccessCode = 0;
         }
     };
     createdPresentation.onDismiss = ^{
-        RONativeAdMobFullScreen *strongSelf = weakSelf;
+        RONativeAdMobOverlay *strongSelf = weakSelf;
         GADNativeAd *strongAd = weakAd;
         if (strongSelf != nil && strongAd != nil) {
             [strongSelf ro_completePresentationForAd:strongAd message:@""];
@@ -360,7 +360,7 @@ static const int32_t kROLoadSuccessCode = 0;
 }
 
 - (void)ro_preparePresentationForAd:(GADNativeAd *)ad
-                              style:(HBFullScreenStyle *)style {
+                              style:(HBOverlayStyle *)style {
     [self ro_releasePreparedPresentation];
     UIViewController *host = [RONativeAdMob unityViewController];
     if (self.released
@@ -371,7 +371,7 @@ static const int32_t kROLoadSuccessCode = 0;
         return;
     }
 
-    RONativeAdMobFullScreenPresentation *createdPresentation =
+    RONativeAdMobOverlayPresentation *createdPresentation =
             [self ro_createPresentationWithHost:host ad:ad style:style];
     if (![createdPresentation prepare]
             || self.released
@@ -386,7 +386,7 @@ static const int32_t kROLoadSuccessCode = 0;
     _preparedStyle = style;
 }
 
-- (void)ro_rebuildPreparedPresentationForStyle:(HBFullScreenStyle *)requestedStyle {
+- (void)ro_rebuildPreparedPresentationForStyle:(HBOverlayStyle *)requestedStyle {
     // Every runtime style setter publishes a new snapshot and passes through
     // here so a prepared face never keeps stale config.
     if (self.released
@@ -403,9 +403,9 @@ static const int32_t kROLoadSuccessCode = 0;
     [self ro_preparePresentationForAd:ad style:requestedStyle];
 }
 
-- (RONativeAdMobFullScreenPresentation *)
+- (RONativeAdMobOverlayPresentation *)
         ro_takePreparedPresentationForAd:(GADNativeAd *)ad
-                                   style:(HBFullScreenStyle *)style {
+                                   style:(HBOverlayStyle *)style {
     if (_preparedPresentation == nil
             || _preparedNativeAd != ad
             || _preparedStyle != style) {
@@ -413,7 +413,7 @@ static const int32_t kROLoadSuccessCode = 0;
         return nil;
     }
 
-    RONativeAdMobFullScreenPresentation *result = _preparedPresentation;
+    RONativeAdMobOverlayPresentation *result = _preparedPresentation;
     _preparedPresentation = nil;
     _preparedNativeAd = nil;
     _preparedStyle = nil;
@@ -421,7 +421,7 @@ static const int32_t kROLoadSuccessCode = 0;
 }
 
 - (void)ro_releasePreparedPresentation {
-    RONativeAdMobFullScreenPresentation *prepared = _preparedPresentation;
+    RONativeAdMobOverlayPresentation *prepared = _preparedPresentation;
     _preparedPresentation = nil;
     _preparedNativeAd = nil;
     _preparedStyle = nil;
@@ -446,7 +446,7 @@ static const int32_t kROLoadSuccessCode = 0;
 }
 
 - (BOOL)ro_isShowing {
-    RONativeAdMobFullScreenPresentation *currentPresentation = _presentation;
+    RONativeAdMobOverlayPresentation *currentPresentation = _presentation;
     return currentPresentation != nil && currentPresentation.isShowing;
 }
 

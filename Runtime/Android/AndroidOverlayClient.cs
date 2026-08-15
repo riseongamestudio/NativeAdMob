@@ -4,7 +4,7 @@ using UnityEngine.Android;
 
 namespace RiseOn.NativeAdMob {
     internal sealed class AndroidOverlayClient : IOverlayClient {
-        private const string JAVA_CLASS_NAME               = "com.riseon.nativeadmob.FullScreen";
+        private const string JAVA_CLASS_NAME               = "com.riseon.nativeadmob.Overlay";
         private const string JAVA_SET_LISTENER_METHOD      = "SetListener";
         private const string JAVA_CONFIGURE_METHOD         = "Configure";
         private const string JAVA_SET_COUNTDOWN_SEC_METHOD = "SetCountdownSec";

@@ -18,9 +18,10 @@ namespace RiseOn.NativeAdMob {
     }
 
     /// <summary>
-    /// Transport C# ↔ Obj-C++. Callback từ native về qua trampoline static
-    /// (yêu cầu của IL2CPP), tra client theo instanceId rồi giao lại; core
-    /// wrapper tự marshal về Unity thread.
+    /// The C# side of the Obj-C++ bridge. Native calls back through static
+    /// trampolines (an IL2CPP requirement) that look the client up by its
+    /// instance id and hand over; the core wrappers marshal to the Unity
+    /// thread themselves.
     /// </summary>
     internal static class IOSBridge {
         internal delegate void LoadingStartedDelegate(int instanceId);
@@ -90,10 +91,10 @@ namespace RiseOn.NativeAdMob {
         internal static extern void RONativeAdMobInFeed_Release(IntPtr handle);
 
         [DllImport("__Internal")]
-        internal static extern IntPtr RONativeAdMobFullScreen_Create(
+        internal static extern IntPtr RONativeAdMobOverlay_Create(
             string adUnitId, int instanceId);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobFullScreen_SetListener(
+        internal static extern void RONativeAdMobOverlay_SetListener(
             IntPtr handle
           , LoadingStartedDelegate loadingStarted
           , LoadingCompletedDelegate loadingCompleted
@@ -103,7 +104,7 @@ namespace RiseOn.NativeAdMob {
           , StateChangedDelegate stateChanged
           , ShowNotReadyDelegate showNotReady);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobFullScreen_Configure(
+        internal static extern void RONativeAdMobOverlay_Configure(
             IntPtr handle
           , [MarshalAs(UnmanagedType.I1)] bool fullscreen
           , int countdownSec
@@ -112,20 +113,20 @@ namespace RiseOn.NativeAdMob {
           , float heightRatio
           , float backgroundAlpha);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobFullScreen_SetCountdownSec(
+        internal static extern void RONativeAdMobOverlay_SetCountdownSec(
             IntPtr handle, int countdownSec);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobFullScreen_LoadAd(IntPtr handle);
+        internal static extern void RONativeAdMobOverlay_LoadAd(IntPtr handle);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobFullScreen_ShowAd(
+        internal static extern void RONativeAdMobOverlay_ShowAd(
             IntPtr handle, int showId, ShowCompletedDelegate onCompleted);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobFullScreen_HideAd(IntPtr handle);
+        internal static extern void RONativeAdMobOverlay_HideAd(IntPtr handle);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobFullScreen_Release(IntPtr handle);
+        internal static extern void RONativeAdMobOverlay_Release(IntPtr handle);
 
-        // Trampoline giữ tham chiếu static để GC không thu delegate mà
-        // native còn đang cầm con trỏ.
+        // Static references keep the delegates alive while native code
+        // still holds their function pointers.
         internal static readonly LoadingStartedDelegate OnLoadingStartedCallback
             = OnLoadingStarted;
         internal static readonly LoadingCompletedDelegate OnLoadingCompletedCallback

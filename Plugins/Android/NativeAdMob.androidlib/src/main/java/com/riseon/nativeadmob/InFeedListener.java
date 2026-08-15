@@ -1,8 +1,9 @@
 package com.riseon.nativeadmob;
 
-// Ten package + ten method phai khop Android proxy ben Unity. The loading
-// and paid events describe the shared supply of one ad unit; the
-// slot-indexed events describe one display slot of it.
+// The package and method names must match the C# proxy exactly:
+// AndroidJavaProxy dispatches by name. The loading and paid events describe
+// the shared supply of one ad unit; the slot-indexed events describe one
+// display slot of it.
 public interface InFeedListener {
     void OnLoadingStarted();
     void OnLoadingCompleted(int errorCode, String errorMessage);

@@ -11,12 +11,12 @@ namespace RiseOn.NativeAdMob {
           , IOverlayCallbacks callbacks) {
             this.callbacks = callbacks;
             instanceId = IOSBridge.Register(this);
-            handle = IOSBridge.RONativeAdMobFullScreen_Create(
+            handle = IOSBridge.RONativeAdMobOverlay_Create(
                 settings.AdUnitId
               , instanceId);
             if (handle == IntPtr.Zero) return;
 
-            IOSBridge.RONativeAdMobFullScreen_Configure(
+            IOSBridge.RONativeAdMobOverlay_Configure(
                 handle
               , settings.CoversFullScreen
               , settings.CountdownSec
@@ -24,7 +24,7 @@ namespace RiseOn.NativeAdMob {
               , settings.NumberOppositeSide
               , settings.HeightRatio
               , settings.BackgroundAlpha);
-            IOSBridge.RONativeAdMobFullScreen_SetListener(
+            IOSBridge.RONativeAdMobOverlay_SetListener(
                 handle
               , IOSBridge.OnLoadingStartedCallback
               , IOSBridge.OnLoadingCompletedCallback
@@ -38,7 +38,7 @@ namespace RiseOn.NativeAdMob {
         public void SetCountdownSec(int countdownSec) {
             if (handle == IntPtr.Zero) return;
 
-            IOSBridge.RONativeAdMobFullScreen_SetCountdownSec(
+            IOSBridge.RONativeAdMobOverlay_SetCountdownSec(
                 handle
               , countdownSec);
         }
@@ -46,7 +46,7 @@ namespace RiseOn.NativeAdMob {
         public void LoadAd() {
             if (handle == IntPtr.Zero) return;
 
-            IOSBridge.RONativeAdMobFullScreen_LoadAd(handle);
+            IOSBridge.RONativeAdMobOverlay_LoadAd(handle);
         }
 
         public void ShowAd(int showId) {
@@ -55,7 +55,7 @@ namespace RiseOn.NativeAdMob {
                 return;
             }
 
-            IOSBridge.RONativeAdMobFullScreen_ShowAd(
+            IOSBridge.RONativeAdMobOverlay_ShowAd(
                 handle
               , showId
               , IOSBridge.OnShowCompletedCallback);
@@ -64,14 +64,14 @@ namespace RiseOn.NativeAdMob {
         public void HideAd() {
             if (handle == IntPtr.Zero) return;
 
-            IOSBridge.RONativeAdMobFullScreen_HideAd(handle);
+            IOSBridge.RONativeAdMobOverlay_HideAd(handle);
         }
 
         public void Release() {
             var releasedHandle = handle;
             handle = IntPtr.Zero;
             if (releasedHandle != IntPtr.Zero) {
-                IOSBridge.RONativeAdMobFullScreen_Release(releasedHandle);
+                IOSBridge.RONativeAdMobOverlay_Release(releasedHandle);
             }
             IOSBridge.Unregister(instanceId);
         }

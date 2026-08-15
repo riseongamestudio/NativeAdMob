@@ -1,4 +1,4 @@
-// Port of com.riseon.nativeadmob.FullScreen: the cached-ad state machine.
+// Port of com.riseon.nativeadmob.Overlay: the cached-ad state machine.
 // One loaded ad at a time; ShowAd consumes it, completion hands the result
 // back through the bridge callback, and a collapsible presentation is
 // prepared ahead of the show exactly as the Java side warms its dialog.
@@ -10,7 +10,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface RONativeAdMobFullScreen : RONativeAdMob
+@interface RONativeAdMobOverlay : RONativeAdMob
 
 - (instancetype)initWithAdUnitId:(NSString *)adUnitId
                       instanceId:(int32_t)instanceId;

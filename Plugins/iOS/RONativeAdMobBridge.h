@@ -114,10 +114,10 @@ void RONativeAdMobInFeed_SetPosition(
 void RONativeAdMobInFeed_Release(void* handle);
 
 // ---------------------------------------------------------------------------
-// Full screen - com.riseon.nativeadmob.FullScreen.
+// Full screen - com.riseon.nativeadmob.Overlay.
 // ---------------------------------------------------------------------------
-void* RONativeAdMobFullScreen_Create(const char* adUnitId, int32_t instanceId);
-void RONativeAdMobFullScreen_SetListener(
+void* RONativeAdMobOverlay_Create(const char* adUnitId, int32_t instanceId);
+void RONativeAdMobOverlay_SetListener(
         void* handle
       , RONativeAdMobLoadingStartedCallback loadingStarted
       , RONativeAdMobLoadingCompletedCallback loadingCompleted
@@ -126,7 +126,7 @@ void RONativeAdMobFullScreen_SetListener(
       , RONativeAdMobPresentationFailedCallback presentationFailed
       , RONativeAdMobStateChangedCallback stateChanged
       , RONativeAdMobShowNotReadyCallback showNotReady);
-void RONativeAdMobFullScreen_Configure(
+void RONativeAdMobOverlay_Configure(
         void* handle
       , bool fullscreen
       , int32_t countdownSec
@@ -134,14 +134,14 @@ void RONativeAdMobFullScreen_Configure(
       , bool numberOppositeSide
       , float heightRatio
       , float backgroundAlpha);
-void RONativeAdMobFullScreen_SetCountdownSec(void* handle, int32_t countdownSec);
-void RONativeAdMobFullScreen_LoadAd(void* handle);
-void RONativeAdMobFullScreen_ShowAd(
+void RONativeAdMobOverlay_SetCountdownSec(void* handle, int32_t countdownSec);
+void RONativeAdMobOverlay_LoadAd(void* handle);
+void RONativeAdMobOverlay_ShowAd(
         void* handle
       , int32_t showId
       , RONativeAdMobShowCompletedCallback onCompleted);
-void RONativeAdMobFullScreen_HideAd(void* handle);
-void RONativeAdMobFullScreen_Release(void* handle);
+void RONativeAdMobOverlay_HideAd(void* handle);
+void RONativeAdMobOverlay_Release(void* handle);
 
 #ifdef __cplusplus
 }

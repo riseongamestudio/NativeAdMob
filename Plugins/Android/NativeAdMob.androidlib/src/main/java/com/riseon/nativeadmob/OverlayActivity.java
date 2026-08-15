@@ -26,8 +26,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
-public final class FullScreenActivity extends Activity {
-    private static final String TAG = "NativeAdMobFullScreen";
+public final class OverlayActivity extends Activity {
+    private static final String TAG = "NativeAdMobOverlay";
     private static final String EXTRA_SESSION_ID =
             "com.riseon.nativeadmob.extra.NATIVE_FULLSCREEN_SESSION_ID";
     private static final String SESSION_ID_PREFIX =
@@ -52,16 +52,16 @@ public final class FullScreenActivity extends Activity {
 
     private String sessionId;
     private Session session;
-    private FullScreenContentView contentView;
+    private OverlayContentView contentView;
     private Object backInvokedCallback;
     private boolean presented;
     private boolean completionStarted;
 
     static String RegisterSession(
             Activity hostActivity
-          , FullScreen owner
+          , Overlay owner
           , com.google.android.gms.ads.nativead.NativeAd nativeAd
-          , FullScreen.FullScreenStyle style) {
+          , Overlay.OverlayStyle style) {
         if (hostActivity == null || owner == null
                 || nativeAd == null || style == null) {
             return null;
@@ -111,7 +111,7 @@ public final class FullScreenActivity extends Activity {
             }
             if (targetSession == null) return;
 
-            FullScreenActivity activity = targetSession.activity;
+            OverlayActivity activity = targetSession.activity;
             if (activity != null) {
                 activity.CompletePresentation("");
             } else {
@@ -125,7 +125,7 @@ public final class FullScreenActivity extends Activity {
             Session targetSession = RemoveSession(targetSessionId, null);
             if (targetSession == null) return;
 
-            FullScreenActivity activity = targetSession.activity;
+            OverlayActivity activity = targetSession.activity;
             if (activity != null) activity.CancelWithoutCallback();
         });
     }
@@ -166,12 +166,12 @@ public final class FullScreenActivity extends Activity {
                             && session.nativeAd.getMediaContent()
                                     .hasVideoContent();
             int requestedPanelHeight =
-                    FullScreenContentView.ResolveInitialPanelHeight(
+                    OverlayContentView.ResolveInitialPanelHeight(
                             this
                           , true
                           , session.style.heightRatio
                           , hasVideoContent);
-            contentView = new FullScreenContentView(
+            contentView = new OverlayContentView(
                     this
                   , session.nativeAd
                   , session.GetRemainingCountdownMs()
@@ -269,7 +269,7 @@ public final class FullScreenActivity extends Activity {
     }
 
     private void ReleaseContentView() {
-        FullScreenContentView currentContentView = contentView;
+        OverlayContentView currentContentView = contentView;
         contentView = null;
         if (currentContentView == null) return;
 
@@ -365,7 +365,7 @@ public final class FullScreenActivity extends Activity {
         try {
             Intent intent = new Intent(
                     hostActivity
-                  , FullScreenActivity.class);
+                  , OverlayActivity.class);
             intent.putExtra(EXTRA_SESSION_ID, targetSessionId);
             hostActivity.startActivity(intent);
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -380,13 +380,13 @@ public final class FullScreenActivity extends Activity {
 
     private static Session AttachActivity(
             String targetSessionId
-          , FullScreenActivity activity) {
+          , OverlayActivity activity) {
         if (targetSessionId == null || activity == null) return null;
         synchronized (SESSION_LOCK) {
             Session targetSession = SESSIONS.get(targetSessionId);
             if (targetSession == null || targetSession.completed) return null;
 
-            FullScreenActivity existingActivity =
+            OverlayActivity existingActivity =
                     targetSession.activity;
             if (existingActivity != null && existingActivity != activity) {
                 boolean existingIsGone = existingActivity.isFinishing()
@@ -406,7 +406,7 @@ public final class FullScreenActivity extends Activity {
 
     private static Session DetachActivity(
             String targetSessionId
-          , FullScreenActivity expectedActivity) {
+          , OverlayActivity expectedActivity) {
         if (targetSessionId == null || expectedActivity == null) return null;
         synchronized (SESSION_LOCK) {
             Session targetSession = SESSIONS.get(targetSessionId);
@@ -425,7 +425,7 @@ public final class FullScreenActivity extends Activity {
 
     private static Session RemoveSession(
             String targetSessionId
-          , FullScreenActivity expectedActivity) {
+          , OverlayActivity expectedActivity) {
         if (targetSessionId == null) return null;
         synchronized (SESSION_LOCK) {
             Session targetSession = SESSIONS.get(targetSessionId);
@@ -513,7 +513,7 @@ public final class FullScreenActivity extends Activity {
 
                 @Override
                 public void onActivityResumed(Activity activity) {
-                    if (activity instanceof FullScreenActivity) return;
+                    if (activity instanceof OverlayActivity) return;
 
                     List<Session> sessionsToRestore = new ArrayList<>();
                     synchronized (SESSION_LOCK) {
@@ -539,7 +539,7 @@ public final class FullScreenActivity extends Activity {
 
                 @Override
                 public void onActivityPaused(Activity activity) {
-                    if (activity instanceof FullScreenActivity) return;
+                    if (activity instanceof OverlayActivity) return;
                     synchronized (SESSION_LOCK) {
                         for (Session targetSession : SESSIONS.values()) {
                             if (!targetSession.MatchesHost(activity)) continue;
@@ -565,7 +565,7 @@ public final class FullScreenActivity extends Activity {
 
                 @Override
                 public void onActivityDestroyed(Activity activity) {
-                    if (activity instanceof FullScreenActivity) return;
+                    if (activity instanceof OverlayActivity) return;
                     synchronized (SESSION_LOCK) {
                         for (Session targetSession : SESSIONS.values()) {
                             Activity rememberedActivity =
@@ -782,9 +782,9 @@ public final class FullScreenActivity extends Activity {
 
     private static final class Session {
         final String sessionId;
-        final FullScreen owner;
+        final Overlay owner;
         final com.google.android.gms.ads.nativead.NativeAd nativeAd;
-        final FullScreen.FullScreenStyle style;
+        final Overlay.OverlayStyle style;
         final String hostActivityClassName;
         final int hostTaskId;
         final boolean closeOnLeft;
@@ -793,7 +793,7 @@ public final class FullScreenActivity extends Activity {
         boolean countdownRunning;
 
         WeakReference<Activity> resumedHostActivity;
-        FullScreenActivity activity;
+        OverlayActivity activity;
         boolean hostResumed;
         boolean displayed;
         boolean completed;
@@ -805,9 +805,9 @@ public final class FullScreenActivity extends Activity {
         Session(
                 String sessionId
               , Activity hostActivity
-              , FullScreen owner
+              , Overlay owner
               , com.google.android.gms.ads.nativead.NativeAd nativeAd
-              , FullScreen.FullScreenStyle style) {
+              , Overlay.OverlayStyle style) {
             this.sessionId = sessionId;
             this.owner = owner;
             this.nativeAd = nativeAd;

@@ -29,7 +29,7 @@ import com.google.android.gms.ads.nativead.NativeAdView;
 
 import java.util.List;
 
-final class FullScreenContentView extends FrameLayout {
+final class OverlayContentView extends FrameLayout {
     private static final class SingleClickNativeAdContainer
             extends FrameLayout {
         private boolean clickCommitted;
@@ -55,7 +55,7 @@ final class FullScreenContentView extends FrameLayout {
         }
     }
 
-    private static final String TAG = "NativeAdMobFullScreen";
+    private static final String TAG = "NativeAdMobOverlay";
     private static final String ATTRIBUTION_TEXT = "Ad";
     private static final String SECONDARY_TEXT_COLOR = "#CCFFFFFF";
     private static final String ATTRIBUTION_BACKGROUND_COLOR = "#FFFFC107";
@@ -154,7 +154,7 @@ final class FullScreenContentView extends FrameLayout {
     private TextView close;
     private boolean released;
 
-    FullScreenContentView(
+    OverlayContentView(
             Context context
           , com.google.android.gms.ads.nativead.NativeAd nativeAd
           , int countDownSec
@@ -176,7 +176,7 @@ final class FullScreenContentView extends FrameLayout {
               , onClose);
     }
 
-    FullScreenContentView(
+    OverlayContentView(
             Context context
           , com.google.android.gms.ads.nativead.NativeAd nativeAd
           , long countDownRemainingMs

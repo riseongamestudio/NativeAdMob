@@ -1,8 +1,9 @@
 using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
-    // Ten interface + ten method phai khop phia Java. Callbacks arrive on
-    // JNI threads; the core wrapper marshals and gates them.
+    // The interface and method names must match the Java side exactly:
+    // AndroidJavaProxy dispatches by name. Callbacks arrive on JNI threads;
+    // the core wrapper marshals and gates them.
     internal sealed class AdLoadListenerProxy : AndroidJavaProxy {
         private const string JAVA_LISTENER_CLASS_NAME = "com.riseon.nativeadmob.AdLoadListener";
 

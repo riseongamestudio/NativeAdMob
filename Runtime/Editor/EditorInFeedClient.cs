@@ -4,13 +4,13 @@ namespace RiseOn.NativeAdMob {
     // The wrapper serializes every call under its own lock and the Editor is
     // single-threaded, so this client needs no locking of its own.
     internal sealed class EditorInFeedClient : IInFeedClient {
-        private const int EDITOR_PREVIEW_SUCCESS_CODE = 0;
+        private const int EDITOR_AD_SUCCESS_CODE = 0;
 
         private readonly IInFeedCallbacks callbacks;
         private readonly string adUnitId;
         private readonly float backgroundAlpha;
-        private readonly EditorPreviewConfig[] configs;
-        private readonly EditorPreview[] previews;
+        private readonly EditorAdConfig[] configs;
+        private readonly EditorAd[] previews;
 
         internal EditorInFeedClient(
             NativeInFeedAdMob.Settings settings
@@ -18,8 +18,8 @@ namespace RiseOn.NativeAdMob {
             this.callbacks  = callbacks;
             adUnitId        = settings.AdUnitId;
             backgroundAlpha = settings.BackgroundAlpha;
-            configs         = new EditorPreviewConfig[settings.SlotCount];
-            previews        = new EditorPreview[settings.SlotCount];
+            configs         = new EditorAdConfig[settings.SlotCount];
+            previews        = new EditorAd[settings.SlotCount];
         }
 
         public void ConfigureSlot(
@@ -30,7 +30,7 @@ namespace RiseOn.NativeAdMob {
             previews[slotIndex] = null;
             if (previous) previous.Release();
 
-            configs[slotIndex] = EditorPreviewConfig.CreateInFeed(
+            configs[slotIndex] = EditorAdConfig.CreateInFeed(
                 adUnitId
               , positionPx
               , sizePx
@@ -50,11 +50,11 @@ namespace RiseOn.NativeAdMob {
             callbacks.OnLoadingStarted();
             if (config == null) return;
 
-            previews[slotIndex] = EditorPreview.Show(
+            previews[slotIndex] = EditorAd.Show(
                 config
               , () => previews[slotIndex] = null);
             callbacks.OnLoadingCompleted(
-                EDITOR_PREVIEW_SUCCESS_CODE
+                EDITOR_AD_SUCCESS_CODE
               , string.Empty);
             callbacks.OnSlotDisplayed(slotIndex);
         }
