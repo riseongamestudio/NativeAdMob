@@ -11,6 +11,21 @@ namespace RiseOn.NativeAdMob {
 
         private AdCompletedListenerProxy androidCompletedListener;
 
+        partial void AndroidCreate() {
+            androidNativeAd = new AndroidJavaObject(JAVA_CLASS_NAME, adUnitId);
+            var generation = AndroidNextListenerGeneration();
+            AndroidAttachListener(new AdLoadListenerProxy(
+                generation
+              , RaiseLoadingCompleted
+              , RaiseLoadingStarted
+              , RaiseAdPaid
+              , RaiseDisplayed
+              , RaisePresentationFailed
+              , HandleNativeStateChanged
+              , HandleShowNotReady
+              , DispatchListenerCallback));
+        }
+
         partial void AndroidLoadAd() {
             Debug.Log("LoadAd()");
 

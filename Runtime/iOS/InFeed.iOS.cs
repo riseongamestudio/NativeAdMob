@@ -7,57 +7,75 @@ namespace RiseOn.NativeAdMob {
         private IntPtr iosReleasePendingHandle;
         private int iosReleasePendingInstanceId;
 
-        partial void IOSCreate(string adUnitId) {
+        partial void IOSCreate(Settings settings) {
             iosInstanceId = IOSBridge.Register(this);
             iosNativeAd = IOSBridge.RONativeAdMobInFeed_Create(
                 adUnitId
+              , settings.SlotCount
+              , settings.CacheSize
+              , settings.BackgroundAlpha
               , iosInstanceId);
-        }
+            if (iosNativeAd == IntPtr.Zero) return;
 
-        private protected override void IOSRegisterListenerNative() {
             IOSBridge.RONativeAdMobInFeed_SetListener(
                 iosNativeAd
               , IOSBridge.OnLoadingStartedCallback
               , IOSBridge.OnLoadingCompletedCallback
               , IOSBridge.OnAdPaidCallback
-              , IOSBridge.OnDisplayedCallback
-              , IOSBridge.OnPresentationFailedCallback
-              , IOSBridge.OnStateChangedCallback
-              , IOSBridge.OnShowNotReadyCallback);
+              , IOSBridge.OnSlotDisplayedCallback
+              , IOSBridge.OnSlotShowNotReadyCallback
+              , IOSBridge.OnSlotPresentationFailedCallback);
         }
 
-        partial void IOSConfigure(
-            Vector2Int positionPx
-          , Vector2Int sizePx
-          , float backgroundAlpha) {
+        internal void IOSHandleSlotDisplayed(int slotIndex)
+            => DispatchFromNative(() => HandleSlotDisplayed(slotIndex));
+
+        internal void IOSHandleSlotShowNotReady(int slotIndex)
+            => DispatchFromNative(() => HandleSlotShowNotReady(slotIndex));
+
+        internal void IOSHandleSlotPresentationFailed(
+            int slotIndex
+          , int errorCode
+          , string errorMessage)
+            => DispatchFromNative(
+                () => HandleSlotPresentationFailed(
+                    slotIndex
+                  , errorCode
+                  , errorMessage));
+
+        partial void IOSConfigureSlot(
+            int slotIndex
+          , Vector2Int positionPx
+          , Vector2Int sizePx) {
             if (iosNativeAd == IntPtr.Zero) return;
 
             IOSBridge.RONativeAdMobInFeed_Configure(
                 iosNativeAd
+              , slotIndex
               , positionPx.x
               , positionPx.y
               , sizePx.x
-              , sizePx.y
-              , backgroundAlpha);
+              , sizePx.y);
         }
 
-        partial void IOSShow() {
+        partial void IOSShowSlot(int slotIndex) {
             if (iosNativeAd == IntPtr.Zero) return;
 
-            IOSBridge.RONativeAdMobInFeed_Show(iosNativeAd);
+            IOSBridge.RONativeAdMobInFeed_Show(iosNativeAd, slotIndex);
         }
 
-        partial void IOSHide() {
+        partial void IOSHideSlot(int slotIndex) {
             if (iosNativeAd == IntPtr.Zero) return;
 
-            IOSBridge.RONativeAdMobInFeed_Hide(iosNativeAd);
+            IOSBridge.RONativeAdMobInFeed_Hide(iosNativeAd, slotIndex);
         }
 
-        partial void IOSSetPosition(Vector2Int positionPx) {
+        partial void IOSSetSlotPosition(int slotIndex, Vector2Int positionPx) {
             if (iosNativeAd == IntPtr.Zero) return;
 
             IOSBridge.RONativeAdMobInFeed_SetPosition(
                 iosNativeAd
+              , slotIndex
               , positionPx.x
               , positionPx.y);
         }

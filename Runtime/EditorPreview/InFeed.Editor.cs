@@ -1,85 +1,109 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
     public sealed partial class InFeed {
         private const int EDITOR_PREVIEW_SUCCESS_CODE = 0;
 
-        private EditorPreviewConfig editorPreviewConfig;
-        private EditorPreview editorPreview;
-        private EditorPreview editorSwappedPreview;
-        private EditorPreview editorReleasePending;
+        private EditorPreviewConfig[] editorConfigs;
+        private EditorPreview[] editorPreviews;
+        private readonly List<EditorPreview> editorSwappedPreviews = new();
+        private readonly List<EditorPreview> editorReleasePending = new();
+        private float editorBackgroundAlpha;
 
-        partial void EditorConfigure(
-            Vector2Int positionPx
-          , Vector2Int sizePx
-          , float backgroundAlpha) {
-            editorSwappedPreview = editorPreview;
-            editorPreview        = null;
-            editorPreviewConfig  = EditorPreviewConfig.CreateInFeed(
+        partial void EditorCreate(Settings settings) {
+            editorConfigs = new EditorPreviewConfig[settings.SlotCount];
+            editorPreviews = new EditorPreview[settings.SlotCount];
+            editorBackgroundAlpha = settings.BackgroundAlpha;
+        }
+
+        partial void EditorConfigureSlot(
+            int slotIndex
+          , Vector2Int positionPx
+          , Vector2Int sizePx) {
+            if (editorPreviews[slotIndex] != null) {
+                editorSwappedPreviews.Add(editorPreviews[slotIndex]);
+                editorPreviews[slotIndex] = null;
+            }
+            editorConfigs[slotIndex] = EditorPreviewConfig.CreateInFeed(
                 adUnitId
               , positionPx
               , sizePx
-              , backgroundAlpha);
+              , editorBackgroundAlpha);
         }
 
         partial void EditorReleaseSwappedPreview() {
-            EditorPreview previous;
+            EditorPreview[] previous = null;
             lock (nativeAdStateLock) {
-                previous             = editorSwappedPreview;
-                editorSwappedPreview = null;
+                if (editorSwappedPreviews.Count > 0) {
+                    previous = editorSwappedPreviews.ToArray();
+                    editorSwappedPreviews.Clear();
+                }
             }
-            if (previous) previous.Release();
+            if (previous == null) return;
+            foreach (var preview in previous) {
+                if (preview) preview.Release();
+            }
         }
 
-        partial void EditorShow() {
-            if (editorPreview != null) {
-                editorPreview.SetVisible(true);
-                InvokeSafely(editorOnDisplayed);
+        partial void EditorShowSlot(int slotIndex) {
+            var preview = editorPreviews[slotIndex];
+            if (preview != null) {
+                preview.SetVisible(true);
+                HandleSlotDisplayed(slotIndex);
                 return;
             }
 
-            var loadingStarted   = editorOnLoadingStarted;
-            var loadingCompleted = editorOnLoadingCompleted;
-            var displayed        = editorOnDisplayed;
-            var config           = editorPreviewConfig?.Snapshot();
+            var config = editorConfigs[slotIndex]?.Snapshot();
 
-            InvokeSafely(loadingStarted);
+            RaiseLoadingStarted();
             if (config == null) return;
 
-            editorPreview = EditorPreview.Show(
+            editorPreviews[slotIndex] = EditorPreview.Show(
                 config
               , () => {
                     lock (nativeAdStateLock) {
-                        editorPreview = null;
+                        editorPreviews[slotIndex] = null;
                     }
                 });
-            InvokeSafely(
-                () => loadingCompleted?.Invoke(
-                    EDITOR_PREVIEW_SUCCESS_CODE
-                  , string.Empty));
-            InvokeSafely(displayed);
+            RaiseLoadingCompleted(EDITOR_PREVIEW_SUCCESS_CODE, string.Empty);
+            HandleSlotDisplayed(slotIndex);
         }
 
-        partial void EditorHide() {
-            if (editorPreview) editorPreview.SetVisible(false);
+        partial void EditorHideSlot(int slotIndex) {
+            var preview = editorPreviews[slotIndex];
+            if (preview) preview.SetVisible(false);
         }
 
-        partial void EditorSetPosition(Vector2Int positionPx) {
-            editorPreviewConfig?.SetPosition(positionPx);
-            if (editorPreview) editorPreview.SetPosition(positionPx);
+        partial void EditorSetSlotPosition(int slotIndex, Vector2Int positionPx) {
+            editorConfigs[slotIndex]?.SetPosition(positionPx);
+            var preview = editorPreviews[slotIndex];
+            if (preview) preview.SetPosition(positionPx);
         }
 
         partial void EditorTakeReleased() {
-            editorReleasePending = editorPreview;
-            editorPreview        = null;
-            editorPreviewConfig  = null;
+            if (editorPreviews == null) return;
+
+            for (var i = 0; i < editorPreviews.Length; ++i) {
+                if (editorPreviews[i] != null) {
+                    editorReleasePending.Add(editorPreviews[i]);
+                    editorPreviews[i] = null;
+                }
+                editorConfigs[i] = null;
+            }
+            editorReleasePending.AddRange(editorSwappedPreviews);
+            editorSwappedPreviews.Clear();
         }
 
         partial void EditorFinishRelease() {
-            var preview = editorReleasePending;
-            editorReleasePending = null;
-            if (preview) preview.Release();
+            if (editorReleasePending.Count == 0) return;
+
+            var previews = editorReleasePending.ToArray();
+            editorReleasePending.Clear();
+            foreach (var preview in previews) {
+                if (preview) preview.Release();
+            }
         }
     }
 }

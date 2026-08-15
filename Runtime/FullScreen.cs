@@ -34,13 +34,39 @@ namespace RiseOn.NativeAdMob {
         private bool cachedAdLoading;
         private int  showGeneration;
 
-        public FullScreen(string adUnitId)
-            : base(JAVA_CLASS_NAME, adUnitId) {
-            this.adUnitId = adUnitId;
-            if (supportsIOS) IOSCreate(adUnitId);
+        public struct Settings {
+            public string AdUnitId;
+            public bool Fullscreen;
+            public int CountdownSec;
+            public bool XRandomSide;
+            public bool NumberOppositeSide;
+            public float HeightRatio;
+            public float BackgroundAlpha;
         }
 
-        partial void IOSCreate(string adUnitId);
+        /// <summary>Presentation-side events of this placement.</summary>
+        public event Action OnDisplayed;
+        public event Action<int, string> OnPresentationFailed;
+
+        public FullScreen(in Settings settings)
+            : base(settings.AdUnitId) {
+            adUnitId = settings.AdUnitId;
+            if (supportsAndroid) {
+                AndroidCreate();
+            } else if (supportsIOS) {
+                IOSCreate();
+            }
+            Configure(
+                settings.Fullscreen
+              , settings.CountdownSec
+              , settings.XRandomSide
+              , settings.NumberOppositeSide
+              , settings.HeightRatio
+              , settings.BackgroundAlpha);
+        }
+
+        partial void AndroidCreate();
+        partial void IOSCreate();
         partial void EditorSetPreviewConfig(
             bool fullscreen
           , int countdownSec
@@ -76,7 +102,7 @@ namespace RiseOn.NativeAdMob {
         partial void EditorRelease();
         partial void AndroidClearCompletedListener();
 
-        public void Configure(
+        private void Configure(
             bool fullscreen
           , int countdownSec
           , bool xRandomSide
@@ -278,6 +304,14 @@ namespace RiseOn.NativeAdMob {
             }
 
             return true;
+        }
+
+        private void RaiseDisplayed() => InvokeSafely(OnDisplayed);
+
+        private void RaisePresentationFailed(int errorCode, string errorMessage) {
+            var handler = OnPresentationFailed;
+            if (handler == null) return;
+            InvokeSafely(() => handler(errorCode, errorMessage));
         }
 
         private static void InvokeCompletionSafely(

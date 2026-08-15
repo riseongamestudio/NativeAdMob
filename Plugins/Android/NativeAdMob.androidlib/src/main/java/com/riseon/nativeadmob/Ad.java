@@ -3,7 +3,6 @@ package com.riseon.nativeadmob;
 import android.app.Activity;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
 
 import com.google.android.gms.ads.ResponseInfo;
 import com.google.android.gms.ads.VideoOptions;
@@ -25,17 +24,7 @@ public abstract class Ad {
 
     protected volatile boolean released;
 
-    private volatile AdLoadListener loadListener;
-
     protected Ad() {}
-
-    public final void SetListener(AdLoadListener listener) {
-        if (released) return;
-        loadListener = listener;
-        OnLoadListenerAttached();
-    }
-
-    protected void OnLoadListenerAttached() {}
 
     protected final int NextLoadGeneration() {
         return loadGeneration.incrementAndGet();
@@ -47,10 +36,6 @@ public abstract class Ad {
 
     protected final boolean IsCurrentLoadGeneration(int generation) {
         return !released && generation == loadGeneration.get();
-    }
-
-    protected final void ClearLoadListener() {
-        loadListener = null;
     }
 
     protected final NativeAdOptions CreateNativeAdOptions(
@@ -108,87 +93,12 @@ public abstract class Ad {
         }
     }
 
-    protected final void NotifyLoadingStarted() {
-        AdLoadListener listener = loadListener;
-        if (listener == null) return;
-        try {
-            listener.OnLoadingStarted();
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnLoadingStarted callback failed", exception);
-        }
-    }
-
-    protected final void NotifyStateChanged(
-            boolean isReady
-          , boolean isLoading) {
-        AdLoadListener listener = loadListener;
-        if (listener == null) return;
-        try {
-            listener.OnStateChanged(isReady, isLoading);
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnStateChanged callback failed", exception);
-        }
-    }
-
-    protected final void NotifyShowNotReady() {
-        AdLoadListener listener = loadListener;
-        if (listener == null) return;
-        try {
-            listener.OnShowNotReady();
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnShowNotReady callback failed", exception);
-        }
-    }
-
-    protected final void NotifyLoadingCompleted(
-            int errorCode
-          , String errorMessage) {
-        AdLoadListener listener = loadListener;
-        if (listener == null) return;
-        try {
-            listener.OnLoadingCompleted(errorCode, errorMessage);
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnLoadingCompleted callback failed", exception);
-        }
-    }
-
-    protected final void NotifyAdPaid(
+    // Each format owns its listener - the two surfaces differ (the in-feed
+    // one is slot-indexed) - but the paid event fires from inside
+    // BindPaidEvent, so delivering it is the one duty the base demands.
+    protected abstract void NotifyAdPaid(
             String source
           , String paidAdUnitId
           , double value
-          , String currencyCode) {
-        AdLoadListener listener = loadListener;
-        if (listener == null) return;
-        try {
-            listener.OnAdPaid(
-                    source
-                  , paidAdUnitId
-                  , value
-                  , currencyCode);
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnAdPaid callback failed", exception);
-        }
-    }
-
-    protected final void NotifyDisplayed() {
-        AdLoadListener listener = loadListener;
-        if (listener == null) return;
-        try {
-            listener.OnDisplayed();
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnDisplayed callback failed", exception);
-        }
-    }
-
-    protected final void NotifyPresentationFailed(
-            int errorCode
-          , String errorMessage) {
-        AdLoadListener listener = loadListener;
-        if (listener == null) return;
-        try {
-            listener.OnPresentationFailed(errorCode, errorMessage);
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnPresentationFailed callback failed", exception);
-        }
-    }
+          , String currencyCode);
 }

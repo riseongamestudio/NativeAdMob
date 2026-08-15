@@ -72,9 +72,103 @@ public final class FullScreen extends Ad {
         this.adUnitId = adUnitId;
     }
 
-    @Override
-    protected void OnLoadListenerAttached() {
+    // The full-screen listener surface stays flat (no slot index), so this
+    // format keeps the AdLoadListener shape and owns its delivery.
+    private volatile AdLoadListener loadListener;
+
+    public void SetListener(AdLoadListener listener) {
+        if (released) return;
+        loadListener = listener;
         NotifyCurrentState();
+    }
+
+    private void ClearLoadListener() {
+        loadListener = null;
+    }
+
+    private void NotifyLoadingStarted() {
+        AdLoadListener listener = loadListener;
+        if (listener == null) return;
+        try {
+            listener.OnLoadingStarted();
+        } catch (RuntimeException exception) {
+            Log.e(TAG, "OnLoadingStarted callback failed", exception);
+        }
+    }
+
+    private void NotifyStateChanged(
+            boolean isReady
+          , boolean isLoading) {
+        AdLoadListener listener = loadListener;
+        if (listener == null) return;
+        try {
+            listener.OnStateChanged(isReady, isLoading);
+        } catch (RuntimeException exception) {
+            Log.e(TAG, "OnStateChanged callback failed", exception);
+        }
+    }
+
+    private void NotifyShowNotReady() {
+        AdLoadListener listener = loadListener;
+        if (listener == null) return;
+        try {
+            listener.OnShowNotReady();
+        } catch (RuntimeException exception) {
+            Log.e(TAG, "OnShowNotReady callback failed", exception);
+        }
+    }
+
+    private void NotifyLoadingCompleted(
+            int errorCode
+          , String errorMessage) {
+        AdLoadListener listener = loadListener;
+        if (listener == null) return;
+        try {
+            listener.OnLoadingCompleted(errorCode, errorMessage);
+        } catch (RuntimeException exception) {
+            Log.e(TAG, "OnLoadingCompleted callback failed", exception);
+        }
+    }
+
+    @Override
+    protected void NotifyAdPaid(
+            String source
+          , String paidAdUnitId
+          , double value
+          , String currencyCode) {
+        AdLoadListener listener = loadListener;
+        if (listener == null) return;
+        try {
+            listener.OnAdPaid(
+                    source
+                  , paidAdUnitId
+                  , value
+                  , currencyCode);
+        } catch (RuntimeException exception) {
+            Log.e(TAG, "OnAdPaid callback failed", exception);
+        }
+    }
+
+    private void NotifyDisplayed() {
+        AdLoadListener listener = loadListener;
+        if (listener == null) return;
+        try {
+            listener.OnDisplayed();
+        } catch (RuntimeException exception) {
+            Log.e(TAG, "OnDisplayed callback failed", exception);
+        }
+    }
+
+    private void NotifyPresentationFailed(
+            int errorCode
+          , String errorMessage) {
+        AdLoadListener listener = loadListener;
+        if (listener == null) return;
+        try {
+            listener.OnPresentationFailed(errorCode, errorMessage);
+        } catch (RuntimeException exception) {
+            Log.e(TAG, "OnPresentationFailed callback failed", exception);
+        }
     }
 
     public synchronized void Configure(

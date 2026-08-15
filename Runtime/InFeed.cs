@@ -2,42 +2,105 @@ using System;
 using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
+    /// <summary>
+    /// One InFeed is one ad unit id for the life of the app: it owns the
+    /// shared supply (cache, loads, retry) natively and exposes a fixed array
+    /// of display slots. Index it to get an Item - a stateless handle over
+    /// one slot - and call Show/Hide/SetPosition there; everything unit-wide
+    /// (settings, events, disposal) lives here.
+    /// </summary>
     public sealed partial class InFeed : Ad {
         private const string JAVA_CLASS_NAME = "com.riseon.nativeadmob.InFeed";
+        private const int MAX_SLOT_COUNT = 8;
+
+        public struct Settings {
+            public string AdUnitId;
+            public int SlotCount;
+            /// <summary>Raw ads kept warm per unit; 0 means SlotCount + 1.</summary>
+            public int CacheSize;
+            public float BackgroundAlpha;
+        }
+
+        /// <summary>
+        /// A stateless view over one slot: just (owner, index), so copies are
+        /// harmless and every bit of state stays inside the owning InFeed.
+        /// </summary>
+        public readonly struct Item {
+            private readonly InFeed owner;
+            private readonly int index;
+
+            internal Item(InFeed owner, int index) {
+                this.owner = owner;
+                this.index = index;
+            }
+
+            public void Configure(Vector2Int positionPx, Vector2Int sizePx)
+                => owner.ConfigureSlot(index, positionPx, sizePx);
+
+            public void Show(Action onDisplayed = null)
+                => owner.ShowSlot(index, onDisplayed);
+
+            public void Hide() => owner.HideSlot(index);
+
+            public void SetPosition(Vector2Int positionPx)
+                => owner.SetSlotPosition(index, positionPx);
+        }
+
+        /// <summary>(slotIndex, errorCode, errorMessage)</summary>
+        public event Action<int, int, string> OnSlotPresentationFailed;
 
         private readonly string adUnitId;
-        private Action pendingOnDisplayed;
-        private bool checkedOut;
+        private readonly Item[] items;
+        private readonly Action[] pendingOnDisplayed;
 
-        public InFeed(string adUnitId)
-            : base(
-                JAVA_CLASS_NAME
-              , adUnitId
-              , passCurrentActivity: true) {
-            this.adUnitId = adUnitId;
-            if (supportsIOS) IOSCreate(adUnitId);
-            if (!supportsAndroid && !supportsIOS && !supportsEditorPreview) {
+        public int SlotCount => items.Length;
+
+        public ref readonly Item this[int index] => ref items[index];
+
+        public InFeed(in Settings settings)
+            : base(settings.AdUnitId) {
+            if (settings.SlotCount < 1 || settings.SlotCount > MAX_SLOT_COUNT) {
+                throw new ArgumentOutOfRangeException(
+                    nameof(settings)
+                  , settings.SlotCount
+                  , $"SlotCount must be within [1, {MAX_SLOT_COUNT}].");
+            }
+
+            adUnitId = settings.AdUnitId;
+            items = new Item[settings.SlotCount];
+            for (var i = 0; i < items.Length; ++i) items[i] = new Item(this, i);
+            pendingOnDisplayed = new Action[items.Length];
+
+            if (supportsAndroid) {
+                AndroidCreate(settings);
+            } else if (supportsIOS) {
+                IOSCreate(settings);
+            } else if (supportsEditorPreview) {
+                EditorCreate(settings);
+            } else {
                 Debug.Log($"{nameof(InFeed)} is not supported on this platform");
             }
         }
 
-        partial void IOSCreate(string adUnitId);
-        partial void AndroidConfigure(
-            Vector2Int positionPx, Vector2Int sizePx, float backgroundAlpha);
-        partial void IOSConfigure(
-            Vector2Int positionPx, Vector2Int sizePx, float backgroundAlpha);
-        partial void EditorConfigure(
-            Vector2Int positionPx, Vector2Int sizePx, float backgroundAlpha);
+        partial void AndroidCreate(Settings settings);
+        partial void IOSCreate(Settings settings);
+        partial void EditorCreate(Settings settings);
+        partial void AndroidConfigureSlot(
+            int slotIndex, Vector2Int positionPx, Vector2Int sizePx);
+        partial void IOSConfigureSlot(
+            int slotIndex, Vector2Int positionPx, Vector2Int sizePx);
+        partial void EditorConfigureSlot(
+            int slotIndex, Vector2Int positionPx, Vector2Int sizePx);
         partial void EditorReleaseSwappedPreview();
-        partial void AndroidShow();
-        partial void IOSShow();
-        partial void EditorShow();
-        partial void AndroidHide();
-        partial void IOSHide();
-        partial void EditorHide();
-        partial void AndroidSetPosition(Vector2Int positionPx);
-        partial void IOSSetPosition(Vector2Int positionPx);
-        partial void EditorSetPosition(Vector2Int positionPx);
+        partial void AndroidShowSlot(int slotIndex);
+        partial void IOSShowSlot(int slotIndex);
+        partial void EditorShowSlot(int slotIndex);
+        partial void AndroidHideSlot(int slotIndex);
+        partial void IOSHideSlot(int slotIndex);
+        partial void EditorHideSlot(int slotIndex);
+        partial void AndroidSetSlotPosition(int slotIndex, Vector2Int positionPx);
+        partial void IOSSetSlotPosition(int slotIndex, Vector2Int positionPx);
+        partial void EditorSetSlotPosition(int slotIndex, Vector2Int positionPx);
         partial void AndroidTakeReleased();
         partial void IOSTakeReleased();
         partial void EditorTakeReleased();
@@ -45,112 +108,111 @@ namespace RiseOn.NativeAdMob {
         partial void IOSFinishRelease();
         partial void EditorFinishRelease();
 
-        public void Configure(
-            Vector2Int positionPx
-          , Vector2Int sizePx
-          , float backgroundAlpha) {
+        private void ConfigureSlot(
+            int slotIndex
+          , Vector2Int positionPx
+          , Vector2Int sizePx) {
             lock (nativeAdStateLock) {
                 if (releasedManaged) return;
 
-                checkedOut         = true;
-                pendingOnDisplayed = null;
+                pendingOnDisplayed[slotIndex] = null;
                 if (supportsAndroid) {
-                    AndroidConfigure(positionPx, sizePx, backgroundAlpha);
+                    AndroidConfigureSlot(slotIndex, positionPx, sizePx);
                 } else if (supportsIOS) {
-                    IOSConfigure(positionPx, sizePx, backgroundAlpha);
+                    IOSConfigureSlot(slotIndex, positionPx, sizePx);
                 } else if (supportsEditorPreview) {
-                    EditorConfigure(positionPx, sizePx, backgroundAlpha);
+                    EditorConfigureSlot(slotIndex, positionPx, sizePx);
                 }
             }
             EditorReleaseSwappedPreview();
         }
 
-        public void Show(Action onDisplayed) {
+        private void ShowSlot(int slotIndex, Action onDisplayed) {
             lock (nativeAdStateLock) {
-                if (releasedManaged || !checkedOut) return;
+                if (releasedManaged) return;
 
-                pendingOnDisplayed = onDisplayed;
+                pendingOnDisplayed[slotIndex] = onDisplayed;
                 if (supportsAndroid) {
-                    AndroidShow();
+                    AndroidShowSlot(slotIndex);
                 } else if (supportsIOS) {
-                    IOSShow();
+                    IOSShowSlot(slotIndex);
                 } else if (supportsEditorPreview) {
-                    EditorShow();
+                    EditorShowSlot(slotIndex);
                 }
             }
         }
 
-        public void Hide() {
+        private void HideSlot(int slotIndex) {
             lock (nativeAdStateLock) {
-                if (releasedManaged || !checkedOut) return;
+                if (releasedManaged) return;
 
-                pendingOnDisplayed = null;
+                pendingOnDisplayed[slotIndex] = null;
                 if (supportsAndroid) {
-                    AndroidHide();
+                    AndroidHideSlot(slotIndex);
                 } else if (supportsIOS) {
-                    IOSHide();
+                    IOSHideSlot(slotIndex);
                 } else if (supportsEditorPreview) {
-                    EditorHide();
+                    EditorHideSlot(slotIndex);
                 }
             }
         }
 
-        public void SetPosition(Vector2Int positionPx) {
+        private void SetSlotPosition(int slotIndex, Vector2Int positionPx) {
             lock (nativeAdStateLock) {
-                if (releasedManaged || !checkedOut) return;
+                if (releasedManaged) return;
 
                 if (supportsAndroid) {
-                    AndroidSetPosition(positionPx);
+                    AndroidSetSlotPosition(slotIndex, positionPx);
                 } else if (supportsIOS) {
-                    IOSSetPosition(positionPx);
+                    IOSSetSlotPosition(slotIndex, positionPx);
                 } else if (supportsEditorPreview) {
-                    EditorSetPosition(positionPx);
+                    EditorSetSlotPosition(slotIndex, positionPx);
                 }
             }
         }
 
-        public void ReturnToPool() {
-            lock (nativeAdStateLock) {
-                if (releasedManaged || !checkedOut) return;
-
-                checkedOut         = false;
-                pendingOnDisplayed = null;
-                if (supportsAndroid) {
-                    AndroidHide();
-                } else if (supportsIOS) {
-                    IOSHide();
-                } else if (supportsEditorPreview) {
-                    EditorHide();
-                }
-            }
-        }
-
-        internal void InvokePendingOnDisplayed() {
+        // Called on the Unity thread by the platform listeners.
+        internal void HandleSlotDisplayed(int slotIndex) {
             Action onDisplayed;
             lock (nativeAdStateLock) {
-                if (releasedManaged || !checkedOut) return;
+                if (releasedManaged
+                 || slotIndex < 0
+                 || slotIndex >= pendingOnDisplayed.Length)
+                    return;
 
-                onDisplayed        = pendingOnDisplayed;
-                pendingOnDisplayed = null;
+                onDisplayed = pendingOnDisplayed[slotIndex];
+                pendingOnDisplayed[slotIndex] = null;
             }
             InvokeSafely(onDisplayed);
         }
 
-        protected override void HandleShowNotReady() {
-            Debug.LogWarning($"{GetType().Name}: Show Called While Not Ready");
+        internal void HandleSlotShowNotReady(int slotIndex) {
+            Debug.LogWarning(
+                $"{nameof(InFeed)} slot {slotIndex}: Show Called While Not Ready");
         }
 
+        internal void HandleSlotPresentationFailed(
+            int slotIndex
+          , int errorCode
+          , string errorMessage) {
+            var handler = OnSlotPresentationFailed;
+            if (handler == null) return;
+            InvokeSafely(() => handler(slotIndex, errorCode, errorMessage));
+        }
+
+        /// <summary>
+        /// Only for retiring the unit itself (an ad unit id swap); slots need
+        /// no per-use cleanup.
+        /// </summary>
         public void Dispose() {
             lock (nativeAdStateLock) {
                 if (releasedManaged) return;
 
                 releasedManaged = true;
-                checkedOut      = false;
-
                 AndroidTakeReleased();
                 IOSTakeReleased();
                 EditorTakeReleased();
-                pendingOnDisplayed = null;
+                Array.Clear(pendingOnDisplayed, 0, pendingOnDisplayed.Length);
                 InvalidateLoadListener();
             }
 

@@ -35,35 +35,46 @@ namespace RiseOn.NativeAdMob {
           , int showId
           , string errorMessage
           , [MarshalAs(UnmanagedType.I1)] bool adConsumed);
+        internal delegate void SlotDisplayedDelegate(
+            int instanceId, int slotIndex);
+        internal delegate void SlotShowNotReadyDelegate(
+            int instanceId, int slotIndex);
+        internal delegate void SlotPresentationFailedDelegate(
+            int instanceId, int slotIndex, int errorCode, string errorMessage);
 
         [DllImport("__Internal")]
         internal static extern IntPtr RONativeAdMobInFeed_Create(
-            string adUnitId, int instanceId);
+            string adUnitId
+          , int slotCount
+          , int cacheSize
+          , float backgroundAlpha
+          , int instanceId);
         [DllImport("__Internal")]
         internal static extern void RONativeAdMobInFeed_SetListener(
             IntPtr handle
           , LoadingStartedDelegate loadingStarted
           , LoadingCompletedDelegate loadingCompleted
           , AdPaidDelegate adPaid
-          , DisplayedDelegate displayed
-          , PresentationFailedDelegate presentationFailed
-          , StateChangedDelegate stateChanged
-          , ShowNotReadyDelegate showNotReady);
+          , SlotDisplayedDelegate slotDisplayed
+          , SlotShowNotReadyDelegate slotShowNotReady
+          , SlotPresentationFailedDelegate slotPresentationFailed);
         [DllImport("__Internal")]
         internal static extern void RONativeAdMobInFeed_Configure(
             IntPtr handle
+          , int slotIndex
           , int xPx
           , int yPx
           , int widthPx
-          , int heightPx
-          , float backgroundAlpha);
+          , int heightPx);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobInFeed_Show(IntPtr handle);
+        internal static extern void RONativeAdMobInFeed_Show(
+            IntPtr handle, int slotIndex);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobInFeed_Hide(IntPtr handle);
+        internal static extern void RONativeAdMobInFeed_Hide(
+            IntPtr handle, int slotIndex);
         [DllImport("__Internal")]
         internal static extern void RONativeAdMobInFeed_SetPosition(
-            IntPtr handle, int xPx, int yPx);
+            IntPtr handle, int slotIndex, int xPx, int yPx);
         [DllImport("__Internal")]
         internal static extern void RONativeAdMobInFeed_Release(IntPtr handle);
 
@@ -119,6 +130,12 @@ namespace RiseOn.NativeAdMob {
             = OnShowNotReady;
         internal static readonly ShowCompletedDelegate OnShowCompletedCallback
             = OnShowCompleted;
+        internal static readonly SlotDisplayedDelegate OnSlotDisplayedCallback
+            = OnSlotDisplayed;
+        internal static readonly SlotShowNotReadyDelegate
+            OnSlotShowNotReadyCallback = OnSlotShowNotReady;
+        internal static readonly SlotPresentationFailedDelegate
+            OnSlotPresentationFailedCallback = OnSlotPresentationFailed;
 
         private static readonly Dictionary<int, Ad> instances = new();
         private static readonly object registryLock = new();
@@ -168,12 +185,12 @@ namespace RiseOn.NativeAdMob {
 
         [MonoPInvokeCallback(typeof(DisplayedDelegate))]
         private static void OnDisplayed(int instanceId)
-            => Find(instanceId)?.IOSHandleDisplayed();
+            => (Find(instanceId) as FullScreen)?.IOSHandleDisplayed();
 
         [MonoPInvokeCallback(typeof(PresentationFailedDelegate))]
         private static void OnPresentationFailed(
             int instanceId, int errorCode, string errorMessage)
-            => Find(instanceId)?.IOSHandlePresentationFailed(
+            => (Find(instanceId) as FullScreen)?.IOSHandlePresentationFailed(
                 errorCode, errorMessage);
 
         [MonoPInvokeCallback(typeof(StateChangedDelegate))]
@@ -190,6 +207,20 @@ namespace RiseOn.NativeAdMob {
             int instanceId, int showId, string errorMessage, bool adConsumed)
             => (Find(instanceId) as FullScreen)
                 ?.IOSHandleShowCompleted(showId, errorMessage, adConsumed);
+
+        [MonoPInvokeCallback(typeof(SlotDisplayedDelegate))]
+        private static void OnSlotDisplayed(int instanceId, int slotIndex)
+            => (Find(instanceId) as InFeed)?.IOSHandleSlotDisplayed(slotIndex);
+
+        [MonoPInvokeCallback(typeof(SlotShowNotReadyDelegate))]
+        private static void OnSlotShowNotReady(int instanceId, int slotIndex)
+            => (Find(instanceId) as InFeed)?.IOSHandleSlotShowNotReady(slotIndex);
+
+        [MonoPInvokeCallback(typeof(SlotPresentationFailedDelegate))]
+        private static void OnSlotPresentationFailed(
+            int instanceId, int slotIndex, int errorCode, string errorMessage)
+            => (Find(instanceId) as InFeed)?.IOSHandleSlotPresentationFailed(
+                slotIndex, errorCode, errorMessage);
     }
 }
 #endif

@@ -14,7 +14,7 @@ namespace RiseOn.NativeAdMob {
         private readonly Action<int, string>                                  onPresentationFailed;
         private readonly Action<bool, bool>                                   onStateChanged;
         private readonly Action                                               onShowNotReady;
-        private readonly Action<AdLoadListenerProxy, int, Action>        dispatch;
+        private readonly Action<AndroidJavaProxy, int, Action>        dispatch;
 
         internal AdLoadListenerProxy(
             int generation
@@ -25,7 +25,7 @@ namespace RiseOn.NativeAdMob {
           , Action<int, string> onPresentationFailed
           , Action<bool, bool> onStateChanged
           , Action onShowNotReady
-          , Action<AdLoadListenerProxy, int, Action> dispatch)
+          , Action<AndroidJavaProxy, int, Action> dispatch)
             : base(JAVA_LISTENER_CLASS_NAME) {
             this.generation         = generation;
             this.onLoadingCompleted = onLoadingCompleted;

@@ -44,8 +44,6 @@ namespace RiseOn.NativeAdMob {
         }
 
         partial void EditorLoadAd() {
-            Action              loadingStarted;
-            Action<int, string> loadingCompleted;
             EditorPreviewConfig previewConfig;
             int                 listenerGeneration;
             lock (nativeAdStateLock) {
@@ -53,13 +51,11 @@ namespace RiseOn.NativeAdMob {
 
                 editorAdLoading    = true;
                 editorAdReady      = false;
-                loadingStarted     = editorOnLoadingStarted;
-                loadingCompleted   = editorOnLoadingCompleted;
                 previewConfig      = editorPreviewConfig;
                 listenerGeneration = loadListenerGeneration;
             }
 
-            InvokeSafely(loadingStarted);
+            RaiseLoadingStarted();
 
             var errorCode = 0;
             var errorMessage = string.Empty;
@@ -80,13 +76,11 @@ namespace RiseOn.NativeAdMob {
                 }
             }
 
-            InvokeSafely(
-                () => loadingCompleted?.Invoke(errorCode, errorMessage));
+            RaiseLoadingCompleted(errorCode, errorMessage);
         }
 
         partial void EditorShowAd(ShowCompletedHandler onAdCompleted) {
             EditorPreviewConfig previewConfig = null;
-            Action              displayed = null;
             int                 generation = INVALID_GENERATION;
             string              rejectedError = null;
             lock (nativeAdStateLock) {
@@ -104,7 +98,6 @@ namespace RiseOn.NativeAdMob {
                     currentShowCompleted = onAdCompleted;
                     generation           = ++showGeneration;
                     previewConfig        = editorPreviewConfig.Snapshot();
-                    displayed            = editorOnDisplayed;
                 }
             }
 
@@ -138,7 +131,7 @@ namespace RiseOn.NativeAdMob {
                     return;
                 }
 
-                InvokeSafely(displayed);
+                RaiseDisplayed();
             } catch (Exception exception) {
                 Debug.LogException(exception);
                 CompleteEditorPreview(

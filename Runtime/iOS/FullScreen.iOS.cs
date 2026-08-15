@@ -7,14 +7,13 @@ namespace RiseOn.NativeAdMob {
         private IntPtr iosReleasePendingHandle;
         private int iosReleasePendingInstanceId;
 
-        partial void IOSCreate(string adUnitId) {
+        partial void IOSCreate() {
             iosInstanceId = IOSBridge.Register(this);
             iosNativeAd = IOSBridge.RONativeAdMobFullScreen_Create(
                 adUnitId
               , iosInstanceId);
-        }
+            if (iosNativeAd == IntPtr.Zero) return;
 
-        private protected override void IOSRegisterListenerNative() {
             IOSBridge.RONativeAdMobFullScreen_SetListener(
                 iosNativeAd
               , IOSBridge.OnLoadingStartedCallback
@@ -25,6 +24,14 @@ namespace RiseOn.NativeAdMob {
               , IOSBridge.OnStateChangedCallback
               , IOSBridge.OnShowNotReadyCallback);
         }
+
+        internal void IOSHandleDisplayed() => DispatchFromNative(RaiseDisplayed);
+
+        internal void IOSHandlePresentationFailed(
+            int errorCode
+          , string errorMessage)
+            => DispatchFromNative(
+                () => RaisePresentationFailed(errorCode, errorMessage));
 
         internal void IOSHandleShowCompleted(
             int showId

@@ -13,33 +13,58 @@ namespace RiseOn.NativeAdMob {
 
         private AndroidJavaObject androidReleasePending;
 
-        partial void AndroidConfigure(
-            Vector2Int positionPx
-          , Vector2Int sizePx
-          , float backgroundAlpha) {
+        partial void AndroidCreate(Settings settings) {
+            androidNativeAd = new AndroidJavaObject(
+                JAVA_CLASS_NAME
+              , AndroidApplication.currentActivity
+              , adUnitId
+              , settings.SlotCount
+              , settings.CacheSize
+              , settings.BackgroundAlpha);
+
+            var generation = AndroidNextListenerGeneration();
+            AndroidAttachListener(new InFeedListenerProxy(
+                generation
+              , RaiseLoadingCompleted
+              , RaiseLoadingStarted
+              , RaiseAdPaid
+              , HandleSlotDisplayed
+              , HandleSlotShowNotReady
+              , HandleSlotPresentationFailed
+              , DispatchListenerCallback));
+        }
+
+        partial void AndroidConfigureSlot(
+            int slotIndex
+          , Vector2Int positionPx
+          , Vector2Int sizePx) {
             androidNativeAd?.Call(
                 JAVA_CONFIGURE_METHOD
               , AndroidApplication.currentActivity
+              , slotIndex
               , positionPx.x
               , positionPx.y
               , sizePx.x
-              , sizePx.y
-              , backgroundAlpha);
+              , sizePx.y);
         }
 
-        partial void AndroidShow() {
+        partial void AndroidShowSlot(int slotIndex) {
             androidNativeAd?.Call(
                 JAVA_SHOW_METHOD
-              , AndroidApplication.currentActivity);
+              , AndroidApplication.currentActivity
+              , slotIndex);
         }
 
-        partial void AndroidHide() {
-            androidNativeAd?.Call(JAVA_HIDE_METHOD);
+        partial void AndroidHideSlot(int slotIndex) {
+            androidNativeAd?.Call(JAVA_HIDE_METHOD, slotIndex);
         }
 
-        partial void AndroidSetPosition(Vector2Int positionPx) {
+        partial void AndroidSetSlotPosition(
+            int slotIndex
+          , Vector2Int positionPx) {
             androidNativeAd?.Call(
                 JAVA_SET_POSITION_METHOD
+              , slotIndex
               , positionPx.x
               , positionPx.y);
         }

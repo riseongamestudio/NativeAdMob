@@ -60,31 +60,56 @@ typedef void (*RONativeAdMobShowCompletedCallback)(
       , const char* errorMessage
       , bool adConsumed);
 
+// The slot-indexed half of the InFeedListener interface on Android: one
+// in-feed unit owns several display slots, and these callbacks say which
+// one is speaking.
+typedef void (*RONativeAdMobInFeedSlotDisplayedCallback)(
+        int32_t instanceId
+      , int32_t slotIndex);
+typedef void (*RONativeAdMobInFeedSlotShowNotReadyCallback)(
+        int32_t instanceId
+      , int32_t slotIndex);
+typedef void (*RONativeAdMobInFeedSlotPresentationFailedCallback)(
+        int32_t instanceId
+      , int32_t slotIndex
+      , int32_t errorCode
+      , const char* errorMessage);
+
 // ---------------------------------------------------------------------------
-// In-feed - com.riseon.nativeadmob.InFeed. Positions and sizes are native
-// screen pixels, exactly what Unity's Screen coordinates produce; the native
-// side converts to points internally the way the Java side converts to dp.
+// In-feed - com.riseon.nativeadmob.InFeed. One handle is one ad unit id with
+// slotCount display slots; every slot operation names its slot. Positions and
+// sizes are native screen pixels, exactly what Unity's Screen coordinates
+// produce; the native side converts to points internally the way the Java
+// side converts to dp.
 // ---------------------------------------------------------------------------
-void* RONativeAdMobInFeed_Create(const char* adUnitId, int32_t instanceId);
+void* RONativeAdMobInFeed_Create(
+        const char* adUnitId
+      , int32_t slotCount
+      , int32_t cacheSize
+      , float backgroundAlpha
+      , int32_t instanceId);
 void RONativeAdMobInFeed_SetListener(
         void* handle
       , RONativeAdMobLoadingStartedCallback loadingStarted
       , RONativeAdMobLoadingCompletedCallback loadingCompleted
       , RONativeAdMobPaidCallback adPaid
-      , RONativeAdMobDisplayedCallback displayed
-      , RONativeAdMobPresentationFailedCallback presentationFailed
-      , RONativeAdMobStateChangedCallback stateChanged
-      , RONativeAdMobShowNotReadyCallback showNotReady);
+      , RONativeAdMobInFeedSlotDisplayedCallback slotDisplayed
+      , RONativeAdMobInFeedSlotShowNotReadyCallback slotShowNotReady
+      , RONativeAdMobInFeedSlotPresentationFailedCallback slotPresentationFailed);
 void RONativeAdMobInFeed_Configure(
         void* handle
+      , int32_t slotIndex
       , int32_t xPx
       , int32_t yPx
       , int32_t widthPx
-      , int32_t heightPx
-      , float backgroundAlpha);
-void RONativeAdMobInFeed_Show(void* handle);
-void RONativeAdMobInFeed_Hide(void* handle);
-void RONativeAdMobInFeed_SetPosition(void* handle, int32_t xPx, int32_t yPx);
+      , int32_t heightPx);
+void RONativeAdMobInFeed_Show(void* handle, int32_t slotIndex);
+void RONativeAdMobInFeed_Hide(void* handle, int32_t slotIndex);
+void RONativeAdMobInFeed_SetPosition(
+        void* handle
+      , int32_t slotIndex
+      , int32_t xPx
+      , int32_t yPx);
 void RONativeAdMobInFeed_Release(void* handle);
 
 // ---------------------------------------------------------------------------

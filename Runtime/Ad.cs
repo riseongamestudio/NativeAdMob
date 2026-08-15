@@ -4,10 +4,11 @@ using UnityEngine;
 namespace RiseOn.NativeAdMob {
     /// <summary>
     /// Shared spine of one native ad wrapper: platform detection, the release
-    /// gate, and listener generations. Each platform owns its handle and its
-    /// state inside its partial file (Ad.Android.cs / Ad.iOS.cs /
-    /// Ad.Editor.cs); the partial hooks below compile away, call sites
-    /// included, on platforms that do not implement them.
+    /// gate, listener generations, and the unit-level events every format
+    /// raises. Each platform owns its handle and its state inside its partial
+    /// file; the partial hooks compile away, call sites included, on
+    /// platforms that do not implement them. Listeners attach internally at
+    /// construction - the public surface is these events.
     /// </summary>
     public abstract partial class Ad {
         protected int loadListenerGeneration;
@@ -18,22 +19,18 @@ namespace RiseOn.NativeAdMob {
         protected readonly bool supportsEditorPreview;
         protected readonly object nativeAdStateLock = new();
 
-        protected Ad(
-            string javaClassName
-          , string adUnitId
-          , bool passCurrentActivity = false) {
-            var validatedAdUnitId = RequireAdUnitId(adUnitId);
+        /// <summary>Supply-side events of the ad unit.</summary>
+        public event Action OnLoadingStarted;
+        public event Action<int, string> OnLoadingCompleted;
+        public event Action<string, string, double, string> OnAdPaid;
+
+        protected Ad(string adUnitId) {
+            RequireAdUnitId(adUnitId);
 
             supportsAndroid = Application.platform == RuntimePlatform.Android;
             supportsIOS =
                 Application.platform == RuntimePlatform.IPhonePlayer;
             supportsEditorPreview = Application.isEditor;
-            if (supportsAndroid) {
-                AndroidCreate(
-                    javaClassName
-                  , validatedAdUnitId
-                  , passCurrentActivity);
-            }
         }
 
         protected static string RequireAdUnitId(string adUnitId) {
@@ -44,37 +41,8 @@ namespace RiseOn.NativeAdMob {
               , nameof(adUnitId));
         }
 
-        partial void AndroidCreate(
-            string javaClassName
-          , string adUnitId
-          , bool passCurrentActivity);
-
         partial void AndroidCall(string methodName, object[] parameters);
-
-        partial void AndroidSetListener(
-            Action<int, string> onLoadingCompleted
-          , Action onLoadingStarted
-          , Action<string, string, double, string> onAdPaid
-          , Action onDisplayed
-          , Action<int, string> onPresentationFailed);
-
-        partial void IOSSetListener(
-            Action<int, string> onLoadingCompleted
-          , Action onLoadingStarted
-          , Action<string, string, double, string> onAdPaid
-          , Action onDisplayed
-          , Action<int, string> onPresentationFailed);
-
-        partial void EditorSetListener(
-            Action<int, string> onLoadingCompleted
-          , Action onLoadingStarted
-          , Action<string, string, double, string> onAdPaid
-          , Action onDisplayed
-          , Action<int, string> onPresentationFailed);
-
         partial void AndroidInvalidateLoadListener();
-        partial void IOSInvalidateLoadListener();
-        partial void EditorInvalidateLoadListener();
 
         protected void CallAndroid(
             string methodName
@@ -86,43 +54,27 @@ namespace RiseOn.NativeAdMob {
             }
         }
 
-        public void SetListener(
-            Action<int, string> onLoadingCompleted
-          , Action onLoadingStarted
-          , Action<string, string, double, string> onAdPaid
-          , Action onDisplayed = null
-          , Action<int, string> onPresentationFailed = null) {
-            if (supportsAndroid) {
-                AndroidSetListener(
-                    onLoadingCompleted
-                  , onLoadingStarted
-                  , onAdPaid
-                  , onDisplayed
-                  , onPresentationFailed);
-            } else if (supportsIOS) {
-                IOSSetListener(
-                    onLoadingCompleted
-                  , onLoadingStarted
-                  , onAdPaid
-                  , onDisplayed
-                  , onPresentationFailed);
-            } else if (supportsEditorPreview) {
-                EditorSetListener(
-                    onLoadingCompleted
-                  , onLoadingStarted
-                  , onAdPaid
-                  , onDisplayed
-                  , onPresentationFailed);
-            } else {
-                Debug.Log("SetListener() is not supported on this platform");
-            }
-        }
-
         protected void InvalidateLoadListener() {
             ++loadListenerGeneration;
             AndroidInvalidateLoadListener();
-            IOSInvalidateLoadListener();
-            EditorInvalidateLoadListener();
+        }
+
+        protected void RaiseLoadingStarted() => InvokeSafely(OnLoadingStarted);
+
+        protected void RaiseLoadingCompleted(int errorCode, string errorMessage) {
+            var handler = OnLoadingCompleted;
+            if (handler == null) return;
+            InvokeSafely(() => handler(errorCode, errorMessage));
+        }
+
+        protected void RaiseAdPaid(
+            string source
+          , string adUnitId
+          , double value
+          , string currencyCode) {
+            var handler = OnAdPaid;
+            if (handler == null) return;
+            InvokeSafely(() => handler(source, adUnitId, value, currencyCode));
         }
 
         protected virtual void HandleNativeStateChanged(

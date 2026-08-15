@@ -40,12 +40,20 @@ static RONativeAdMobListenerCallbacks HBMakeCallbacks(
 // In-feed
 // ---------------------------------------------------------------------------
 
-void* RONativeAdMobInFeed_Create(const char* adUnitId, int32_t instanceId) {
+void* RONativeAdMobInFeed_Create(
+        const char* adUnitId
+      , int32_t slotCount
+      , int32_t cacheSize
+      , float backgroundAlpha
+      , int32_t instanceId) {
     NSString *unit = HBStringFromUtf8(adUnitId);
     if (unit.length == 0) return NULL;
     RONativeAdMobInFeed *ad =
             [[RONativeAdMobInFeed alloc] initWithAdUnitId:unit
-                                            instanceId:instanceId];
+                                                slotCount:slotCount
+                                                cacheSize:cacheSize
+                                          backgroundAlpha:backgroundAlpha
+                                               instanceId:instanceId];
     return (void *)CFBridgingRetain(ad);
 }
 
@@ -54,53 +62,57 @@ void RONativeAdMobInFeed_SetListener(
       , RONativeAdMobLoadingStartedCallback loadingStarted
       , RONativeAdMobLoadingCompletedCallback loadingCompleted
       , RONativeAdMobPaidCallback adPaid
-      , RONativeAdMobDisplayedCallback displayed
-      , RONativeAdMobPresentationFailedCallback presentationFailed
-      , RONativeAdMobStateChangedCallback stateChanged
-      , RONativeAdMobShowNotReadyCallback showNotReady) {
+      , RONativeAdMobInFeedSlotDisplayedCallback slotDisplayed
+      , RONativeAdMobInFeedSlotShowNotReadyCallback slotShowNotReady
+      , RONativeAdMobInFeedSlotPresentationFailedCallback slotPresentationFailed) {
     if (handle == NULL) return;
     RONativeAdMobInFeed *ad = (__bridge RONativeAdMobInFeed *)handle;
-    [ad setListenerCallbacks:HBMakeCallbacks(
-            loadingStarted
-          , loadingCompleted
-          , adPaid
-          , displayed
-          , presentationFailed
-          , stateChanged
-          , showNotReady)];
+    RONativeAdMobInFeedListenerCallbacks callbacks;
+    callbacks.loadingStarted = loadingStarted;
+    callbacks.loadingCompleted = loadingCompleted;
+    callbacks.adPaid = adPaid;
+    callbacks.slotDisplayed = slotDisplayed;
+    callbacks.slotShowNotReady = slotShowNotReady;
+    callbacks.slotPresentationFailed = slotPresentationFailed;
+    [ad setInFeedListenerCallbacks:callbacks];
 }
 
 void RONativeAdMobInFeed_Configure(
         void* handle
+      , int32_t slotIndex
       , int32_t xPx
       , int32_t yPx
       , int32_t widthPx
-      , int32_t heightPx
-      , float backgroundAlpha) {
+      , int32_t heightPx) {
     if (handle == NULL) return;
     RONativeAdMobInFeed *ad = (__bridge RONativeAdMobInFeed *)handle;
-    [ad configureWithX:HBPointsFromPixels(xPx)
-                     y:HBPointsFromPixels(yPx)
-                 width:HBPointsFromPixels(widthPx)
-                height:HBPointsFromPixels(heightPx)
-       backgroundAlpha:backgroundAlpha];
+    [ad configureSlot:slotIndex
+                    x:HBPointsFromPixels(xPx)
+                    y:HBPointsFromPixels(yPx)
+                width:HBPointsFromPixels(widthPx)
+               height:HBPointsFromPixels(heightPx)];
 }
 
-void RONativeAdMobInFeed_Show(void* handle) {
+void RONativeAdMobInFeed_Show(void* handle, int32_t slotIndex) {
     if (handle == NULL) return;
-    [(__bridge RONativeAdMobInFeed *)handle show];
+    [(__bridge RONativeAdMobInFeed *)handle showSlot:slotIndex];
 }
 
-void RONativeAdMobInFeed_Hide(void* handle) {
+void RONativeAdMobInFeed_Hide(void* handle, int32_t slotIndex) {
     if (handle == NULL) return;
-    [(__bridge RONativeAdMobInFeed *)handle hide];
+    [(__bridge RONativeAdMobInFeed *)handle hideSlot:slotIndex];
 }
 
-void RONativeAdMobInFeed_SetPosition(void* handle, int32_t xPx, int32_t yPx) {
+void RONativeAdMobInFeed_SetPosition(
+        void* handle
+      , int32_t slotIndex
+      , int32_t xPx
+      , int32_t yPx) {
     if (handle == NULL) return;
     [(__bridge RONativeAdMobInFeed *)handle
-            setPositionX:HBPointsFromPixels(xPx)
-                       y:HBPointsFromPixels(yPx)];
+            setSlot:slotIndex
+          positionX:HBPointsFromPixels(xPx)
+                  y:HBPointsFromPixels(yPx)];
 }
 
 void RONativeAdMobInFeed_Release(void* handle) {

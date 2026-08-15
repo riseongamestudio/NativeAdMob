@@ -1,0 +1,20 @@
+package com.riseon.nativeadmob;
+
+// Ten package + ten method phai khop Android proxy ben Unity. The loading
+// and paid events describe the shared supply of one ad unit; the
+// slot-indexed events describe one display slot of it.
+public interface InFeedListener {
+    void OnLoadingStarted();
+    void OnLoadingCompleted(int errorCode, String errorMessage);
+    void OnAdPaid(
+        String adSource
+      , String adUnitId
+      , double value
+      , String currencyCode);
+    void OnSlotDisplayed(int slotIndex);
+    void OnSlotShowNotReady(int slotIndex);
+    void OnSlotPresentationFailed(
+        int slotIndex
+      , int errorCode
+      , String errorMessage);
+}
