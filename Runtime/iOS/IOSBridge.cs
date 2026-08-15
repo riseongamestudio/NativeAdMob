@@ -1,16 +1,26 @@
-#if UNITY_IOS
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using AOT;
 
 namespace RiseOn.NativeAdMob {
+    // The loading and paid callbacks are shared by both client kinds; the
+    // trampolines reach them through this without caring which one answered.
+    internal interface IIOSSharedHandlers {
+        void HandleLoadingStarted();
+        void HandleLoadingCompleted(int errorCode, string errorMessage);
+        void HandleAdPaid(
+            string source
+          , string adUnitId
+          , double value
+          , string currencyCode
+          , int precision);
+    }
+
     /// <summary>
-    /// Transport C# ↔ Obj-C++ cho package native ad trên iOS — phản chiếu
-    /// đúng bề mặt AndroidJavaObject đang dùng trên Android. Callback từ
-    /// native về qua trampoline static (yêu cầu của IL2CPP), tra instance
-    /// theo instanceId rồi giao lại cho wrapper, wrapper tự marshal về
-    /// Unity thread như các proxy Android.
+    /// Transport C# ↔ Obj-C++. Callback từ native về qua trampoline static
+    /// (yêu cầu của IL2CPP), tra client theo instanceId rồi giao lại; core
+    /// wrapper tự marshal về Unity thread.
     /// </summary>
     internal static class IOSBridge {
         internal delegate void LoadingStartedDelegate(int instanceId);
@@ -138,14 +148,14 @@ namespace RiseOn.NativeAdMob {
         internal static readonly SlotPresentationFailedDelegate
             OnSlotPresentationFailedCallback = OnSlotPresentationFailed;
 
-        private static readonly Dictionary<int, NativeAdMob> instances = new();
+        private static readonly Dictionary<int, object> instances = new();
         private static readonly object registryLock = new();
         private static int nextInstanceId;
 
-        internal static int Register(NativeAdMob ad) {
+        internal static int Register(object client) {
             lock (registryLock) {
                 var instanceId = ++nextInstanceId;
-                instances[instanceId] = ad;
+                instances[instanceId] = client;
                 return instanceId;
             }
         }
@@ -156,23 +166,23 @@ namespace RiseOn.NativeAdMob {
             }
         }
 
-        private static NativeAdMob Find(int instanceId) {
+        private static object Find(int instanceId) {
             lock (registryLock) {
-                return instances.TryGetValue(instanceId, out var ad)
-                    ? ad
+                return instances.TryGetValue(instanceId, out var client)
+                    ? client
                     : null;
             }
         }
 
         [MonoPInvokeCallback(typeof(LoadingStartedDelegate))]
         private static void OnLoadingStarted(int instanceId)
-            => Find(instanceId)?.IOSHandleLoadingStarted();
+            => (Find(instanceId) as IIOSSharedHandlers)?.HandleLoadingStarted();
 
         [MonoPInvokeCallback(typeof(LoadingCompletedDelegate))]
         private static void OnLoadingCompleted(
             int instanceId, int errorCode, string errorMessage)
-            => Find(instanceId)?.IOSHandleLoadingCompleted(
-                errorCode, errorMessage);
+            => (Find(instanceId) as IIOSSharedHandlers)
+                ?.HandleLoadingCompleted(errorCode, errorMessage);
 
         [MonoPInvokeCallback(typeof(AdPaidDelegate))]
         private static void OnAdPaid(
@@ -182,47 +192,50 @@ namespace RiseOn.NativeAdMob {
           , double value
           , string currencyCode
           , int precision)
-            => Find(instanceId)?.IOSHandleAdPaid(
+            => (Find(instanceId) as IIOSSharedHandlers)?.HandleAdPaid(
                 source, adUnitId, value, currencyCode, precision);
 
         [MonoPInvokeCallback(typeof(DisplayedDelegate))]
         private static void OnDisplayed(int instanceId)
-            => (Find(instanceId) as NativeOverlayAdMob)?.IOSHandleDisplayed();
+            => (Find(instanceId) as IOSOverlayClient)?.HandleDisplayed();
 
         [MonoPInvokeCallback(typeof(PresentationFailedDelegate))]
         private static void OnPresentationFailed(
             int instanceId, int errorCode, string errorMessage)
-            => (Find(instanceId) as NativeOverlayAdMob)?.IOSHandlePresentationFailed(
-                errorCode, errorMessage);
+            => (Find(instanceId) as IOSOverlayClient)
+                ?.HandlePresentationFailed(errorCode, errorMessage);
 
         [MonoPInvokeCallback(typeof(StateChangedDelegate))]
         private static void OnStateChanged(
             int instanceId, bool isReady, bool isLoading)
-            => Find(instanceId)?.IOSHandleStateChanged(isReady, isLoading);
+            => (Find(instanceId) as IOSOverlayClient)
+                ?.HandleStateChanged(isReady, isLoading);
 
         [MonoPInvokeCallback(typeof(ShowNotReadyDelegate))]
         private static void OnShowNotReady(int instanceId)
-            => Find(instanceId)?.IOSHandleShowNotReady();
+            => (Find(instanceId) as IOSOverlayClient)?.HandleShowNotReady();
 
         [MonoPInvokeCallback(typeof(ShowCompletedDelegate))]
         private static void OnShowCompleted(
             int instanceId, int showId, string errorMessage, bool adConsumed)
-            => (Find(instanceId) as NativeOverlayAdMob)
-                ?.IOSHandleShowCompleted(showId, errorMessage, adConsumed);
+            => (Find(instanceId) as IOSOverlayClient)
+                ?.HandleShowCompleted(showId, errorMessage, adConsumed);
 
         [MonoPInvokeCallback(typeof(SlotDisplayedDelegate))]
         private static void OnSlotDisplayed(int instanceId, int slotIndex)
-            => (Find(instanceId) as NativeInFeedAdMob)?.IOSHandleSlotDisplayed(slotIndex);
+            => (Find(instanceId) as IOSInFeedClient)
+                ?.HandleSlotDisplayed(slotIndex);
 
         [MonoPInvokeCallback(typeof(SlotShowNotReadyDelegate))]
         private static void OnSlotShowNotReady(int instanceId, int slotIndex)
-            => (Find(instanceId) as NativeInFeedAdMob)?.IOSHandleSlotShowNotReady(slotIndex);
+            => (Find(instanceId) as IOSInFeedClient)
+                ?.HandleSlotShowNotReady(slotIndex);
 
         [MonoPInvokeCallback(typeof(SlotPresentationFailedDelegate))]
         private static void OnSlotPresentationFailed(
             int instanceId, int slotIndex, int errorCode, string errorMessage)
-            => (Find(instanceId) as NativeInFeedAdMob)?.IOSHandleSlotPresentationFailed(
-                slotIndex, errorCode, errorMessage);
+            => (Find(instanceId) as IOSInFeedClient)
+                ?.HandleSlotPresentationFailed(
+                    slotIndex, errorCode, errorMessage);
     }
 }
-#endif

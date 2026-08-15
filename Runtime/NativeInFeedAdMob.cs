@@ -4,14 +4,13 @@ using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
     /// <summary>
-    /// One NativeInFeedAdMob is one ad unit id for the life of the app: it owns the
-    /// shared supply (cache, loads, retry) natively and exposes a fixed array
-    /// of display slots. Index it to get an Item - a stateless handle over
-    /// one slot - and call Show/Hide/SetPosition there; everything unit-wide
-    /// (settings, events, disposal) lives here.
+    /// One NativeInFeedAdMob is one ad unit id for the life of the app: it
+    /// owns the shared supply (cache, loads, retry) natively and exposes a
+    /// fixed array of display slots. Index it to get an Item - a stateless
+    /// handle over one slot - and call Show/Hide/SetPosition there;
+    /// everything unit-wide (settings, events, disposal) lives here.
     /// </summary>
-    public sealed partial class NativeInFeedAdMob : NativeAdMob {
-        private const string JAVA_CLASS_NAME = "com.riseon.nativeadmob.InFeed";
+    public sealed class NativeInFeedAdMob : NativeAdMob, IInFeedCallbacks {
         private const int MAX_SLOT_COUNT = 8;
 
         public struct Settings {
@@ -24,7 +23,7 @@ namespace RiseOn.NativeAdMob {
 
         /// <summary>
         /// A stateless view over one slot: just (owner, index), so copies are
-        /// harmless and every bit of state stays inside the owning NativeInFeedAdMob.
+        /// harmless and every bit of state stays inside the owning unit.
         /// </summary>
         public readonly struct Item {
             private readonly NativeInFeedAdMob owner;
@@ -50,9 +49,9 @@ namespace RiseOn.NativeAdMob {
         /// <summary>(slotIndex, errorCode, errorMessage)</summary>
         public event Action<int, int, string> OnSlotPresentationFailed;
 
-        private readonly string adUnitId;
         private readonly Item[] items;
         private readonly Action[] pendingOnDisplayed;
+        private IInFeedClient client;
 
         public int SlotCount => items.Length;
 
@@ -70,47 +69,19 @@ namespace RiseOn.NativeAdMob {
                   , $"SlotCount must be within [1, {MAX_SLOT_COUNT}].");
             }
 
-            adUnitId = settings.AdUnitId;
             items = new Item[settings.SlotCount];
             for (var i = 0; i < items.Length; ++i) items[i] = new Item(this, i);
             pendingOnDisplayed = new Action[items.Length];
 
-            if (supportsAndroid) {
-                AndroidCreate(settings);
-            } else if (supportsIOS) {
-                IOSCreate(settings);
-            } else if (supportsEditorPreview) {
-                EditorCreate(settings);
-            } else {
-                Debug.Log($"{nameof(NativeInFeedAdMob)} is not supported on this platform");
+            var platform = NativeAdMobPlatform.Installed;
+            if (platform == null) {
+                Debug.Log(
+                    $"{nameof(NativeInFeedAdMob)} is not supported on "
+                    + Application.platform);
+                return;
             }
+            client = platform.CreateInFeed(settings, this);
         }
-
-        partial void AndroidCreate(Settings settings);
-        partial void IOSCreate(Settings settings);
-        partial void EditorCreate(Settings settings);
-        partial void AndroidConfigureSlot(
-            int slotIndex, Vector2Int positionPx, Vector2Int sizePx);
-        partial void IOSConfigureSlot(
-            int slotIndex, Vector2Int positionPx, Vector2Int sizePx);
-        partial void EditorConfigureSlot(
-            int slotIndex, Vector2Int positionPx, Vector2Int sizePx);
-        partial void EditorReleaseSwappedPreview();
-        partial void AndroidShowSlot(int slotIndex);
-        partial void IOSShowSlot(int slotIndex);
-        partial void EditorShowSlot(int slotIndex);
-        partial void AndroidHideSlot(int slotIndex);
-        partial void IOSHideSlot(int slotIndex);
-        partial void EditorHideSlot(int slotIndex);
-        partial void AndroidSetSlotPosition(int slotIndex, Vector2Int positionPx);
-        partial void IOSSetSlotPosition(int slotIndex, Vector2Int positionPx);
-        partial void EditorSetSlotPosition(int slotIndex, Vector2Int positionPx);
-        partial void AndroidTakeReleased();
-        partial void IOSTakeReleased();
-        partial void EditorTakeReleased();
-        partial void AndroidFinishRelease();
-        partial void IOSFinishRelease();
-        partial void EditorFinishRelease();
 
         private void ConfigureSlot(
             int slotIndex
@@ -120,15 +91,8 @@ namespace RiseOn.NativeAdMob {
                 if (releasedManaged) return;
 
                 pendingOnDisplayed[slotIndex] = null;
-                if (supportsAndroid) {
-                    AndroidConfigureSlot(slotIndex, positionPx, sizePx);
-                } else if (supportsIOS) {
-                    IOSConfigureSlot(slotIndex, positionPx, sizePx);
-                } else if (supportsEditorPreview) {
-                    EditorConfigureSlot(slotIndex, positionPx, sizePx);
-                }
+                client?.ConfigureSlot(slotIndex, positionPx, sizePx);
             }
-            EditorReleaseSwappedPreview();
         }
 
         private void ShowSlot(int slotIndex, Action onDisplayed) {
@@ -136,13 +100,7 @@ namespace RiseOn.NativeAdMob {
                 if (releasedManaged) return;
 
                 pendingOnDisplayed[slotIndex] = onDisplayed;
-                if (supportsAndroid) {
-                    AndroidShowSlot(slotIndex);
-                } else if (supportsIOS) {
-                    IOSShowSlot(slotIndex);
-                } else if (supportsEditorPreview) {
-                    EditorShowSlot(slotIndex);
-                }
+                client?.ShowSlot(slotIndex);
             }
         }
 
@@ -151,13 +109,7 @@ namespace RiseOn.NativeAdMob {
                 if (releasedManaged) return;
 
                 pendingOnDisplayed[slotIndex] = null;
-                if (supportsAndroid) {
-                    AndroidHideSlot(slotIndex);
-                } else if (supportsIOS) {
-                    IOSHideSlot(slotIndex);
-                } else if (supportsEditorPreview) {
-                    EditorHideSlot(slotIndex);
-                }
+                client?.HideSlot(slotIndex);
             }
         }
 
@@ -165,18 +117,40 @@ namespace RiseOn.NativeAdMob {
             lock (nativeAdStateLock) {
                 if (releasedManaged) return;
 
-                if (supportsAndroid) {
-                    AndroidSetSlotPosition(slotIndex, positionPx);
-                } else if (supportsIOS) {
-                    IOSSetSlotPosition(slotIndex, positionPx);
-                } else if (supportsEditorPreview) {
-                    EditorSetSlotPosition(slotIndex, positionPx);
-                }
+                client?.SetSlotPosition(slotIndex, positionPx);
             }
         }
 
-        // Called on the Unity thread by the platform listeners.
-        internal void HandleSlotDisplayed(int slotIndex) {
+        void IInFeedCallbacks.OnLoadingStarted()
+            => DispatchFromNative(RaiseLoadingStarted);
+
+        void IInFeedCallbacks.OnLoadingCompleted(int errorCode, string errorMessage)
+            => DispatchFromNative(
+                () => RaiseLoadingCompleted(errorCode, errorMessage));
+
+        void IInFeedCallbacks.OnAdPaid(AdValue adValue)
+            => DispatchFromNative(() => RaiseAdPaid(adValue));
+
+        void IInFeedCallbacks.OnSlotDisplayed(int slotIndex)
+            => DispatchFromNative(() => HandleSlotDisplayed(slotIndex));
+
+        void IInFeedCallbacks.OnSlotShowNotReady(int slotIndex)
+            => DispatchFromNative(
+                () => Debug.LogWarning(
+                    $"{nameof(NativeInFeedAdMob)} slot {slotIndex}: "
+                    + "Show Called While Not Ready"));
+
+        void IInFeedCallbacks.OnSlotPresentationFailed(
+            int slotIndex
+          , int errorCode
+          , string errorMessage)
+            => DispatchFromNative(() => {
+                var handler = OnSlotPresentationFailed;
+                if (handler == null) return;
+                InvokeSafely(() => handler(slotIndex, errorCode, errorMessage));
+            });
+
+        private void HandleSlotDisplayed(int slotIndex) {
             Action onDisplayed;
             lock (nativeAdStateLock) {
                 if (releasedManaged
@@ -190,39 +164,22 @@ namespace RiseOn.NativeAdMob {
             InvokeSafely(onDisplayed);
         }
 
-        internal void HandleSlotShowNotReady(int slotIndex) {
-            Debug.LogWarning(
-                $"{nameof(NativeInFeedAdMob)} slot {slotIndex}: Show Called While Not Ready");
-        }
-
-        internal void HandleSlotPresentationFailed(
-            int slotIndex
-          , int errorCode
-          , string errorMessage) {
-            var handler = OnSlotPresentationFailed;
-            if (handler == null) return;
-            InvokeSafely(() => handler(slotIndex, errorCode, errorMessage));
-        }
-
         /// <summary>
         /// Only for retiring the unit itself (an ad unit id swap); slots need
         /// no per-use cleanup.
         /// </summary>
         public void Dispose() {
+            IInFeedClient releasedClient;
             lock (nativeAdStateLock) {
                 if (releasedManaged) return;
 
                 releasedManaged = true;
-                AndroidTakeReleased();
-                IOSTakeReleased();
-                EditorTakeReleased();
+                releasedClient = client;
+                client = null;
                 Array.Clear(pendingOnDisplayed, 0, pendingOnDisplayed.Length);
-                InvalidateLoadListener();
             }
 
-            AndroidFinishRelease();
-            IOSFinishRelease();
-            EditorFinishRelease();
+            releasedClient?.Release();
         }
     }
 }

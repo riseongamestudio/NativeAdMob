@@ -1,4 +1,3 @@
-#if UNITY_EDITOR
 using System;
 using UnityEngine;
 using UnityEngine.UI;
@@ -1943,4 +1942,3 @@ namespace RiseOn.NativeAdMob {
         }
     }
 }
-#endif

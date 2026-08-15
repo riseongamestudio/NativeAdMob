@@ -14,29 +14,27 @@ namespace RiseOn.NativeAdMob {
         string errorMessage
       , bool adConsumed);
 
-    public abstract partial class NativeOverlayAdMob : NativeAdMob {
+    /// <summary>
+    /// The shared engine of the two overlay formats - an ad presented over
+    /// the game in its own window. NativeFullScreenAdMob covers the whole
+    /// screen; NativeHalfScreenAdMob covers a bottom slice. The constructor
+    /// is assembly-locked: those two are its only faces.
+    /// </summary>
+    public abstract class NativeOverlayAdMob : NativeAdMob, IOverlayCallbacks {
         private const int INVALID_GENERATION = 0;
+        private const string AD_RELEASED_ERROR        = "Ad released";
+        private const string AD_ALREADY_SHOWING_ERROR = "Ad already showing";
 
-        private const string AD_RELEASED_ERROR        = "NativeAdMob released";
-        private const string AD_ALREADY_SHOWING_ERROR = "NativeAdMob already showing";
-        private const string AD_NOT_READY_ERROR       = "NativeAdMob not ready";
-        private const string AD_NOT_CONFIGURED_ERROR  = "NativeAdMob not configured";
+        /// <summary>Presentation-side events of this placement.</summary>
+        public event Action OnDisplayed;
+        public event Action<int, string> OnPresentationFailed;
 
-        private const string JAVA_CLASS_NAME               = "com.riseon.nativeadmob.FullScreen";
-        private const string JAVA_CONFIGURE_METHOD         = "Configure";
-        private const string JAVA_SET_COUNTDOWN_SEC_METHOD = "SetCountdownSec";
-        private const string JAVA_HIDE_AD_METHOD           = "HideAd";
-
-        private readonly string adUnitId;
+        private IOverlayClient client;
         private ShowCompletedHandler currentShowCompleted;
         private bool showPendingOrActive;
         private bool cachedAdReady;
         private bool cachedAdLoading;
         private int  showGeneration;
-
-        /// <summary>Presentation-side events of this placement.</summary>
-        public event Action OnDisplayed;
-        public event Action<int, string> OnPresentationFailed;
 
         private protected NativeOverlayAdMob(
             string adUnitId
@@ -47,198 +45,146 @@ namespace RiseOn.NativeAdMob {
           , float heightRatio
           , float backgroundAlpha)
             : base(adUnitId) {
-            this.adUnitId = adUnitId;
-            if (supportsAndroid) {
-                AndroidCreate();
-            } else if (supportsIOS) {
-                IOSCreate();
-            }
-            Configure(
-                coversFullScreen
-              , countdownSec
-              , xRandomSide
-              , numberOppositeSide
-              , heightRatio
-              , backgroundAlpha);
-        }
-
-        partial void AndroidCreate();
-        partial void IOSCreate();
-        partial void EditorSetPreviewConfig(
-            bool fullscreen
-          , int countdownSec
-          , bool xRandomSide
-          , bool numberOppositeSide
-          , float heightRatio
-          , float backgroundAlpha);
-        partial void EditorSetPreviewCountdownSec(int countdownSec);
-        partial void IOSConfigure(
-            bool fullscreen
-          , int countdownSec
-          , bool xRandomSide
-          , bool numberOppositeSide
-          , float heightRatio
-          , float backgroundAlpha);
-        partial void IOSSetCountdownSec(int countdownSec);
-        partial void AndroidLoadAd();
-        partial void IOSLoadAd();
-        partial void EditorLoadAd();
-        partial void AndroidShowAd(ShowCompletedHandler onAdCompleted);
-        partial void IOSShowAd(ShowCompletedHandler onAdCompleted);
-        partial void EditorShowAd(ShowCompletedHandler onAdCompleted);
-        partial void IOSHideAd();
-        partial void EditorHideAd();
-        partial void AndroidIsAdReady(ref bool isReady);
-        partial void IOSIsAdReady(ref bool isReady);
-        partial void EditorIsAdReady(ref bool isReady);
-        partial void AndroidIsAdLoading(ref bool isLoading);
-        partial void IOSIsAdLoading(ref bool isLoading);
-        partial void EditorIsAdLoading(ref bool isLoading);
-        partial void AndroidRelease();
-        partial void IOSRelease();
-        partial void EditorRelease();
-        partial void AndroidClearCompletedListener();
-
-        private void Configure(
-            bool fullscreen
-          , int countdownSec
-          , bool xRandomSide
-          , bool numberOppositeSide
-          , float heightRatio
-          , float backgroundAlpha) {
-            EditorSetPreviewConfig(
-                fullscreen
-              , countdownSec
-              , xRandomSide
-              , numberOppositeSide
-              , heightRatio
-              , backgroundAlpha);
-            if (supportsIOS) {
-                IOSConfigure(
-                    fullscreen
-                  , countdownSec
-                  , xRandomSide
-                  , numberOppositeSide
-                  , heightRatio
-                  , backgroundAlpha);
+            var platform = NativeAdMobPlatform.Installed;
+            if (platform == null) {
+                Debug.Log(
+                    $"{GetType().Name} is not supported on "
+                    + Application.platform);
                 return;
             }
-            CallAndroid(
-                JAVA_CONFIGURE_METHOD
-              , fullscreen
-              , countdownSec
-              , xRandomSide
-              , numberOppositeSide
-              , heightRatio
-              , backgroundAlpha);
+            client = platform.CreateOverlay(
+                new OverlaySettings {
+                    AdUnitId           = adUnitId
+                  , CoversFullScreen   = coversFullScreen
+                  , CountdownSec       = countdownSec
+                  , XRandomSide        = xRandomSide
+                  , NumberOppositeSide = numberOppositeSide
+                  , HeightRatio        = heightRatio
+                  , BackgroundAlpha    = backgroundAlpha
+                }
+              , this);
         }
 
         public void SetCountdownSec(int countdownSec) {
-            EditorSetPreviewCountdownSec(countdownSec);
-            if (supportsIOS) {
-                IOSSetCountdownSec(countdownSec);
-                return;
+            lock (nativeAdStateLock) {
+                if (releasedManaged) return;
+
+                client?.SetCountdownSec(countdownSec);
             }
-            CallAndroid(JAVA_SET_COUNTDOWN_SEC_METHOD, countdownSec);
         }
 
         public void LoadAd() {
-            if (supportsAndroid) {
-                AndroidLoadAd();
-            } else if (supportsIOS) {
-                IOSLoadAd();
-            } else if (supportsEditorPreview) {
-                EditorLoadAd();
-            } else {
-                Debug.Log("LoadAd() is not supported on this platform");
+            lock (nativeAdStateLock) {
+                if (releasedManaged || client == null) return;
+
+                Debug.Log("LoadAd()");
+                client.LoadAd();
             }
         }
 
         public void ShowAd(ShowCompletedHandler onAdCompleted) {
-            if (supportsAndroid) {
-                AndroidShowAd(onAdCompleted);
-            } else if (supportsIOS) {
-                IOSShowAd(onAdCompleted);
-            } else if (supportsEditorPreview) {
-                EditorShowAd(onAdCompleted);
-            } else {
-                Debug.Log("ShowAd() is not supported on this platform");
+            int    generation = INVALID_GENERATION;
+            string rejectedError = null;
+            lock (nativeAdStateLock) {
+                if (releasedManaged || client == null) {
+                    rejectedError = AD_RELEASED_ERROR;
+                } else if (showPendingOrActive) {
+                    rejectedError = AD_ALREADY_SHOWING_ERROR;
+                } else {
+                    showPendingOrActive  = true;
+                    currentShowCompleted = onAdCompleted;
+                    generation           = ++showGeneration;
+                }
+            }
+
+            if (rejectedError != null) {
                 InvokeCompletionSafely(
                     onAdCompleted
-                  , string.Empty
+                  , rejectedError
                   , false);
+                return;
+            }
+
+            Debug.Log("ShowAd()");
+            lock (nativeAdStateLock) {
+                if (!releasedManaged
+                 && showPendingOrActive
+                 && generation == showGeneration
+                 && client != null) {
+                    // The show id travels with the call and is echoed back, so
+                    // a completion can only resolve the show that registered it.
+                    client.ShowAd(generation);
+                }
             }
         }
 
         public void HideAd() {
-            if (supportsAndroid) {
-                CallAndroid(JAVA_HIDE_AD_METHOD);
-            } else if (supportsIOS) {
-                IOSHideAd();
-            } else if (supportsEditorPreview) {
-                EditorHideAd();
-            } else {
-                Debug.Log("HideAd() only supports Android for now ...");
+            lock (nativeAdStateLock) {
+                if (releasedManaged) return;
+
+                client?.HideAd();
             }
         }
 
         public bool IsAdReady() {
-            if (supportsAndroid) {
-                var isReady = false;
-                AndroidIsAdReady(ref isReady);
-                return isReady;
+            lock (nativeAdStateLock) {
+                return
+                    !releasedManaged
+                 && !showPendingOrActive
+                 && client != null
+                 && cachedAdReady;
             }
-            if (supportsIOS) {
-                var isReady = false;
-                IOSIsAdReady(ref isReady);
-                return isReady;
-            }
-            if (supportsEditorPreview) {
-                var isReady = false;
-                EditorIsAdReady(ref isReady);
-                return isReady;
-            }
-
-            Debug.Log("IsAdReady() only supports Android for now ...");
-            return false;
         }
 
         public bool IsAdLoading() {
-            if (supportsAndroid) {
-                var isLoading = false;
-                AndroidIsAdLoading(ref isLoading);
-                return isLoading;
+            lock (nativeAdStateLock) {
+                return
+                    !releasedManaged
+                 && client != null
+                 && cachedAdLoading;
             }
-            if (supportsIOS) {
-                var isLoading = false;
-                IOSIsAdLoading(ref isLoading);
-                return isLoading;
-            }
-            if (supportsEditorPreview) {
-                var isLoading = false;
-                EditorIsAdLoading(ref isLoading);
-                return isLoading;
-            }
-
-            Debug.Log("IsAdLoading() only supports Android for now ...");
-            return false;
         }
 
         public void Release() {
-            if (supportsAndroid) {
-                AndroidRelease();
-            } else if (supportsIOS) {
-                IOSRelease();
-            } else if (supportsEditorPreview) {
-                EditorRelease();
-            } else {
-                Debug.Log("Release() only supports Android for now ...");
+            IOverlayClient       releasedClient;
+            ShowCompletedHandler completed;
+            lock (nativeAdStateLock) {
+                if (releasedManaged) return;
+
+                releasedManaged = true;
+                releasedClient  = client;
+                client          = null;
+
+                completed            = showPendingOrActive
+                        ? currentShowCompleted
+                        : null;
+                showPendingOrActive  = false;
+                currentShowCompleted = null;
+                cachedAdReady        = false;
+                cachedAdLoading      = false;
+                ++showGeneration;
             }
+
+            releasedClient?.Release();
+            InvokeCompletionSafely(
+                completed
+              , AD_RELEASED_ERROR
+              , false);
         }
 
-        private protected override void HandleNativeStateChanged(
-            bool isReady
-          , bool isLoading) {
+        void IOverlayCallbacks.OnLoadingStarted()
+            => DispatchFromNative(RaiseLoadingStarted);
+
+        void IOverlayCallbacks.OnLoadingCompleted(int errorCode, string errorMessage)
+            => DispatchFromNative(
+                () => RaiseLoadingCompleted(errorCode, errorMessage));
+
+        void IOverlayCallbacks.OnAdPaid(AdValue adValue)
+            => DispatchFromNative(() => RaiseAdPaid(adValue));
+
+        // Synchronous under the lock: IsAdReady right after a load completes
+        // must already see the new state.
+        void IOverlayCallbacks.OnStateChanged(bool isReady, bool isLoading) {
             lock (nativeAdStateLock) {
                 if (releasedManaged) return;
 
@@ -247,13 +193,26 @@ namespace RiseOn.NativeAdMob {
             }
         }
 
-        private void CompleteShowFromNativeThread(
-            int generation
+        void IOverlayCallbacks.OnShowNotReady() {}
+
+        void IOverlayCallbacks.OnDisplayed() {
+            DispatchFromNative(() => InvokeSafely(OnDisplayed));
+        }
+
+        void IOverlayCallbacks.OnPresentationFailed(int errorCode, string errorMessage)
+            => DispatchFromNative(() => {
+                var handler = OnPresentationFailed;
+                if (handler == null) return;
+                InvokeSafely(() => handler(errorCode, errorMessage));
+            });
+
+        void IOverlayCallbacks.OnShowCompleted(
+            int showId
           , string errorMessage
           , bool adConsumed) {
             GoogleMobileAds.Common.MobileAdsEventExecutor.ExecuteInUpdate(() => {
                 if (!TryTakeShowCompletion(
-                        generation
+                        showId
                       , adConsumed
                       , out var completed))
                     return;
@@ -266,18 +225,6 @@ namespace RiseOn.NativeAdMob {
                   , adConsumed);
                 if (adConsumed) LoadAd();
             });
-        }
-
-        private void CompleteShowOnUnityThread(int generation, string errorMessage) {
-            if (TryTakeShowCompletion(
-                    generation
-                  , false
-                  , out var completed)) {
-                InvokeCompletionSafely(
-                    completed
-                  , errorMessage
-                  , false);
-            }
         }
 
         private bool TryTakeShowCompletion(
@@ -297,18 +244,9 @@ namespace RiseOn.NativeAdMob {
                 showPendingOrActive  = false;
                 completed            = currentShowCompleted;
                 currentShowCompleted = null;
-                AndroidClearCompletedListener();
             }
 
             return true;
-        }
-
-        private void RaiseDisplayed() => InvokeSafely(OnDisplayed);
-
-        private void RaisePresentationFailed(int errorCode, string errorMessage) {
-            var handler = OnPresentationFailed;
-            if (handler == null) return;
-            InvokeSafely(() => handler(errorCode, errorMessage));
         }
 
         private static void InvokeCompletionSafely(

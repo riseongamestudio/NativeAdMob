@@ -3,21 +3,15 @@ using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
     /// <summary>
-    /// Shared spine of one native ad wrapper: platform detection, the release
-    /// gate, listener generations, and the unit-level events every format
-    /// raises. Each platform owns its handle and its state inside its partial
-    /// file; the partial hooks compile away, call sites included, on
-    /// platforms that do not implement them. Listeners attach internally at
-    /// construction - the public surface is these events.
+    /// Shared spine of one native ad wrapper: the release gate, the
+    /// native-to-Unity marshalling, and the unit-level events every format
+    /// raises. Each format keeps its state machine here in the core and
+    /// talks to its platform through an internal client created by the one
+    /// platform assembly present in the build.
     /// </summary>
-    public abstract partial class NativeAdMob {
-        private protected int loadListenerGeneration;
-        private protected bool releasedManaged;
-
-        private protected readonly bool supportsAndroid;
-        private protected readonly bool supportsIOS;
-        private protected readonly bool supportsEditorPreview;
+    public abstract class NativeAdMob {
         private protected readonly object nativeAdStateLock = new();
+        private protected bool releasedManaged;
 
         /// <summary>Supply-side events of the ad unit.</summary>
         public event Action OnLoadingStarted;
@@ -25,43 +19,30 @@ namespace RiseOn.NativeAdMob {
         public event Action<AdValue> OnAdPaid;
 
         private protected NativeAdMob(string adUnitId) {
-            RequireAdUnitId(adUnitId);
-
-            supportsAndroid = Application.platform == RuntimePlatform.Android;
-            supportsIOS =
-                Application.platform == RuntimePlatform.IPhonePlayer;
-            supportsEditorPreview = Application.isEditor;
-        }
-
-        private protected static string RequireAdUnitId(string adUnitId) {
-            if (!string.IsNullOrWhiteSpace(adUnitId)) return adUnitId;
-
-            throw new ArgumentException(
-                "A non-empty ad unit ID is required."
-              , nameof(adUnitId));
-        }
-
-        partial void AndroidCall(string methodName, object[] parameters);
-        partial void AndroidInvalidateLoadListener();
-
-        private protected void CallAndroid(
-            string methodName
-          , params object[] parameters) {
-            if (supportsAndroid) {
-                AndroidCall(methodName, parameters);
-            } else if (!supportsEditorPreview) {
-                Debug.Log($"{methodName}() only supports Android for now ...");
+            if (string.IsNullOrWhiteSpace(adUnitId)) {
+                throw new ArgumentException(
+                    "A non-empty ad unit ID is required."
+                  , nameof(adUnitId));
             }
         }
 
-        private protected void InvalidateLoadListener() {
-            ++loadListenerGeneration;
-            AndroidInvalidateLoadListener();
+        // Native calls back on its own thread; hop to Unity's update loop
+        // and re-check the release gate there.
+        private protected void DispatchFromNative(Action callback) {
+            GoogleMobileAds.Common.MobileAdsEventExecutor.ExecuteInUpdate(() => {
+                lock (nativeAdStateLock) {
+                    if (releasedManaged) return;
+                }
+                InvokeSafely(callback);
+            });
         }
 
-        private protected void RaiseLoadingStarted() => InvokeSafely(OnLoadingStarted);
+        private protected void RaiseLoadingStarted()
+            => InvokeSafely(OnLoadingStarted);
 
-        private protected void RaiseLoadingCompleted(int errorCode, string errorMessage) {
+        private protected void RaiseLoadingCompleted(
+            int errorCode
+          , string errorMessage) {
             var handler = OnLoadingCompleted;
             if (handler == null) return;
             InvokeSafely(() => handler(errorCode, errorMessage));
@@ -72,12 +53,6 @@ namespace RiseOn.NativeAdMob {
             if (handler == null) return;
             InvokeSafely(() => handler(adValue));
         }
-
-        private protected virtual void HandleNativeStateChanged(
-            bool isReady
-          , bool isLoading) {}
-
-        private protected virtual void HandleShowNotReady() {}
 
         private protected static void InvokeSafely(Action callback) {
             try {
