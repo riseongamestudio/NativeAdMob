@@ -320,9 +320,10 @@ static const int64_t kROGeometryHashPrime = 1099511628211LL;
     return YES;
 }
 
-// Anything inside the scrim sits on its own opaque background, so it may
-// lie over the media without costing readability - the same warrant the
-// badges carry. The scrim only exists on the media-background template.
+// Anything inside the scrim block sits over the full-cell veil the
+// media-background template paints, so it may lie over the media without
+// costing readability - the same warrant the badges carry. The scrim only
+// exists on that template.
 - (BOOL)ro_isAllowedScrimOverlay:(UIView *)first
                           second:(UIView *)second
                            views:(ROInFeedAssetViews *)views {

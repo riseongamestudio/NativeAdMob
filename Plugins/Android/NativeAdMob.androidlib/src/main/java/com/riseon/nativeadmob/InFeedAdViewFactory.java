@@ -85,8 +85,13 @@ final class InFeedAdViewFactory {
     private static final String CTA_TEXT_COLOR = "#FFFFFFFF";
     private static final String CTA_RIPPLE_COLOR = "#55FFFFFF";
     // Opaque enough that text over any picture stays readable - the same
-    // warrant the badges carry for sitting on the media.
+    // warrant the badges carry for sitting on the media. Painted as one veil
+    // over the whole cell, never as a band that stops short of an edge.
     private static final String SCRIM_BACKGROUND_COLOR = "#B3000000";
+    // The least line width worth giving a headline next to an icon. Below
+    // it even a marquee reads as a sliver, so the icon leaves the line and
+    // the text takes the full width instead.
+    private static final int MIN_ICON_ROW_TEXT_WIDTH_DP = 72;
     private static final int CTA_BORDER_WIDTH_DP = 1;
     private static final float ATTRIBUTION_TEXT_HEIGHT_RATIO = 0.55f;
     // Boxes are sized from the ad, labels are sized from their box. The two
@@ -482,19 +487,25 @@ final class InFeedAdViewFactory {
                         ViewGroup.LayoutParams.MATCH_PARENT
                       , ViewGroup.LayoutParams.MATCH_PARENT));
 
+            // One veil over the whole cell, not a band that stops short of
+            // the top edge: the media reads as the panel's background
+            // through it and no uncovered strip is left above the text.
+            View veil = new View(activity);
+            veil.setBackgroundColor(
+                    Color.parseColor(SCRIM_BACKGROUND_COLOR));
+            veil.setClickable(false);
+            veil.setFocusable(false);
+            root.addView(
+                    veil
+                  , new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                      , ViewGroup.LayoutParams.MATCH_PARENT));
+
             LinearLayout scrim = new LinearLayout(activity);
             scrim.setOrientation(LinearLayout.VERTICAL);
-            scrim.setBackgroundColor(
-                    Color.parseColor(SCRIM_BACKGROUND_COLOR));
             int scrimPad = Math.max(gap, Dp(4));
             scrim.setPadding(scrimPad, scrimPad, scrimPad, scrimPad);
 
-            LinearLayout headlineRow = new LinearLayout(activity);
-            headlineRow.setOrientation(LinearLayout.HORIZONTAL);
-            headlineRow.setGravity(Gravity.CENTER_VERTICAL);
-            if (plan.showIcon) {
-                AddIcon(headlineRow, views, plan.tier, gap, probe);
-            }
             views.headline = CreateText(
                     nativeAd.getHeadline()
                   , HeadlineSp(plan)
@@ -504,17 +515,51 @@ final class InFeedAdViewFactory {
                     plan.marqueeHeadline
                   , views.headline
                   , HeadlineMaxLines(plan));
-            headlineRow.addView(
-                    views.headline
-                  , new LinearLayout.LayoutParams(
-                        0
-                      , ViewGroup.LayoutParams.WRAP_CONTENT
-                      , 1f));
-            scrim.addView(
-                    headlineRow
-                  , new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                      , ViewGroup.LayoutParams.WRAP_CONTENT));
+            // The icon only shares the headline's line while the line keeps a
+            // usable width for text - a marquee squeezed into a sliver reads
+            // worse than no icon row at all. Below that floor the icon stands
+            // alone and every text follows at full width.
+            int scrimContentWidth = Math.max(0, plan.width - 2 * scrimPad);
+            boolean iconStandsAlone = plan.showIcon
+                    && HasRenderableIcon()
+                    && scrimContentWidth
+                                - IconSizeForTier(plan.tier)
+                                - gap
+                            < Dp(MIN_ICON_ROW_TEXT_WIDTH_DP);
+            if (iconStandsAlone) {
+                AddIcon(scrim, views, plan.tier, 0, probe);
+                if (views.icon != null) {
+                    LinearLayout.LayoutParams iconParams =
+                            (LinearLayout.LayoutParams)
+                                    views.icon.getLayoutParams();
+                    iconParams.gravity = Gravity.CENTER_HORIZONTAL;
+                    iconParams.bottomMargin = gap;
+                    views.icon.setLayoutParams(iconParams);
+                }
+                scrim.addView(
+                        views.headline
+                      , new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                          , ViewGroup.LayoutParams.WRAP_CONTENT));
+            } else {
+                LinearLayout headlineRow = new LinearLayout(activity);
+                headlineRow.setOrientation(LinearLayout.HORIZONTAL);
+                headlineRow.setGravity(Gravity.CENTER_VERTICAL);
+                if (plan.showIcon) {
+                    AddIcon(headlineRow, views, plan.tier, gap, probe);
+                }
+                headlineRow.addView(
+                        views.headline
+                      , new LinearLayout.LayoutParams(
+                            0
+                          , ViewGroup.LayoutParams.WRAP_CONTENT
+                          , 1f));
+                scrim.addView(
+                        headlineRow
+                      , new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                          , ViewGroup.LayoutParams.WRAP_CONTENT));
+            }
             AddBodyAndOptional(scrim, views, plan);
             AddCallToAction(scrim, views, plan, gap, true);
 
@@ -994,10 +1039,34 @@ final class InFeedAdViewFactory {
         content.setOrientation(LinearLayout.VERTICAL);
         content.setGravity(Gravity.TOP);
 
+        // The same floor the scrim template applies: the icon only shares
+        // the headline's line while the line keeps a usable text width. In a
+        // narrow column beside the media it stands alone instead, and the
+        // texts follow below at the column's full width.
+        int textColumnWidth =
+                Math.max(0, plan.width - plan.mediaWidth - gap);
+        boolean iconStandsAlone = plan.showIcon
+                && HasRenderableIcon()
+                && textColumnWidth
+                            - IconSizeForTier(plan.tier)
+                            - gap
+                        < Dp(MIN_ICON_ROW_TEXT_WIDTH_DP);
+        if (iconStandsAlone) {
+            AddIcon(content, views, plan.tier, 0, probe);
+            if (views.icon != null) {
+                LinearLayout.LayoutParams iconParams =
+                        (LinearLayout.LayoutParams)
+                                views.icon.getLayoutParams();
+                iconParams.gravity = Gravity.START;
+                iconParams.bottomMargin = gap;
+                views.icon.setLayoutParams(iconParams);
+            }
+        }
+
         LinearLayout identity = new LinearLayout(activity);
         identity.setOrientation(LinearLayout.HORIZONTAL);
         identity.setGravity(Gravity.CENTER_VERTICAL);
-        if (plan.showIcon) {
+        if (plan.showIcon && !iconStandsAlone) {
             AddIcon(identity, views, plan.tier, gap, probe);
         }
 
@@ -1333,9 +1402,8 @@ final class InFeedAdViewFactory {
         String callToActionValue = nativeAd.getCallToAction();
         if (TextUtils.isEmpty(callToActionValue)) return;
 
-        // OverlayAdActivity uses Theme.Translucent.NoTitleBar.
-        // Create the in-feed CTA with the same theme instead of applying a
-        // separate color or corner radius.
+        // A translucent theme keeps the platform's Material button chrome
+        // out of the call to action; it paints its own background below.
         views.callToAction = new CallToActionButton(
                 new ContextThemeWrapper(
                         activity

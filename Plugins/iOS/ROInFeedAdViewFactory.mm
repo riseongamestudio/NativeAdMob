@@ -9,6 +9,10 @@ static NSString *const kROTag = @"InFeed";
 // the creative's property, known before layout.
 static const CGFloat kROMinVideoMediaSize = 120;
 static const CGFloat kROMinImageMediaSize = 48;
+// The least line width worth giving a headline next to an icon. Below it
+// even a marquee reads as a sliver, so the icon leaves the line and the
+// text takes the full width instead.
+static const CGFloat kROInFeedMinIconRowTextWidth = 72;
 static const CGFloat kROMinAttributionSizePx = 15;
 static const CGFloat kROAttributionWidth = 24;
 static const CGFloat kROAttributionHeight = 18;
@@ -510,35 +514,68 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
         backgroundMedia.ro_layoutHeight = ROLayoutMatchParent;
         [root addSubview:backgroundMedia];
 
+        // One veil over the whole cell, not a band that stops short of the
+        // top edge: the media reads as the panel's background through it and
+        // no uncovered strip is left above the text.
+        UIView *veil = [[UIView alloc] init];
+        veil.backgroundColor = ROInFeedArgb(0xB3000000);
+        veil.userInteractionEnabled = NO;
+        veil.ro_layoutWidth = ROLayoutMatchParent;
+        veil.ro_layoutHeight = ROLayoutMatchParent;
+        [root addSubview:veil];
+
         HBLinearLayoutView *scrim = [[HBLinearLayoutView alloc] init];
         scrim.ro_vertical = YES;
-        scrim.backgroundColor = ROInFeedArgb(0xB3000000);
         CGFloat scrimPad = MAX(gap, 4);
         scrim.ro_padding = UIEdgeInsetsMake(
                 scrimPad, scrimPad, scrimPad, scrimPad);
 
-        HBLinearLayoutView *headlineRow = [[HBLinearLayoutView alloc] init];
-        headlineRow.ro_vertical = NO;
-        headlineRow.ro_gravity = HBGravityCenterVertical;
-        if (plan.showIcon) {
-            [self ro_addIconTo:headlineRow
-                         views:views
-                          tier:plan.tier
-                           gap:gap];
-        }
         views.headline = [self ro_createTextWithValue:_nativeAd.headline
                                                  size:[self ro_headlineSizeForPlan:plan]
                                                  bold:YES];
         [self ro_applyTextMode:plan.marqueeHeadline
                          label:views.headline
                       maxLines:[self ro_headlineMaxLinesForPlan:plan]];
-        HBFrameLayoutView *headlineSlot = [[HBFrameLayoutView alloc] init];
-        [headlineSlot addSubview:views.headline];
-        headlineSlot.ro_layoutWidth = 0;
-        headlineSlot.ro_layoutWeight = 1;
-        [headlineRow addSubview:headlineSlot];
-        headlineRow.ro_layoutWidth = ROLayoutMatchParent;
-        [scrim addSubview:headlineRow];
+        // The icon only shares the headline's line while the line keeps a
+        // usable width for text - a marquee squeezed into a sliver reads
+        // worse than no icon row at all. Below that floor the icon stands
+        // alone and every text follows at full width.
+        CGFloat scrimContentWidth = MAX(0, plan.width - 2 * scrimPad);
+        BOOL iconStandsAlone = plan.showIcon
+                && [self hasRenderableIcon]
+                && scrimContentWidth
+                            - [self ro_iconSizeForTier:plan.tier]
+                            - gap
+                        < kROInFeedMinIconRowTextWidth;
+        if (iconStandsAlone) {
+            [self ro_addIconTo:scrim views:views tier:plan.tier gap:0];
+            if (views.icon != nil) {
+                views.icon.ro_layoutGravity = HBGravityCenterHorizontal;
+                views.icon.ro_layoutMargins =
+                        UIEdgeInsetsMake(0, 0, gap, 0);
+            }
+            views.headline.ro_layoutWidth = ROLayoutMatchParent;
+            [scrim addSubview:views.headline];
+        } else {
+            HBLinearLayoutView *headlineRow =
+                    [[HBLinearLayoutView alloc] init];
+            headlineRow.ro_vertical = NO;
+            headlineRow.ro_gravity = HBGravityCenterVertical;
+            if (plan.showIcon) {
+                [self ro_addIconTo:headlineRow
+                             views:views
+                              tier:plan.tier
+                               gap:gap];
+            }
+            HBFrameLayoutView *headlineSlot =
+                    [[HBFrameLayoutView alloc] init];
+            [headlineSlot addSubview:views.headline];
+            headlineSlot.ro_layoutWidth = 0;
+            headlineSlot.ro_layoutWeight = 1;
+            [headlineRow addSubview:headlineSlot];
+            headlineRow.ro_layoutWidth = ROLayoutMatchParent;
+            [scrim addSubview:headlineRow];
+        }
         [self ro_addBodyAndOptionalTo:scrim views:views plan:plan];
         [self ro_addCallToActionTo:scrim
                              views:views
@@ -806,10 +843,29 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
     content.ro_vertical = YES;
     content.ro_gravity = HBGravityTop;
 
+    // The same floor the scrim template applies: the icon only shares the
+    // headline's line while the line keeps a usable text width. In a narrow
+    // column beside the media it stands alone instead, and the texts follow
+    // below at the column's full width.
+    CGFloat textColumnWidth = MAX(0, plan.width - plan.mediaWidth - gap);
+    BOOL iconStandsAlone = plan.showIcon
+            && [self hasRenderableIcon]
+            && textColumnWidth
+                        - [self ro_iconSizeForTier:plan.tier]
+                        - gap
+                    < kROInFeedMinIconRowTextWidth;
+    if (iconStandsAlone) {
+        [self ro_addIconTo:content views:views tier:plan.tier gap:0];
+        if (views.icon != nil) {
+            views.icon.ro_layoutGravity = HBGravityLeft;
+            views.icon.ro_layoutMargins = UIEdgeInsetsMake(0, 0, gap, 0);
+        }
+    }
+
     HBLinearLayoutView *identity = [[HBLinearLayoutView alloc] init];
     identity.ro_vertical = NO;
     identity.ro_gravity = HBGravityCenterVertical;
-    if (plan.showIcon) {
+    if (plan.showIcon && !iconStandsAlone) {
         [self ro_addIconTo:identity views:views tier:plan.tier gap:gap];
     }
 

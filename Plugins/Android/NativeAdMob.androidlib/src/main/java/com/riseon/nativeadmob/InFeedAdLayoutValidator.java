@@ -276,9 +276,10 @@ final class InFeedAdLayoutValidator {
                         && !IsReadableText(first, views);
     }
 
-    // Anything inside the scrim sits on its own opaque background, so it may
-    // lie over the media without costing readability - the same warrant the
-    // badges carry. The scrim only exists on the media-background template.
+    // Anything inside the scrim block sits over the full-cell veil the
+    // media-background template paints, so it may lie over the media without
+    // costing readability - the same warrant the badges carry. The scrim
+    // only exists on that template.
     private static boolean IsAllowedScrimOverlay(
             View first
           , View second

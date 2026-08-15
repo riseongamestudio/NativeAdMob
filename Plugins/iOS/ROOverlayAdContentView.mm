@@ -27,6 +27,17 @@ static const CGFloat kRORightControlInset = 18;
 static const CGFloat kROSideMediaMaxAspect = 0.85f;
 static const CGFloat kROSideMediaMaxWidthShare = 0.62f;
 static const CGFloat kROSideMediaMinRail = 120;
+// A panel meaningfully taller than wide reads as a page: media belongs
+// stacked on top of it, not beside it. Side media only suits panels near
+// screen proportions.
+static const CGFloat kROSideMediaMaxPanelHeightRatio = 1.3f;
+// The rail is narrow by construction, so the icon never shares a line with
+// text there: it stands alone and the identity stack follows below.
+static const CGFloat kROSideRailIconWidthRatio = 0.3f;
+// Extra ground the strip-avoiding layout may give before it surrenders and
+// lets the corner controls overlay the media instead.
+static const CGFloat kROAvoidCallToActionHeight = 36;
+static const CGFloat kROAvoidIconSize = 28;
 // Ratio first: media needs its minimum plus a usable row of content under it;
 // a panel that cannot host that drops the media rather than growing past the
 // request, and only a panel under the absolute floor is ever grown.
@@ -126,6 +137,9 @@ static UIColor *HBArgb(uint32_t argb) {
 
     BOOL _hasDisplayableMedia;
     BOOL _sideMediaLayout;
+    CGFloat _sideMediaWidthPx;
+    BOOL _mediaAvoidsControlStrip;
+    HBLinearLayoutView *_sideRail;
     BOOL _iconHero;
     BOOL _tickerLayout;
     CGFloat _minimumMediaSize;
@@ -340,7 +354,7 @@ static UIColor *HBArgb(uint32_t argb) {
     if (_iconHero) {
         _icon.contentMode = UIViewContentModeScaleAspectFit;
         _icon.clipsToBounds = NO;
-    } else {
+    } else if (!_sideMediaLayout) {
         [_identityRow addSubview:_icon];
     }
 
@@ -392,13 +406,21 @@ static UIColor *HBArgb(uint32_t argb) {
     if (_sideMediaLayout) {
         CGFloat sideMediaWidth =
                 [self ro_sideMediaWidthForPanelHeight:sidePanelHeight];
-        NSLog(@"%@: Full screen side-media layout: media %gx%g"
-              , kROTag, sideMediaWidth, sidePanelHeight);
+        _sideMediaWidthPx = sideMediaWidth;
+        // The media column is exactly as tall as the creative can fill at
+        // its own aspect, centred - never a band of dead backfill painted
+        // to the panel's height.
+        CGFloat sideMediaHeight = MIN(
+                sidePanelHeight
+              , round(sideMediaWidth / _mediaAspectRatio));
+        NSLog(@"%@: Side-media layout: media %gx%g in panel height %g"
+              , kROTag, sideMediaWidth, sideMediaHeight, sidePanelHeight);
         _contentColumn.ro_padding = UIEdgeInsetsZero;
         HBLinearLayoutView *sideRow = [[HBLinearLayoutView alloc] init];
         sideRow.ro_vertical = NO;
         _mediaView.ro_layoutWidth = sideMediaWidth;
-        _mediaView.ro_layoutHeight = ROLayoutMatchParent;
+        _mediaView.ro_layoutHeight = sideMediaHeight;
+        _mediaView.ro_layoutGravity = HBGravityCenterVertical;
         _mediaView.ro_layoutMargins = UIEdgeInsetsZero;
         [sideRow addSubview:_mediaView];
 
@@ -412,6 +434,26 @@ static UIColor *HBArgb(uint32_t argb) {
               , kROHorizontalPadding
               , 0
               , kROHorizontalPadding);
+        // The rail is narrow, so the icon never shares a line with text
+        // here: it stands alone and the identity stack follows below at the
+        // rail's full width.
+        if (!_iconHero) {
+            CGFloat railWidth = MAX(
+                    0
+                  , UIScreen.mainScreen.bounds.size.width
+                            - sideMediaWidth
+                            - 2 * kROHorizontalPadding);
+            CGFloat railIconSize = MAX(
+                    kROMinIconSize
+                  , MIN(
+                        kROMaxIconSize
+                      , round(railWidth * kROSideRailIconWidthRatio)));
+            _icon.ro_layoutWidth = railIconSize;
+            _icon.ro_layoutHeight = railIconSize;
+            _icon.ro_layoutMargins =
+                    UIEdgeInsetsMake(0, 0, kROIconGap, 0);
+            [rail addSubview:_icon];
+        }
         [rail addSubview:_identityRow];
         [rail addSubview:_body];
         [rail addSubview:_callToAction];
@@ -422,6 +464,7 @@ static UIColor *HBArgb(uint32_t argb) {
         sideRow.ro_layoutWidth = ROLayoutMatchParent;
         sideRow.ro_layoutHeight = sidePanelHeight;
         [_contentColumn addSubview:sideRow];
+        _sideRail = rail;
     } else if (_tickerLayout) {
         _contentColumn.ro_padding = UIEdgeInsetsZero;
         _body.hidden = YES;
@@ -477,8 +520,13 @@ static UIColor *HBArgb(uint32_t argb) {
     _nativeAdView.callToActionView = _callToAction;
     [self ro_bindAssets];
     if (!_fullscreen && !_tickerLayout) {
-        [self ro_configureResponsiveCollapsibleContentWithPanelHeight:
-                requestedPanelHeight];
+        if (_sideMediaLayout) {
+            [self ro_configureResponsiveSideRailWithPanelHeight:
+                    requestedPanelHeight];
+        } else {
+            [self ro_configureResponsiveCollapsibleContentWithPanelHeight:
+                    requestedPanelHeight];
+        }
     }
     _nativeAdView.nativeAd = _nativeAd;
     [self addSubview:_nativeAdView];
@@ -668,6 +716,33 @@ static UIColor *HBArgb(uint32_t argb) {
 
 - (void)ro_configureResponsiveCollapsibleContentWithPanelHeight:
         (CGFloat)panelHeight {
+    // The strip-avoiding attempt comes first: the media inset like every
+    // other element and the control strip's band kept above it, so close and
+    // timer overlay nothing. Shrinking spends the call to action, the icon
+    // and the paddings before the attempt surrenders; only when even those
+    // floors cannot host the content does the layout fall back to bleeding
+    // the media edge to edge under the strip.
+    if (_hasDisplayableMedia) {
+        _mediaView.ro_layoutMargins = UIEdgeInsetsZero;
+        _mediaAvoidsControlStrip = YES;
+        BOOL contentFits =
+                [self ro_runCollapsibleFitPipelineWithPanelHeight:panelHeight];
+        if (!contentFits) {
+            [self ro_applyStripAvoidingFloors];
+            contentFits = [self
+                    ro_contentFitsWithMinimumMediaForPanelHeight:panelHeight];
+        }
+        if (contentFits) return;
+
+        _mediaAvoidsControlStrip = NO;
+        _mediaView.ro_layoutMargins = UIEdgeInsetsMake(
+                0, -kROHorizontalPadding, 0, -kROHorizontalPadding);
+        [self ro_restoreOptionalRows];
+    }
+    [self ro_runCollapsibleFitPipelineWithPanelHeight:panelHeight];
+}
+
+- (BOOL)ro_runCollapsibleFitPipelineWithPanelHeight:(CGFloat)panelHeight {
     _headline.maxLines = kROCollapsibleHeadlineMaxLines;
     _body.maxLines = kROMaxBodyLineCount;
     [self ro_applyResponsiveContentScale:0];
@@ -701,14 +776,14 @@ static UIColor *HBArgb(uint32_t argb) {
                 ro_contentFitsWithMinimumMediaForPanelHeight:panelHeight];
     }
 
-    if (!contentFits) return;
+    if (!contentFits) return NO;
     if (![self ro_contentFitsWithNaturalMediaForPanelHeight:panelHeight]) {
-        return;
+        return YES;
     }
 
     [self ro_applyResponsiveContentScale:1];
     if ([self ro_contentFitsWithNaturalMediaForPanelHeight:panelHeight]) {
-        return;
+        return YES;
     }
 
     CGFloat minimumScale = 0;
@@ -725,6 +800,108 @@ static UIColor *HBArgb(uint32_t argb) {
         }
     }
     [self ro_applyResponsiveContentScale:minimumScale];
+    return YES;
+}
+
+// The rail owns a fixed height beside the media, so the fit that matters is
+// the rail's own stack against that height. The search mirrors the stacked
+// panel's: the largest text that keeps every element inside the rail,
+// shedding body lines and then optional rows when even the floor does not
+// fit.
+- (void)ro_configureResponsiveSideRailWithPanelHeight:(CGFloat)panelHeight {
+    if (_sideRail == nil) return;
+
+    _headline.maxLines = kROCollapsibleHeadlineMaxLines;
+    _body.maxLines = kROMaxBodyLineCount;
+    [self ro_applyResponsiveContentScale:0];
+
+    BOOL railFits = [self ro_sideRailFitsWithPanelHeight:panelHeight];
+    while (!railFits
+            && !_body.ro_gone
+            && _body.maxLines > kROMinBodyLineCount) {
+        _body.maxLines = _body.maxLines - 1;
+        railFits = [self ro_sideRailFitsWithPanelHeight:panelHeight];
+    }
+    if (!railFits && !_body.ro_gone) {
+        _body.ro_gone = YES;
+        _body.hidden = YES;
+        railFits = [self ro_sideRailFitsWithPanelHeight:panelHeight];
+    }
+    if (!railFits && !_starRating.ro_gone) {
+        _starRating.ro_gone = YES;
+        _starRating.hidden = YES;
+        railFits = [self ro_sideRailFitsWithPanelHeight:panelHeight];
+    }
+    if (!railFits && !_advertiser.ro_gone) {
+        _advertiser.ro_gone = YES;
+        _advertiser.hidden = YES;
+        railFits = [self ro_sideRailFitsWithPanelHeight:panelHeight];
+    }
+    if (!railFits) return;
+
+    [self ro_applyResponsiveContentScale:1];
+    if ([self ro_sideRailFitsWithPanelHeight:panelHeight]) return;
+
+    CGFloat minimumScale = 0;
+    CGFloat maximumScale = 1;
+    for (NSInteger iteration = 0;
+         iteration < kROResponsiveScaleSearchIterations;
+         ++iteration) {
+        CGFloat candidateScale = (minimumScale + maximumScale) / 2;
+        [self ro_applyResponsiveContentScale:candidateScale];
+        if ([self ro_sideRailFitsWithPanelHeight:panelHeight]) {
+            minimumScale = candidateScale;
+        } else {
+            maximumScale = candidateScale;
+        }
+    }
+    [self ro_applyResponsiveContentScale:minimumScale];
+}
+
+- (BOOL)ro_sideRailFitsWithPanelHeight:(CGFloat)panelHeight {
+    [_sideRail ro_measureWithWidthSpec:
+                    HBMeasureSpecMake(
+                            HBMeasureSpecExactly
+                          , MAX(
+                                0
+                              , UIScreen.mainScreen.bounds.size.width
+                                        - _sideMediaWidthPx))
+                            heightSpec:
+                    HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
+    return _sideRail.ro_measuredSize.height <= panelHeight;
+}
+
+// The floors the strip-avoiding layout may fall to before it surrenders: a
+// shorter call to action, a smaller icon and no optional padding, each a
+// price worth paying to keep the corner controls off the media.
+- (void)ro_applyStripAvoidingFloors {
+    _callToAction.ro_minimumSize =
+            CGSizeMake(0, kROAvoidCallToActionHeight);
+    if (!_iconHero && !_sideMediaLayout) {
+        _icon.ro_layoutWidth = kROAvoidIconSize;
+        _icon.ro_layoutHeight = kROAvoidIconSize;
+    }
+    _identityRow.ro_padding = UIEdgeInsetsZero;
+    _body.ro_padding = UIEdgeInsetsZero;
+}
+
+- (void)ro_restoreOptionalRows {
+    if (_nativeAd.advertiser.length > 0) {
+        _advertiser.ro_gone = NO;
+        _advertiser.hidden = NO;
+    }
+    NSDecimalNumber *starRatingValue = _nativeAd.starRating;
+    double stars = starRatingValue.doubleValue;
+    if (starRatingValue != nil && stars > 0 && !isnan(stars)
+            && !isinf(stars)) {
+        _starRating.ro_gone = NO;
+        _starRating.hidden = NO;
+    }
+    if (_nativeAd.body.length > 0) {
+        _body.ro_gone = NO;
+        _body.hidden = NO;
+    }
+    _body.maxLines = kROMaxBodyLineCount;
 }
 
 static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
@@ -770,7 +947,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
                   , resolvedScale))
           , 0);
 
-    if (!_iconHero) {
+    if (!_iconHero && !_sideMediaLayout) {
         CGFloat iconSize = round(
                 HBInterpolate(kROMinIconSize, kROMaxIconSize, resolvedScale));
         _icon.ro_layoutWidth = iconSize;
@@ -788,6 +965,10 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
 
 - (BOOL)ro_shouldUseSideMediaForPanelHeight:(CGFloat)panelHeight {
     if (_mediaAspectRatio >= kROSideMediaMaxAspect) return NO;
+    if (panelHeight > UIScreen.mainScreen.bounds.size.width
+            * kROSideMediaMaxPanelHeightRatio) {
+        return NO;
+    }
 
     CGFloat mediaWidth = [self ro_sideMediaWidthForPanelHeight:panelHeight];
     CGFloat railWidth =
@@ -859,9 +1040,13 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
         // Controls and badges draw on top with their own opaque backgrounds,
         // and with media as the first child the strip can only ever cover
         // media, never text - so the inset's height belongs to the media.
-        UIEdgeInsets columnInset = _contentColumn.ro_padding;
-        columnInset.top = 0;
-        _contentColumn.ro_padding = columnInset;
+        // The strip-avoiding layout keeps the inset instead: nothing of the
+        // media sits under the controls there.
+        if (!_mediaAvoidsControlStrip) {
+            UIEdgeInsets columnInset = _contentColumn.ro_padding;
+            columnInset.top = 0;
+            _contentColumn.ro_padding = columnInset;
+        }
         [_contentColumn ro_measureWithWidthSpec:
                         HBMeasureSpecMake(HBMeasureSpecExactly, screen.width)
                                      heightSpec:
@@ -873,16 +1058,21 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
                 ? screen.height
                 : requestedPanelHeight;
         CGFloat availableMediaHeight = panelHeight - lowerContentHeight;
+        // A strip-avoiding media is inset like every other element, so its
+        // width basis is the content width, not the bleed's screen width.
+        CGFloat mediaWidthBasis = _mediaAvoidsControlStrip
+                ? contentWidth
+                : screen.width;
         CGFloat naturalMediaHeight = MAX(
                 _minimumMediaSize
-              , round(screen.width / _mediaAspectRatio));
+              , round(mediaWidthBasis / _mediaAspectRatio));
         CGFloat resolvedMediaHeight = MAX(
                 _minimumMediaSize
               , MIN(
                     naturalMediaHeight
                   , MAX(_minimumMediaSize, availableMediaHeight)));
         CGFloat resolvedMediaWidth = MIN(
-                screen.width
+                mediaWidthBasis
               , MAX(
                     _minimumMediaSize
                   , round(resolvedMediaHeight * _mediaAspectRatio)));
@@ -946,8 +1136,14 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
             adFrame.size.width - adChoicesSize, 0, adChoicesSize, adChoicesSize);
 
     CGFloat controlSize = kROControlStripHeight;
+    // In the side-media layout the left corner belongs to the media, so a
+    // left control clears the media's edge instead of hugging the
+    // attribution badge over the picture.
     CGFloat leftControlInset =
-            CGRectGetMaxX(_attribution.frame) + kROControlGap;
+            (_sideMediaLayout
+                    ? _sideMediaWidthPx
+                    : CGRectGetMaxX(_attribution.frame))
+                    + kROControlGap;
     CGFloat rightControlInset = kRORightControlInset;
     BOOL closeLeft = _closeOnLeft;
     BOOL numberLeft = _numberOpposite ? !closeLeft : closeLeft;
@@ -973,7 +1169,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
 }
 
 - (void)ro_matchIconSizeToIdentityText {
-    if (_icon.ro_gone) return;
+    if (_icon.ro_gone || _sideMediaLayout) return;
 
     CGFloat textHeight = _identityText.ro_measuredSize.height;
     CGFloat rowWidth = _identityRow.ro_measuredSize.width;

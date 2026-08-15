@@ -126,6 +126,19 @@ final class OverlayAdContentView extends FrameLayout {
     private static final float SIDE_MEDIA_MAX_ASPECT = 0.85f;
     private static final float SIDE_MEDIA_MAX_WIDTH_SHARE = 0.62f;
     private static final int SIDE_MEDIA_MIN_RAIL_DP = 120;
+    // A panel meaningfully taller than wide reads as a page: media belongs
+    // stacked on top of it, not beside it. Side media only suits panels near
+    // screen proportions, where a portrait creative would otherwise sit in a
+    // centred column between dead gutters.
+    private static final float SIDE_MEDIA_MAX_PANEL_HEIGHT_RATIO = 1.3f;
+    // The rail is narrow by construction, so the icon never shares a line
+    // with text there: it stands alone and the identity stack follows below
+    // at the rail's full width.
+    private static final float SIDE_RAIL_ICON_WIDTH_RATIO = 0.3f;
+    // Extra ground the strip-avoiding layout may give before it surrenders
+    // and lets the corner controls overlay the media instead.
+    private static final int AVOID_CALL_TO_ACTION_HEIGHT_DP = 36;
+    private static final int AVOID_ICON_SIZE_DP = 28;
     // Ratio first: the panel is the height the game asked for. Media needs its
     // policy minimum plus a usable row of content under it; a panel that
     // cannot host that drops the media rather than growing past the request,
@@ -141,6 +154,8 @@ final class OverlayAdContentView extends FrameLayout {
     private final com.google.android.gms.ads.nativead.NativeAd nativeAd;
     private long countDownRemainingMs;
     private boolean sideMediaLayout;
+    private int sideMediaWidthPx;
+    private boolean mediaAvoidsControlStrip;
     private final boolean closeOnLeft;
     private final boolean numberOpposite;
     private final boolean fullscreen;
@@ -335,6 +350,14 @@ final class OverlayAdContentView extends FrameLayout {
         hasDisplayableMedia = hasDisplayableMedia
                 && panelHostsMedia
                 && !tickerLayout;
+        int sidePanelHeight = fullscreen
+                ? displayMetrics.heightPixels
+                : requestedPanelHeight;
+        sideMediaLayout = hasDisplayableMedia
+                && ShouldUseSideMedia(
+                        displayMetrics
+                      , mediaAspectRatio
+                      , sidePanelHeight);
 
         ConfigureBackground();
 
@@ -402,7 +425,7 @@ final class OverlayAdContentView extends FrameLayout {
         iconLayoutParams.setMarginEnd((int) (ICON_GAP_DP * density));
         if (iconHero) {
             icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        } else {
+        } else if (!sideMediaLayout) {
             identityRow.addView(icon, iconLayoutParams);
         }
 
@@ -462,31 +485,33 @@ final class OverlayAdContentView extends FrameLayout {
         callToAction.setMinimumHeight(
                 (int) (MIN_CALL_TO_ACTION_HEIGHT_DP * density));
 
-        int sidePanelHeight = fullscreen
-                ? displayMetrics.heightPixels
-                : requestedPanelHeight;
-        sideMediaLayout = hasDisplayableMedia
-                && ShouldUseSideMedia(
-                        displayMetrics
-                      , mediaAspectRatio
-                      , sidePanelHeight);
+        LinearLayout sideRail = null;
         if (sideMediaLayout) {
             int sideMediaWidth = SideMediaWidth(
                     displayMetrics
                   , mediaAspectRatio
                   , sidePanelHeight);
+            sideMediaWidthPx = sideMediaWidth;
+            // The media column is exactly as tall as the creative can fill
+            // at its own aspect, centred - never a band of dead backfill
+            // painted to the panel's height.
+            int sideMediaHeight = Math.min(
+                    sidePanelHeight
+                  , Math.round(sideMediaWidth / mediaAspectRatio));
             Log.i(
                     TAG
-                  , "Full screen side-media layout: media "
-                            + sideMediaWidth + "x" + sidePanelHeight);
+                  , "Side-media layout: media "
+                            + sideMediaWidth + "x" + sideMediaHeight
+                            + " in panel height " + sidePanelHeight);
             contentColumn.setPadding(0, 0, 0, 0);
             LinearLayout sideRow = new LinearLayout(context);
             sideRow.setOrientation(LinearLayout.HORIZONTAL);
-            sideRow.addView(
-                    mediaView
-                  , new LinearLayout.LayoutParams(
-                        sideMediaWidth
-                      , ViewGroup.LayoutParams.MATCH_PARENT));
+            LinearLayout.LayoutParams sideMediaParams =
+                    new LinearLayout.LayoutParams(
+                            sideMediaWidth
+                          , sideMediaHeight);
+            sideMediaParams.gravity = Gravity.CENTER_VERTICAL;
+            sideRow.addView(mediaView, sideMediaParams);
             LinearLayout rail = new LinearLayout(context);
             rail.setOrientation(LinearLayout.VERTICAL);
             rail.setGravity(Gravity.CENTER_VERTICAL);
@@ -497,6 +522,29 @@ final class OverlayAdContentView extends FrameLayout {
                   , controlStripHeight
                   , horizontalPadding
                   , 0);
+            // The rail is narrow, so the icon never shares a line with text
+            // here: it stands alone and the identity stack follows below at
+            // the rail's full width.
+            if (!iconHero) {
+                int railWidth = Math.max(
+                        0
+                      , displayMetrics.widthPixels
+                                - sideMediaWidth
+                                - 2 * horizontalPadding);
+                int railIconSize = Math.max(
+                        Math.round(MIN_ICON_SIZE_DP * density)
+                      , Math.min(
+                            Math.round(MAX_ICON_SIZE_DP * density)
+                          , Math.round(
+                                railWidth * SIDE_RAIL_ICON_WIDTH_RATIO)));
+                LinearLayout.LayoutParams railIconParams =
+                        new LinearLayout.LayoutParams(
+                                railIconSize
+                              , railIconSize);
+                railIconParams.bottomMargin =
+                        Math.round(ICON_GAP_DP * density);
+                rail.addView(icon, railIconParams);
+            }
             rail.addView(identityRow);
             rail.addView(body);
             rail.addView(
@@ -515,6 +563,7 @@ final class OverlayAdContentView extends FrameLayout {
                   , new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT
                       , sidePanelHeight));
+            sideRail = rail;
         } else if (tickerLayout) {
             contentColumn.setPadding(0, 0, 0, 0);
             body.setVisibility(View.GONE);
@@ -625,25 +674,39 @@ final class OverlayAdContentView extends FrameLayout {
         KeepTextWholeOrScrolling(body);
         KeepTextWholeOrScrolling(advertiser);
         if (!fullscreen && !tickerLayout) {
-            ConfigureResponsiveCollapsibleContent(
-                    displayMetrics
-                  , horizontalPadding
-                  , minimumMediaSize
-                  , mediaAspectRatio
-                  , hasDisplayableMedia && !sideMediaLayout
-                  , requestedPanelHeight
-                  , density
-                  , contentColumn
-                  , mediaView
-                  , identityRow
-                  , headline
-                  , advertiser
-                  , starRating
-                  , body
-                  , iconHero ? null : icon
-                  , callToAction);
+            if (sideMediaLayout) {
+                ConfigureResponsiveSideRail(
+                        sideRail
+                      , displayMetrics.widthPixels - sideMediaWidthPx
+                      , requestedPanelHeight
+                      , density
+                      , identityRow
+                      , headline
+                      , advertiser
+                      , starRating
+                      , body
+                      , callToAction);
+            } else {
+                ConfigureResponsiveCollapsibleContent(
+                        displayMetrics
+                      , horizontalPadding
+                      , minimumMediaSize
+                      , mediaAspectRatio
+                      , hasDisplayableMedia
+                      , requestedPanelHeight
+                      , density
+                      , contentColumn
+                      , mediaView
+                      , identityRow
+                      , headline
+                      , advertiser
+                      , starRating
+                      , body
+                      , iconHero ? null : icon
+                      , callToAction);
+            }
         }
-        if (!iconHero) {
+        if (!iconHero && !sideMediaLayout) {
             MatchIconSizeToIdentityText(
                     icon
                   , identityText
@@ -762,6 +825,91 @@ final class OverlayAdContentView extends FrameLayout {
           , TextView body
           , ImageView icon
           , Button callToAction) {
+        // The strip-avoiding attempt comes first: the media inset like every
+        // other element and the control strip's band kept above it, so close
+        // and timer overlay nothing. Shrinking spends the call to action, the
+        // icon and the paddings before the attempt surrenders; only when even
+        // those floors cannot host the content does the layout fall back to
+        // bleeding the media edge to edge under the strip.
+        if (hasDisplayableMedia) {
+            SetMediaSideBleed(mediaView, 0);
+            mediaAvoidsControlStrip = true;
+            boolean contentFits = RunCollapsibleFitPipeline(
+                    displayMetrics
+                  , horizontalPadding
+                  , minimumMediaSize
+                  , mediaAspectRatio
+                  , true
+                  , requestedPanelHeight
+                  , density
+                  , contentColumn
+                  , mediaView
+                  , identityRow
+                  , headline
+                  , advertiser
+                  , starRating
+                  , body
+                  , icon
+                  , callToAction);
+            if (!contentFits) {
+                ApplyStripAvoidingFloors(
+                        density
+                      , icon
+                      , callToAction
+                      , identityRow
+                      , body);
+                contentFits = ContentFitsWithMinimumMedia(
+                        displayMetrics
+                      , horizontalPadding
+                      , minimumMediaSize
+                      , mediaAspectRatio
+                      , true
+                      , requestedPanelHeight
+                      , contentColumn
+                      , mediaView);
+            }
+            if (contentFits) return;
+
+            mediaAvoidsControlStrip = false;
+            SetMediaSideBleed(mediaView, horizontalPadding);
+            RestoreOptionalRows(advertiser, starRating, body);
+        }
+        RunCollapsibleFitPipeline(
+                displayMetrics
+              , horizontalPadding
+              , minimumMediaSize
+              , mediaAspectRatio
+              , hasDisplayableMedia
+              , requestedPanelHeight
+              , density
+              , contentColumn
+              , mediaView
+              , identityRow
+              , headline
+              , advertiser
+              , starRating
+              , body
+              , icon
+              , callToAction);
+    }
+
+    private boolean RunCollapsibleFitPipeline(
+            DisplayMetrics displayMetrics
+          , int horizontalPadding
+          , int minimumMediaSize
+          , float mediaAspectRatio
+          , boolean hasDisplayableMedia
+          , int requestedPanelHeight
+          , float density
+          , LinearLayout contentColumn
+          , MediaView mediaView
+          , LinearLayout identityRow
+          , TextView headline
+          , TextView advertiser
+          , NativeAdStarRatingView starRating
+          , TextView body
+          , ImageView icon
+          , Button callToAction) {
         headline.setMaxLines(COLLAPSIBLE_HEADLINE_MAX_LINE_COUNT);
         headline.setEllipsize(TextUtils.TruncateAt.END);
         body.setMaxLines(MAX_BODY_LINE_COUNT);
@@ -837,7 +985,7 @@ final class OverlayAdContentView extends FrameLayout {
                   , mediaView);
         }
 
-        if (!contentFits) return;
+        if (!contentFits) return false;
         if (!ContentFitsWithNaturalMedia(
                 displayMetrics
               , horizontalPadding
@@ -847,7 +995,7 @@ final class OverlayAdContentView extends FrameLayout {
               , requestedPanelHeight
               , contentColumn
               , mediaView)) {
-            return;
+            return true;
         }
 
         ApplyResponsiveContentScale(
@@ -868,7 +1016,7 @@ final class OverlayAdContentView extends FrameLayout {
               , requestedPanelHeight
               , contentColumn
               , mediaView)) {
-            return;
+            return true;
         }
 
         float minimumScale = 0f;
@@ -910,6 +1058,175 @@ final class OverlayAdContentView extends FrameLayout {
               , body
               , icon
               , callToAction);
+        return true;
+    }
+
+    // The rail owns a fixed height beside the media, so the fit that matters
+    // is the rail's own stack against that height. The search mirrors the
+    // stacked panel's: the largest text that keeps every element inside the
+    // rail, shedding body lines and then optional rows when even the floor
+    // does not fit.
+    private void ConfigureResponsiveSideRail(
+            LinearLayout rail
+          , int railOuterWidth
+          , int railHeight
+          , float density
+          , LinearLayout identityRow
+          , TextView headline
+          , TextView advertiser
+          , NativeAdStarRatingView starRating
+          , TextView body
+          , Button callToAction) {
+        if (rail == null) return;
+
+        headline.setMaxLines(COLLAPSIBLE_HEADLINE_MAX_LINE_COUNT);
+        headline.setEllipsize(TextUtils.TruncateAt.END);
+        body.setMaxLines(MAX_BODY_LINE_COUNT);
+        body.setEllipsize(TextUtils.TruncateAt.END);
+
+        ApplyResponsiveContentScale(
+                0f
+              , density
+              , identityRow
+              , headline
+              , advertiser
+              , body
+              , null
+              , callToAction);
+        boolean railFits = RailFits(rail, railOuterWidth, railHeight);
+        while (!railFits
+                && body.getVisibility() == View.VISIBLE
+                && body.getMaxLines() > MIN_BODY_LINE_COUNT) {
+            body.setMaxLines(body.getMaxLines() - 1);
+            railFits = RailFits(rail, railOuterWidth, railHeight);
+        }
+        if (!railFits && body.getVisibility() == View.VISIBLE) {
+            body.setVisibility(View.GONE);
+            railFits = RailFits(rail, railOuterWidth, railHeight);
+        }
+        if (!railFits && starRating.getVisibility() == View.VISIBLE) {
+            starRating.setVisibility(View.GONE);
+            railFits = RailFits(rail, railOuterWidth, railHeight);
+        }
+        if (!railFits && advertiser.getVisibility() == View.VISIBLE) {
+            advertiser.setVisibility(View.GONE);
+            railFits = RailFits(rail, railOuterWidth, railHeight);
+        }
+        if (!railFits) return;
+
+        ApplyResponsiveContentScale(
+                1f
+              , density
+              , identityRow
+              , headline
+              , advertiser
+              , body
+              , null
+              , callToAction);
+        if (RailFits(rail, railOuterWidth, railHeight)) return;
+
+        float minimumScale = 0f;
+        float maximumScale = 1f;
+        for (int iteration = 0;
+                iteration < RESPONSIVE_SCALE_SEARCH_ITERATIONS;
+                iteration++) {
+            float candidateScale =
+                    (minimumScale + maximumScale) / 2f;
+            ApplyResponsiveContentScale(
+                    candidateScale
+                  , density
+                  , identityRow
+                  , headline
+                  , advertiser
+                  , body
+                  , null
+                  , callToAction);
+            if (RailFits(rail, railOuterWidth, railHeight)) {
+                minimumScale = candidateScale;
+            } else {
+                maximumScale = candidateScale;
+            }
+        }
+        ApplyResponsiveContentScale(
+                minimumScale
+              , density
+              , identityRow
+              , headline
+              , advertiser
+              , body
+              , null
+              , callToAction);
+    }
+
+    private static boolean RailFits(
+            LinearLayout rail
+          , int railOuterWidth
+          , int railHeight) {
+        rail.measure(
+                View.MeasureSpec.makeMeasureSpec(
+                        Math.max(0, railOuterWidth)
+                      , View.MeasureSpec.EXACTLY)
+              , View.MeasureSpec.makeMeasureSpec(
+                        0
+                      , View.MeasureSpec.UNSPECIFIED));
+        return rail.getMeasuredHeight() <= railHeight;
+    }
+
+    // The floors the strip-avoiding layout may fall to before it surrenders:
+    // a shorter call to action, a smaller icon and no optional padding, each
+    // a price worth paying to keep the corner controls off the media.
+    private static void ApplyStripAvoidingFloors(
+            float density
+          , ImageView icon
+          , Button callToAction
+          , LinearLayout identityRow
+          , TextView body) {
+        int callToActionHeight =
+                Math.round(AVOID_CALL_TO_ACTION_HEIGHT_DP * density);
+        callToAction.setMinHeight(callToActionHeight);
+        callToAction.setMinimumHeight(callToActionHeight);
+        if (icon != null) {
+            LinearLayout.LayoutParams iconLayoutParams =
+                    (LinearLayout.LayoutParams) icon.getLayoutParams();
+            int iconSize = Math.round(AVOID_ICON_SIZE_DP * density);
+            iconLayoutParams.width = iconSize;
+            iconLayoutParams.height = iconSize;
+            icon.setLayoutParams(iconLayoutParams);
+        }
+        identityRow.setPadding(0, 0, 0, 0);
+        body.setPadding(0, 0, 0, 0);
+    }
+
+    private void RestoreOptionalRows(
+            TextView advertiser
+          , NativeAdStarRatingView starRating
+          , TextView body) {
+        advertiser.setVisibility(
+                TextUtils.isEmpty(nativeAd.getAdvertiser())
+                        ? View.GONE
+                        : View.VISIBLE);
+        Double starRatingValue = nativeAd.getStarRating();
+        boolean hasStarRating = starRatingValue != null
+                && starRatingValue > 0d
+                && !starRatingValue.isNaN()
+                && !starRatingValue.isInfinite();
+        starRating.setVisibility(
+                hasStarRating ? View.VISIBLE : View.GONE);
+        body.setVisibility(
+                TextUtils.isEmpty(nativeAd.getBody())
+                        ? View.GONE
+                        : View.VISIBLE);
+        body.setMaxLines(MAX_BODY_LINE_COUNT);
+    }
+
+    private static void SetMediaSideBleed(
+            MediaView mediaView
+          , int bleedPx) {
+        LinearLayout.LayoutParams mediaLayoutParams =
+                (LinearLayout.LayoutParams) mediaView.getLayoutParams();
+        mediaLayoutParams.leftMargin = -bleedPx;
+        mediaLayoutParams.rightMargin = -bleedPx;
+        mediaView.setLayoutParams(mediaLayoutParams);
     }
 
     private static void ApplyResponsiveContentScale(
@@ -1413,7 +1730,7 @@ final class OverlayAdContentView extends FrameLayout {
         // Only a media-free layout keeps it, because there the top row is
         // text.
         if (hasDisplayableMedia && !sideMediaLayout) {
-            SetTopInset(contentColumn, 0);
+            if (!mediaAvoidsControlStrip) SetTopInset(contentColumn, 0);
             SizeMediaForBudget(
                     displayMetrics
                   , horizontalPadding
@@ -1467,17 +1784,22 @@ final class OverlayAdContentView extends FrameLayout {
                 ? displayMetrics.heightPixels
                 : requestedPanelHeight;
         int availableMediaHeight = panelHeight - lowerContentHeight;
+        // A strip-avoiding media is inset like every other element, so its
+        // width basis is the content width, not the bleed's screen width.
+        int mediaWidthBasis = mediaAvoidsControlStrip
+                ? contentWidth
+                : displayMetrics.widthPixels;
         int naturalMediaHeight = Math.max(
                 minimumMediaSize
               , Math.round(
-                    displayMetrics.widthPixels / mediaAspectRatio));
+                    mediaWidthBasis / mediaAspectRatio));
         int resolvedMediaHeight = Math.max(
                 minimumMediaSize
               , Math.min(
                     naturalMediaHeight
                   , Math.max(minimumMediaSize, availableMediaHeight)));
         int resolvedMediaWidth = Math.min(
-                displayMetrics.widthPixels
+                mediaWidthBasis
               , Math.max(
                     minimumMediaSize
                   , Math.round(
@@ -1497,6 +1819,10 @@ final class OverlayAdContentView extends FrameLayout {
           , float mediaAspectRatio
           , int panelHeight) {
         if (mediaAspectRatio >= SIDE_MEDIA_MAX_ASPECT) return false;
+        if (panelHeight > displayMetrics.widthPixels
+                * SIDE_MEDIA_MAX_PANEL_HEIGHT_RATIO) {
+            return false;
+        }
 
         float density = displayMetrics.density;
         int mediaWidth = SideMediaWidth(
@@ -1552,8 +1878,13 @@ final class OverlayAdContentView extends FrameLayout {
           , Drawable fallbackMediaImage) {
         // Full column width, padding included: the media bleeds through the
         // side padding by negative margins, so capping it at the padded width
-        // here would shrink it right back after layout.
-        int availableWidth = contentColumn.getWidth();
+        // here would shrink it right back after layout. A strip-avoiding
+        // media keeps the inset instead, so its cap is the padded width.
+        int availableWidth = mediaAvoidsControlStrip
+                ? contentColumn.getWidth()
+                        - contentColumn.getPaddingLeft()
+                        - contentColumn.getPaddingRight()
+                : contentColumn.getWidth();
         int availableHeight =
                 contentColumn.getHeight()
                         - ResolveNonMediaContentHeight(
@@ -1633,7 +1964,14 @@ final class OverlayAdContentView extends FrameLayout {
           , int controlGap
           , int rightControlInset) {
         Runnable alignControlsToBadges = () -> {
-            int measuredLeftInset = attribution.getRight() + controlGap;
+            // In the side-media layout the left corner belongs to the media,
+            // so a left control clears the media's edge instead of hugging
+            // the attribution badge over the picture.
+            int measuredLeftInset =
+                    (sideMediaLayout
+                            ? sideMediaWidthPx
+                            : attribution.getRight())
+                            + controlGap;
             UpdateControlInsets(
                     countdown
                   , measuredLeftInset
