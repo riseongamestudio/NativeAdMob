@@ -526,9 +526,11 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
 
         HBLinearLayoutView *scrim = [[HBLinearLayoutView alloc] init];
         scrim.ro_vertical = YES;
-        CGFloat scrimPad = MAX(gap, 4);
-        scrim.ro_padding = UIEdgeInsetsMake(
-                scrimPad, scrimPad, scrimPad, scrimPad);
+        // Slim borders: the veil already separates the text from the
+        // picture, so the block spends no more than the tier's own gap
+        // vertically and a hair more horizontally.
+        CGFloat scrimPad = MAX(gap, 2);
+        scrim.ro_padding = UIEdgeInsetsMake(gap, scrimPad, gap, scrimPad);
 
         views.headline = [self ro_createTextWithValue:_nativeAd.headline
                                                  size:[self ro_headlineSizeForPlan:plan]
@@ -696,13 +698,13 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
         return [self ro_finishContentRoot:root outer:outer views:views plan:plan];
     }
 
-    mediaView.ro_layoutWidth = plan.mediaWidth;
-    mediaView.ro_layoutHeight = plan.mediaHeight;
-    mediaView.ro_layoutGravity = HBGravityCenterHorizontal;
-    mediaView.ro_layoutMargins = UIEdgeInsetsMake(0, 0, gap, 0);
-    [outer addSubview:mediaView];
-
     if (plan.renderVideo) {
+        mediaView.ro_layoutWidth = plan.mediaWidth;
+        mediaView.ro_layoutHeight = plan.mediaHeight;
+        mediaView.ro_layoutGravity = HBGravityCenterHorizontal;
+        mediaView.ro_layoutMargins = UIEdgeInsetsMake(0, 0, gap, 0);
+        [outer addSubview:mediaView];
+
         HBLinearLayoutView *footer = [self ro_buildVideoFooterRow:views
                                                              plan:plan];
         views.insetContent = footer;
@@ -710,13 +712,26 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
         footer.ro_layoutWidth = ROLayoutMatchParent;
         [outer addSubview:footer];
     } else {
+        // The image media takes the plan's size as its floor and absorbs
+        // whatever height the slot has left over, so free space enlarges the
+        // picture instead of sitting as an empty band inside the text block.
+        // The minimums keep the engine's natural measure - and so the
+        // validator's math - exactly the plan's.
+        mediaView.ro_minimumSize =
+                CGSizeMake(plan.mediaWidth, plan.mediaHeight);
+        mediaView.ro_layoutWidth = plan.mediaWidth;
+        mediaView.ro_layoutHeight = 0;
+        mediaView.ro_layoutWeight = 1;
+        mediaView.ro_layoutGravity = HBGravityCenterHorizontal;
+        mediaView.ro_layoutMargins = UIEdgeInsetsMake(0, 0, gap, 0);
+        [outer addSubview:mediaView];
+
         HBLinearLayoutView *content =
                 [self ro_buildHeadlineAndActionStack:views plan:plan];
         views.insetContent = content;
         views.insetContentAvoidsBadges = NO;
         content.ro_layoutWidth = ROLayoutMatchParent;
-        content.ro_layoutHeight = 0;
-        content.ro_layoutWeight = 1;
+        content.ro_layoutHeight = ROLayoutWrapContent;
         [outer addSubview:content];
     }
     return [self ro_finishContentRoot:root outer:outer views:views plan:plan];
@@ -954,7 +969,15 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
     actionRow.ro_vertical = NO;
     actionRow.ro_gravity = HBGravityCenterVertical;
     if (views.icon == nil && plan.showIcon) {
-        [self ro_addIconTo:actionRow views:views tier:plan.tier gap:gap];
+        // The icon rides the button's row, so it takes the button's height -
+        // a tier-sized icon would stretch the whole row and spend height the
+        // media above it needs more.
+        [self ro_addSizedIconTo:actionRow
+                          views:views
+                           size:MIN(
+                                [self ro_iconSizeForTier:plan.tier]
+                              , [self callToActionHeightForPlan:plan])
+                            gap:gap];
     }
     [self ro_addCallToActionTo:actionRow
                          views:views
@@ -973,7 +996,9 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
     if (views.callToAction != nil
             && views.icon != nil
             && views.icon.superview == actionRow) {
-        CGFloat rowHeight = [self ro_iconSizeForTier:plan.tier];
+        CGFloat rowHeight = MIN(
+                [self ro_iconSizeForTier:plan.tier]
+              , [self callToActionHeightForPlan:plan]);
         views.callToAction.ro_minimumSize = CGSizeMake(0, rowHeight);
         [(ROInFeedCallToActionButton *)views.callToAction
                 ro_applyLabelSizeForHeight:rowHeight];
@@ -1134,8 +1159,19 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
     // The primary asset is always a GADMediaView; drawing pixels through an
     // image view is fine, registering one is what stops the fill.
     ROInFeedMediaView *mediaView = [[ROInFeedMediaView alloc] init];
-    mediaView.backgroundColor = UIColor.blackColor;
-    mediaView.contentMode = UIViewContentModeScaleAspectFit;
+    BOOL backgroundTemplate =
+            plan.layoutTemplate == ROInFeedTemplateMediaBackground;
+    // A background media covers its cell by cropping - it has no band to
+    // letterbox in, and dead fill at its edges is exactly what a background
+    // must never show. A band media letterboxes against the panel colour
+    // instead of black; only video keeps the black stage its player paints.
+    mediaView.backgroundColor = plan.renderVideo
+            ? UIColor.blackColor
+            : UIColor.clearColor;
+    mediaView.clipsToBounds = YES;
+    mediaView.contentMode = backgroundTemplate
+            ? UIViewContentModeScaleAspectFill
+            : UIViewContentModeScaleAspectFit;
     views.media = mediaView;
     views.mediaSlot = mediaView;
     if (probe) return mediaView;
@@ -1160,7 +1196,10 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
     }
     UIImageView *fallbackImageView =
             [[UIImageView alloc] initWithImage:mainImage];
-    fallbackImageView.contentMode = UIViewContentModeScaleAspectFit;
+    fallbackImageView.contentMode = backgroundTemplate
+            ? UIViewContentModeScaleAspectFill
+            : UIViewContentModeScaleAspectFit;
+    fallbackImageView.clipsToBounds = YES;
     [mediaView addSubview:fallbackImageView];
     mediaView.fallbackImageView = fallbackImageView;
     return mediaView;

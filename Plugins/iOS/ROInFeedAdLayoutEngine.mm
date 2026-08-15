@@ -681,7 +681,16 @@ static const NSInteger kRONudgeTextMaxSteps = 5;
     // right-handed, so the text and the button belong under the thumb.
     int64_t sidePenalty =
             plan.layoutTemplate == ROInFeedTemplateMediaRight ? 1 : 0;
+    // The background template is how media survives a cell that no band
+    // layout can host, not a first choice: its full-cell media area must
+    // never outscore a dedicated band showing the same assets, so the
+    // penalty outweighs the whole media-area reward.
+    int64_t backgroundPenalty =
+            plan.layoutTemplate == ROInFeedTemplateMediaBackground
+                    ? 6000LL
+                    : 0LL;
     plan.score = movement * 1000000LL
+            + backgroundPenalty
             + whitespace * 100LL
             + tierPenalty * 1000LL
             + marqueePenalty * 3000LL

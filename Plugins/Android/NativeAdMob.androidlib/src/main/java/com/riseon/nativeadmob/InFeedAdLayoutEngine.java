@@ -684,11 +684,18 @@ final class InFeedAdLayoutEngine {
         // a tie.
         long sidePenalty =
                 plan.template == TEMPLATE_MEDIA_RIGHT ? 1 : 0;
+        // The background template is how media survives a cell that no band
+        // layout can host, not a first choice: its full-cell media area must
+        // never outscore a dedicated band showing the same assets, so the
+        // penalty outweighs the whole media-area reward.
+        long backgroundPenalty =
+                plan.template == TEMPLATE_MEDIA_BACKGROUND ? 6_000L : 0L;
         plan.score = movement * 1_000_000L
                 + whitespace * 100L
                 + tierPenalty * 1_000L
                 + marqueePenalty * 3_000L
                 + sidePenalty * 500L
+                + backgroundPenalty
                 - mediaAreaPercent * 30L
                 - richness * 10_000L;
         return plan;

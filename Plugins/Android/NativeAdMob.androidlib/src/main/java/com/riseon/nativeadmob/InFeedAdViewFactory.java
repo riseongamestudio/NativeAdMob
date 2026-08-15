@@ -503,8 +503,11 @@ final class InFeedAdViewFactory {
 
             LinearLayout scrim = new LinearLayout(activity);
             scrim.setOrientation(LinearLayout.VERTICAL);
-            int scrimPad = Math.max(gap, Dp(4));
-            scrim.setPadding(scrimPad, scrimPad, scrimPad, scrimPad);
+            // Slim borders: the veil already separates the text from the
+            // picture, so the block spends no more than the tier's own gap
+            // vertically and a hair more horizontally.
+            int scrimPad = Math.max(gap, Dp(2));
+            scrim.setPadding(scrimPad, gap, scrimPad, gap);
 
             views.headline = CreateText(
                     nativeAd.getHeadline()
@@ -705,15 +708,15 @@ final class InFeedAdViewFactory {
             return FinishContentRoot(root, outer, views, plan);
         }
 
-        LinearLayout.LayoutParams mediaLayoutParams =
-                new LinearLayout.LayoutParams(
-                        plan.mediaWidth
-                      , plan.mediaHeight);
-        mediaLayoutParams.gravity = Gravity.CENTER_HORIZONTAL;
-        mediaLayoutParams.bottomMargin = gap;
-        outer.addView(mediaView, mediaLayoutParams);
-
         if (plan.renderVideo) {
+            LinearLayout.LayoutParams mediaLayoutParams =
+                    new LinearLayout.LayoutParams(
+                            plan.mediaWidth
+                          , plan.mediaHeight);
+            mediaLayoutParams.gravity = Gravity.CENTER_HORIZONTAL;
+            mediaLayoutParams.bottomMargin = gap;
+            outer.addView(mediaView, mediaLayoutParams);
+
             LinearLayout footer = BuildVideoFooterRow(views, plan);
             views.insetContent = footer;
             views.insetContentAvoidsBadges = false;
@@ -723,6 +726,22 @@ final class InFeedAdViewFactory {
                         ViewGroup.LayoutParams.MATCH_PARENT
                       , ViewGroup.LayoutParams.WRAP_CONTENT));
         } else {
+            // The image media takes the plan's size as its floor and absorbs
+            // whatever height the slot has left over, so free space enlarges
+            // the picture instead of sitting as an empty band inside the
+            // text block. The minimums keep the engine's natural measure -
+            // and so the validator's math - exactly the plan's.
+            mediaView.setMinimumWidth(plan.mediaWidth);
+            mediaView.setMinimumHeight(plan.mediaHeight);
+            LinearLayout.LayoutParams mediaLayoutParams =
+                    new LinearLayout.LayoutParams(
+                            plan.mediaWidth
+                          , 0
+                          , 1f);
+            mediaLayoutParams.gravity = Gravity.CENTER_HORIZONTAL;
+            mediaLayoutParams.bottomMargin = gap;
+            outer.addView(mediaView, mediaLayoutParams);
+
             LinearLayout content = BuildHeadlineAndActionStack(
                     views
                   , plan
@@ -733,8 +752,7 @@ final class InFeedAdViewFactory {
                     content
                   , new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT
-                      , 0
-                      , 1f));
+                      , ViewGroup.LayoutParams.WRAP_CONTENT));
         }
         return FinishContentRoot(root, outer, views, plan);
     }
@@ -1181,7 +1199,17 @@ final class InFeedAdViewFactory {
         actionRow.setGravity(Gravity.CENTER_VERTICAL);
         if (views.icon == null) {
             if (plan.showIcon) {
-                AddIcon(actionRow, views, plan.tier, gap, probe);
+                // The icon rides the button's row, so it takes the button's
+                // height - a tier-sized icon would stretch the whole row and
+                // spend height the media above it needs more.
+                AddSizedIcon(
+                        actionRow
+                      , views
+                      , Math.min(
+                            IconSizeForTier(plan.tier)
+                          , CallToActionHeightPx(plan))
+                      , gap
+                      , probe);
             }
         }
         AddCallToAction(actionRow, views, plan, gap, false);
@@ -1200,7 +1228,9 @@ final class InFeedAdViewFactory {
         if (views.callToAction != null
                 && views.icon != null
                 && views.icon.getParent() == actionRow) {
-            int rowHeight = IconSizeForTier(plan.tier);
+            int rowHeight = Math.min(
+                    IconSizeForTier(plan.tier)
+                  , CallToActionHeightPx(plan));
             views.callToAction.setMinHeight(rowHeight);
             views.callToAction.setMinimumHeight(rowHeight);
             ((CallToActionButton) views.callToAction)
@@ -1473,8 +1503,19 @@ final class InFeedAdViewFactory {
         // ImageView through setImageView() is what makes AdMob stop filling the
         // unit, not drawing the pixels with an ImageView.
         MediaView mediaView = new MediaView(activity);
-        mediaView.setBackgroundColor(Color.BLACK);
-        mediaView.setImageScaleType(ImageView.ScaleType.FIT_CENTER);
+        boolean backgroundTemplate = plan.template
+                == InFeedAdLayoutEngine.TEMPLATE_MEDIA_BACKGROUND;
+        // A background media covers its cell by cropping - it has no band to
+        // letterbox in, and dead fill at its edges is exactly what a
+        // background must never show. A band media letterboxes against the
+        // panel colour instead of black; only video keeps the black stage its
+        // player paints anyway.
+        mediaView.setBackgroundColor(
+                plan.renderVideo ? Color.BLACK : Color.TRANSPARENT);
+        mediaView.setImageScaleType(
+                backgroundTemplate
+                        ? ImageView.ScaleType.CENTER_CROP
+                        : ImageView.ScaleType.FIT_CENTER);
         views.media = mediaView;
         views.mediaSlot = mediaView;
         if (probe) return mediaView;
@@ -1497,7 +1538,10 @@ final class InFeedAdViewFactory {
                     "Main image is required for an image fallback layout");
         }
         ImageView fallbackImageView = new ImageView(activity);
-        fallbackImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        fallbackImageView.setScaleType(
+                backgroundTemplate
+                        ? ImageView.ScaleType.CENTER_CROP
+                        : ImageView.ScaleType.FIT_CENTER);
         fallbackImageView.setAdjustViewBounds(false);
         fallbackImageView.setImageDrawable(mainImage);
         mediaView.addView(
