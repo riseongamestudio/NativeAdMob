@@ -1392,42 +1392,38 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     BOOL numberLeft = _numberOpposite ? !_closeOnLeft : _closeOnLeft;
     BOOL leftOccupied = _closeOnLeft || numberLeft;
     BOOL rightOccupied = !_closeOnLeft || !numberLeft;
-    CGFloat half = panelWidth / 2;
-    CGFloat topRowLeftLimit = leftOccupied
-            ? MAX(0, half
-                    - kROAttributionWidth
-                    - controlGap
-                    - controlSize
-                    - controlGap)
-            : half;
-    CGFloat topRowRightLimit = rightOccupied
-            ? MAX(0, panelWidth
-                    - kRORightControlInset
-                    - controlSize
-                    - controlGap
-                    - half)
-            : half;
-    CGFloat topRowGapWidth = MIN(
-            panelWidth
-          , 2 * MIN(topRowLeftLimit, topRowRightLimit));
-    CGFloat edgeLimit = MAX(0, half - controlSize - controlGap);
-    CGFloat edgeGapWidth = MIN(
-            panelWidth
-          , 2 * MIN(
-                leftOccupied ? edgeLimit : half
-              , rightOccupied ? edgeLimit : half));
+    // The free interval is real, not symmetric: a control occupies only its
+    // own side, and a side with no control is free to its edge - so the
+    // media may sit off-centre inside the interval instead of wasting the
+    // open side on centring.
+    CGFloat topRowIntervalLeft = leftOccupied
+            ? kROAttributionWidth + controlGap + controlSize + controlGap
+            : 0;
+    CGFloat topRowIntervalRight = rightOccupied
+            ? panelWidth - kRORightControlInset - controlSize - controlGap
+            : panelWidth;
+    CGFloat edgeIntervalLeft = leftOccupied
+            ? controlSize + controlGap
+            : 0;
+    CGFloat edgeIntervalRight = rightOccupied
+            ? panelWidth - controlSize - controlGap
+            : panelWidth;
 
-    // Below the controls the media may bleed edge to edge - the panel's
-    // full width, not the inset content width.
+    // Below the controls the media may bleed edge to edge.
     CGFloat candidateTops[4] = {
             0
           , controlSize + controlGap
           , badgeHeight + controlGap
           , badgeHeight + controlSize + 2 * controlGap };
-    CGFloat candidateCaps[4] = {
-            topRowGapWidth
+    CGFloat candidateLefts[4] = {
+            topRowIntervalLeft
+          , 0
+          , edgeIntervalLeft
+          , 0 };
+    CGFloat candidateRights[4] = {
+            topRowIntervalRight
           , panelWidth
-          , edgeGapWidth
+          , edgeIntervalRight
           , panelWidth };
     BOOL candidateEdges[4] = { NO, NO, YES, YES };
     // A reported ratio sizes the box to the creative itself: it grows
@@ -1440,11 +1436,15 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     CGFloat bestBoxWidth = MAX(panelWidth, _minimumMediaSize);
     CGFloat bestBoxHeight = MAX(_minimumMediaSize, availableHeight);
     CGFloat bestTop = 0;
+    CGFloat bestIntervalLeft = 0;
+    CGFloat bestIntervalWidth = panelWidth;
     BOOL bestAtEdges = NO;
     for (NSInteger index = 0; index < 4; ++index) {
         CGFloat top = candidateTops[index];
-        CGFloat widthCap = candidateCaps[index];
-        if (widthCap < _minimumMediaSize) continue;
+        CGFloat intervalLeft = MAX(0, candidateLefts[index]);
+        CGFloat intervalRight = MIN(panelWidth, candidateRights[index]);
+        CGFloat intervalWidth = intervalRight - intervalLeft;
+        if (intervalWidth < _minimumMediaSize) continue;
 
         CGFloat bandHeight = availableHeight - top;
         if (bandHeight < _minimumMediaSize) continue;
@@ -1454,16 +1454,16 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
         if (_mediaAspectReported) {
             boxHeight = MIN(
                     bandHeight
-                  , round(widthCap / _mediaAspectRatio));
+                  , round(intervalWidth / _mediaAspectRatio));
             boxWidth = MIN(
-                    widthCap
+                    intervalWidth
                   , round(boxHeight * _mediaAspectRatio));
             if (boxWidth < _minimumMediaSize
                     || boxHeight < _minimumMediaSize) {
                 continue;
             }
         } else {
-            boxWidth = widthCap;
+            boxWidth = intervalWidth;
             boxHeight = bandHeight;
         }
 
@@ -1473,6 +1473,8 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
             bestBoxWidth = boxWidth;
             bestBoxHeight = boxHeight;
             bestTop = top;
+            bestIntervalLeft = intervalLeft;
+            bestIntervalWidth = intervalWidth;
             bestAtEdges = candidateEdges[index];
         }
     }
@@ -1487,7 +1489,14 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     _mediaView.ro_layoutWidth = bestBoxWidth;
     _mediaView.ro_layoutHeight = bestBoxHeight;
     _mediaView.ro_layoutWeight = 0;
-    _mediaView.ro_layoutGravity = HBGravityCenterHorizontal;
+    // Centred within the free interval, not within the panel: the open
+    // side is used, not admired.
+    _mediaView.ro_layoutGravity = HBGravityLeft;
+    UIEdgeInsets mediaMargins = UIEdgeInsetsZero;
+    mediaMargins.left = MAX(
+            0
+          , bestIntervalLeft + (bestIntervalWidth - bestBoxWidth) / 2);
+    _mediaView.ro_layoutMargins = mediaMargins;
 }
 
 - (void)ro_matchIconSizeToIdentityText {

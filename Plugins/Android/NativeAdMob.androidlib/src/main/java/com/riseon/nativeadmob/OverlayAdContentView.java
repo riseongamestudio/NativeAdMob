@@ -1776,43 +1776,38 @@ final class OverlayAdContentView extends FrameLayout {
         boolean numberLeft = numberOpposite ? !closeOnLeft : closeOnLeft;
         boolean leftOccupied = closeOnLeft || numberLeft;
         boolean rightOccupied = !closeOnLeft || !numberLeft;
-        int half = panelWidth / 2;
-        int topRowLeftLimit = leftOccupied
-                ? Math.max(
-                        0
-                      , half
-                            - (int) (ATTRIBUTION_WIDTH_DP * density)
-                            - controlGap
-                            - controlSize
-                            - controlGap)
-                : half;
-        int topRowRightLimit = rightOccupied
-                ? Math.max(
-                        0
-                      , panelWidth
-                            - (int) (RIGHT_CONTROL_INSET_DP * density)
-                            - controlSize
-                            - controlGap
-                            - half)
-                : half;
-        int topRowGapWidth = Math.min(
-                panelWidth
-              , 2 * Math.min(topRowLeftLimit, topRowRightLimit));
-        int edgeLimit = Math.max(0, half - controlSize - controlGap);
-        int edgeGapWidth = Math.min(
-                panelWidth
-              , 2 * Math.min(
-                    leftOccupied ? edgeLimit : half
-                  , rightOccupied ? edgeLimit : half));
+        // The free interval is real, not symmetric: a control occupies only
+        // its own side, and a side with no control is free to its edge - so
+        // the media may sit off-centre inside the interval instead of
+        // wasting the open side on centring.
+        int topRowIntervalLeft = leftOccupied
+                ? (int) (ATTRIBUTION_WIDTH_DP * density)
+                        + controlGap + controlSize + controlGap
+                : 0;
+        int topRowIntervalRight = rightOccupied
+                ? panelWidth
+                        - (int) (RIGHT_CONTROL_INSET_DP * density)
+                        - controlSize
+                        - controlGap
+                : panelWidth;
+        int edgeIntervalLeft = leftOccupied
+                ? controlSize + controlGap
+                : 0;
+        int edgeIntervalRight = rightOccupied
+                ? panelWidth - controlSize - controlGap
+                : panelWidth;
 
-        // {media top, media width cap, controls at edges}. Below the
-        // controls the media may bleed edge to edge - the panel's full
-        // width, not the inset content width.
+        // {media top, interval left, interval right, controls at edges}.
+        // Below the controls the media may bleed edge to edge.
         int[][] candidates = {
-                { 0, topRowGapWidth, 0 }
-              , { controlSize + controlGap, panelWidth, 0 }
-              , { badgeHeight + controlGap, edgeGapWidth, 1 }
+                { 0, topRowIntervalLeft, topRowIntervalRight, 0 }
+              , { controlSize + controlGap, 0, panelWidth, 0 }
+              , { badgeHeight + controlGap
+                  , edgeIntervalLeft
+                  , edgeIntervalRight
+                  , 1 }
               , { badgeHeight + controlSize + 2 * controlGap
+                  , 0
                   , panelWidth
                   , 1 }
         };
@@ -1828,11 +1823,15 @@ final class OverlayAdContentView extends FrameLayout {
                 avoidanceMinimumMediaSize
               , availableHeight);
         int bestTop = 0;
+        int bestIntervalLeft = 0;
+        int bestIntervalWidth = panelWidth;
         boolean bestEdges = false;
         for (int[] candidate : candidates) {
             int top = candidate[0];
-            int widthCap = candidate[1];
-            if (widthCap < avoidanceMinimumMediaSize) continue;
+            int intervalLeft = Math.max(0, candidate[1]);
+            int intervalRight = Math.min(panelWidth, candidate[2]);
+            int intervalWidth = intervalRight - intervalLeft;
+            if (intervalWidth < avoidanceMinimumMediaSize) continue;
 
             int bandHeight = availableHeight - top;
             if (bandHeight < avoidanceMinimumMediaSize) continue;
@@ -1842,16 +1841,16 @@ final class OverlayAdContentView extends FrameLayout {
             if (mediaAspectReported) {
                 boxHeight = Math.min(
                         bandHeight
-                      , Math.round(widthCap / avoidanceMediaAspect));
+                      , Math.round(intervalWidth / avoidanceMediaAspect));
                 boxWidth = Math.min(
-                        widthCap
+                        intervalWidth
                       , Math.round(boxHeight * avoidanceMediaAspect));
                 if (boxWidth < avoidanceMinimumMediaSize
                         || boxHeight < avoidanceMinimumMediaSize) {
                     continue;
                 }
             } else {
-                boxWidth = widthCap;
+                boxWidth = intervalWidth;
                 boxHeight = bandHeight;
             }
 
@@ -1861,7 +1860,9 @@ final class OverlayAdContentView extends FrameLayout {
                 bestBoxWidth = boxWidth;
                 bestBoxHeight = boxHeight;
                 bestTop = top;
-                bestEdges = candidate[2] == 1;
+                bestIntervalLeft = intervalLeft;
+                bestIntervalWidth = intervalWidth;
+                bestEdges = candidate[3] == 1;
             }
         }
 
@@ -1878,7 +1879,14 @@ final class OverlayAdContentView extends FrameLayout {
               , slack / 2);
         mediaLayoutParams.width = bestBoxWidth;
         mediaLayoutParams.height = bestBoxHeight;
-        mediaLayoutParams.gravity = Gravity.CENTER_HORIZONTAL;
+        // Centred within the free interval, not within the panel: the open
+        // side is used, not admired.
+        mediaLayoutParams.gravity = Gravity.START;
+        mediaLayoutParams.leftMargin = Math.max(
+                0
+              , bestIntervalLeft
+                        + (bestIntervalWidth - bestBoxWidth) / 2);
+        mediaLayoutParams.rightMargin = 0;
         avoidanceMediaView.setLayoutParams(mediaLayoutParams);
         requestLayout();
     }
