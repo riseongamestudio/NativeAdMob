@@ -207,33 +207,23 @@ public final class OverlayAdPresentation
         window.setAttributes(attributes);
     }
 
-    // The full-screen window owns the whole display: system bars hide the
-    // immersive way an interstitial hides them, and the content view keeps
-    // its own cutout inset.
     @SuppressWarnings("deprecation")
     private static void ConfigureLegacyFullscreenInsets(Window window) {
         window.getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                        | View.SYSTEM_UI_FLAG_FULLSCREEN
-                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
     }
 
     private static final class Api30Impl {
         private Api30Impl() {}
 
         static void ConfigureFullscreenInsets(Window window) {
-            window.setDecorFitsSystemWindows(false);
-            android.view.WindowInsetsController controller =
-                    window.getInsetsController();
-            if (controller == null) return;
-
-            controller.setSystemBarsBehavior(
-                    android.view.WindowInsetsController
-                            .BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-            controller.hide(WindowInsets.Type.systemBars());
+            WindowManager.LayoutParams attributes = window.getAttributes();
+            int fitInsetTypes =
+                    WindowInsets.Type.systemBars()
+                            & ~WindowInsets.Type.statusBars();
+            attributes.setFitInsetsTypes(fitInsetTypes);
+            window.setAttributes(attributes);
         }
     }
 }

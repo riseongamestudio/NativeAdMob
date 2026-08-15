@@ -62,6 +62,7 @@ public final class OverlayAd extends NativeAd {
     private com.google.android.gms.ads.nativead.NativeAd preparedNativeAd;
     private OverlayAdStyle preparedStyle;
     private NativeAdCompletedListener activeShowCompleted;
+    private String activeActivitySessionId;
 
     public OverlayAd(String adUnitId) {
         if (adUnitId == null || adUnitId.trim().isEmpty()) {
@@ -272,7 +273,8 @@ public final class OverlayAd extends NativeAd {
                               , () -> IsCurrentLoadGeneration(generation));
                         OverlayAdStyle presentationStyle =
                                 configuredStyle;
-                        if (presentationStyle != null) {
+                        if (presentationStyle != null
+                                && !presentationStyle.fullscreen) {
                             PreparePresentation(
                                     activity
                                   , ad
@@ -304,6 +306,13 @@ public final class OverlayAd extends NativeAd {
 
                         @Override
                         public void onAdClicked() {
+                            String activitySessionId =
+                                    activeActivitySessionId;
+                            if (activitySessionId != null) {
+                                OverlayAdActivity.CommitAdClick(
+                                        activitySessionId);
+                                return;
+                            }
                             NativeAdPresentation activePresentation =
                                     presentation;
                             if (activePresentation != null) {
@@ -363,6 +372,28 @@ public final class OverlayAd extends NativeAd {
             activeShowCompleted = onCompleted;
             NotifyCurrentState();
 
+            if (requestedShowStyle.fullscreen) {
+                ReleasePreparedPresentation();
+                String sessionId =
+                        OverlayAdActivity.RegisterSession(
+                                activity
+                              , this
+                              , shownAd
+                              , requestedShowStyle);
+                activeActivitySessionId = sessionId;
+                if (sessionId == null
+                        || !OverlayAdActivity.StartSession(
+                                activity
+                              , sessionId)) {
+                    activeActivitySessionId = null;
+                    OverlayAdActivity.CancelSession(sessionId);
+                    CompletePresentation(
+                            shownAd
+                          , "Failed to start native full-screen Activity");
+                }
+                return;
+            }
+
             try {
                 OverlayAdPresentation createdPresentation =
                         TakePreparedPresentation(
@@ -406,6 +437,13 @@ public final class OverlayAd extends NativeAd {
 
     public void HideAd() {
         RunOnMainThread(() -> {
+            String activitySessionId = activeActivitySessionId;
+            if (activitySessionId != null) {
+                OverlayAdActivity.DismissSession(
+                        activitySessionId);
+                return;
+            }
+
             OverlayAdPresentation currentPresentation =
                     presentation;
             if (currentPresentation != null
@@ -436,6 +474,11 @@ public final class OverlayAd extends NativeAd {
             isAdLoading = false;
 
             ReleasePreparedPresentation();
+
+            String activitySessionId = activeActivitySessionId;
+            activeActivitySessionId = null;
+            OverlayAdActivity.CancelSession(
+                    activitySessionId);
 
             OverlayAdPresentation currentPresentation =
                     presentation;
@@ -538,6 +581,7 @@ public final class OverlayAd extends NativeAd {
         RunOnMainThread(() -> {
             if (released
                     || requestedStyle == null
+                    || requestedStyle.fullscreen
                     || configuredStyle != requestedStyle
                     || nativeAd == null
                     || activeNativeAd != null) {
@@ -589,6 +633,31 @@ public final class OverlayAd extends NativeAd {
         }
     }
 
+    void OnActivityPresentationDisplayed(
+            String sessionId
+          , com.google.android.gms.ads.nativead.NativeAd shownAd) {
+        if (released
+                || sessionId == null
+                || !sessionId.equals(activeActivitySessionId)
+                || activeNativeAd != shownAd) {
+            return;
+        }
+        NotifyDisplayed();
+    }
+
+    void OnActivityPresentationCompleted(
+            String sessionId
+          , com.google.android.gms.ads.nativead.NativeAd shownAd
+          , String errorMessage) {
+        if (sessionId == null
+                || !sessionId.equals(activeActivitySessionId)
+                || activeNativeAd != shownAd) {
+            return;
+        }
+        activeActivitySessionId = null;
+        CompletePresentation(shownAd, errorMessage);
+    }
+
     private void CompletePresentation(
             com.google.android.gms.ads.nativead.NativeAd shownAd
           , String errorMessage) {
@@ -598,6 +667,7 @@ public final class OverlayAd extends NativeAd {
         NativeAdCompletedListener onCompleted = activeShowCompleted;
         activeShowCompleted = null;
         activeNativeAd = null;
+        activeActivitySessionId = null;
         if (shownAd != null) shownAd.destroy();
         presentation = null;
 
@@ -623,6 +693,11 @@ public final class OverlayAd extends NativeAd {
     }
 
     private boolean IsShowingInternal() {
+        String activitySessionId = activeActivitySessionId;
+        if (activitySessionId != null) {
+            return OverlayAdActivity.IsSessionActive(
+                    activitySessionId);
+        }
         OverlayAdPresentation currentPresentation = presentation;
         return currentPresentation != null
                 && currentPresentation.IsShowing();

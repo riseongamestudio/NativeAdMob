@@ -185,7 +185,7 @@ static const int32_t kROLoadSuccessCode = 0;
         }];
 
         HBOverlayStyle *presentationStyle = self->_configuredStyle;
-        if (presentationStyle != nil) {
+        if (presentationStyle != nil && !presentationStyle.fullscreen) {
             [self ro_preparePresentationForAd:nativeAd
                                         style:presentationStyle];
         } else {
@@ -391,6 +391,7 @@ static const int32_t kROLoadSuccessCode = 0;
     // here so a prepared face never keeps stale config.
     if (self.released
             || requestedStyle == nil
+            || requestedStyle.fullscreen
             || _configuredStyle != requestedStyle
             || _nativeAd == nil
             || _activeNativeAd != nil) {
