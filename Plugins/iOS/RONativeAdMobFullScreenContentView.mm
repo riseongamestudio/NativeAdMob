@@ -1,0 +1,1082 @@
+#import "RONativeAdMobFullScreenContentView.h"
+
+#import "ROAdTextLabel.h"
+#import "RONativeAdMobStarRatingView.h"
+
+static NSString *const kROTag = @"FullScreen";
+static NSString *const kROAttributionText = @"Ad";
+
+static const CGFloat kROMinVideoMediaSize = 120;
+// The 120pt floor is video's; a creative with no video keeps its picture
+// in shorter panels instead of handing the band to the icon.
+static const CGFloat kROMinImageMediaSize = 48;
+static const CGFloat kRODefaultMediaAspectRatio = 1;
+static const float kRODefaultHeightRatio = 0.5f;
+static const float kROFullScreenDefaultAlpha = 0.80f;
+static const float kROCollapsibleDefaultAlpha = 0.95f;
+static const uint32_t kROFullScreenBackgroundRgb = 0x000000;
+static const uint32_t kROCollapsibleBackgroundRgb = 0x1B2029;
+// 20pt a side spent 40pt of every screen on nothing the ad needed.
+static const CGFloat kROHorizontalPadding = 8;
+static const CGFloat kROControlStripHeight = 34;
+static const CGFloat kROControlGap = 2;
+static const CGFloat kRORightControlInset = 18;
+// A portrait creative fills the panel's height on the left and everything
+// else moves into a rail beside it, provided the media still meets its policy
+// minimum and the rail keeps enough width to read.
+static const CGFloat kROSideMediaMaxAspect = 0.85f;
+static const CGFloat kROSideMediaMaxWidthShare = 0.62f;
+static const CGFloat kROSideMediaMinRail = 120;
+// Ratio first: media needs its minimum plus a usable row of content under it;
+// a panel that cannot host that drops the media rather than growing past the
+// request, and only a panel under the absolute floor is ever grown.
+static const CGFloat kROMinMediaLowerContent = 88;
+static const CGFloat kROMinPanelHeight = 48;
+// Below this the panel is a strip, and the strip is one row.
+static const CGFloat kROTickerMaxPanelHeight = 120;
+static const CGFloat kROTickerCtaMinHeight = 32;
+static const CGFloat kROMinBadgeSize = 15;
+static const CGFloat kROAttributionWidth = 24;
+static const CGFloat kROAttributionHeight = 18;
+static const CGFloat kROAdChoicesReserveSize = 24;
+static const CGFloat kROMinIconSize = 36;
+static const CGFloat kROMaxIconSize = 64;
+static const CGFloat kROIconGap = 8;
+// The floor gives ground in a tight panel; the ceiling is what a roomy
+// panel is allowed to spend.
+static const CGFloat kROMinCallToActionHeight = 44;
+static const CGFloat kROMaxCallToActionHeight = 56;
+static const CGFloat kROMinIdentityVerticalPadding = 2;
+static const CGFloat kROMaxIdentityVerticalPadding = 6;
+static const CGFloat kROMinBodyBottomPadding = 4;
+static const CGFloat kROMaxBodyBottomPadding = 8;
+static const CGFloat kROMinHeadlineTextSize = 15;
+static const CGFloat kROMaxHeadlineTextSize = 20;
+static const CGFloat kROFullscreenHeadlineTextSize = 18;
+static const CGFloat kROMinAdvertiserTextSize = 12;
+static const CGFloat kROMaxAdvertiserTextSize = 14;
+static const CGFloat kROMinBodyTextSize = 13;
+static const CGFloat kROMaxBodyTextSize = 16;
+static const CGFloat kROMinCallToActionTextSize = 14;
+static const CGFloat kROMaxCallToActionTextSize = 17;
+static const NSInteger kROCollapsibleHeadlineMaxLines = 2;
+static const NSInteger kROMinBodyLineCount = 1;
+static const NSInteger kROMaxBodyLineCount = 3;
+static const NSInteger kROResponsiveScaleSearchIterations = 8;
+static const CGFloat kROMaxIconRowWidthRatio = 0.33f;
+// A line that moves is harder to read than one that sits still, so text
+// that has to scroll never does it at the size that failed to fit whole.
+static const CGFloat kROMarqueeTextShrink = 0.8f;
+static const NSTimeInterval kROCountdownInterval = 0.25;
+
+static UIColor *HBArgb(uint32_t argb) {
+    return [UIColor colorWithRed:((argb >> 16) & 0xFF) / 255.0
+                           green:((argb >> 8) & 0xFF) / 255.0
+                            blue:(argb & 0xFF) / 255.0
+                           alpha:((argb >> 24) & 0xFF) / 255.0];
+}
+
+// A UILabel with content insets - the attribution badge and the timer and
+// close controls all pad their text the way the Android views do.
+@interface HBPaddedLabel : UILabel
+@property (nonatomic) UIEdgeInsets ro_contentInsets;
+@end
+
+@implementation HBPaddedLabel
+
+- (void)drawTextInRect:(CGRect)rect {
+    [super drawTextInRect:UIEdgeInsetsInsetRect(rect, self.ro_contentInsets)];
+}
+
+- (CGSize)sizeThatFits:(CGSize)size {
+    CGSize content = [super sizeThatFits:size];
+    UIEdgeInsets insets = self.ro_contentInsets;
+    return CGSizeMake(
+            content.width + insets.left + insets.right
+          , content.height + insets.top + insets.bottom);
+}
+
+@end
+
+@implementation RONativeAdMobFullScreenContentView {
+    GADNativeAd *_nativeAd;
+    int64_t _countDownRemainingMs;
+    BOOL _closeOnLeft;
+    BOOL _numberOpposite;
+    BOOL _fullscreen;
+    float _backgroundAlpha;
+    dispatch_block_t _onClose;
+    CGFloat _resolvedPanelHeight;
+
+    GADNativeAdView *_nativeAdView;
+    HBLinearLayoutView *_contentColumn;
+    GADMediaView *_mediaView;
+    HBLinearLayoutView *_identityRow;
+    HBLinearLayoutView *_identityText;
+    UIImageView *_icon;
+    ROAdTextLabel *_headline;
+    ROAdTextLabel *_advertiser;
+    RONativeAdMobStarRatingView *_starRating;
+    ROAdTextLabel *_body;
+    UIButton *_callToAction;
+    HBPaddedLabel *_attribution;
+    UIView *_adChoicesReserve;
+    HBPaddedLabel *_countdown;
+    HBPaddedLabel *_close;
+
+    BOOL _hasDisplayableMedia;
+    BOOL _sideMediaLayout;
+    BOOL _iconHero;
+    BOOL _tickerLayout;
+    CGFloat _minimumMediaSize;
+    CGFloat _mediaAspectRatio;
+    UIImage *_fallbackMediaImage;
+    UIImageView *_fallbackMediaImageView;
+
+    NSTimer *_timer;
+    BOOL _clickCommitted;
+    BOOL _released;
+    // One shrink per label, ever - the whole-or-scrolling switch must not
+    // compound across layout passes.
+    NSMutableSet<NSValue *> *_shrunkTexts;
+}
+
++ (CGFloat)resolveInitialPanelHeightForFullscreen:(BOOL)fullscreen
+                                      heightRatio:(float)heightRatio
+                                  hasVideoContent:(BOOL)hasVideoContent {
+    CGSize screen = UIScreen.mainScreen.bounds.size;
+    if (fullscreen) return screen.height;
+
+    float ratio = heightRatio;
+    if (isnan(ratio) || isinf(ratio)) {
+        NSLog(@"%@: heightRatio is not finite; using 0.5", kROTag);
+        ratio = kRODefaultHeightRatio;
+    }
+    ratio = MAX(0.0f, MIN(1.0f, ratio));
+    CGFloat requestedHeight = screen.height * ratio;
+    requestedHeight = MAX(requestedHeight, kROMinPanelHeight);
+    return MIN(screen.height, requestedHeight);
+}
+
+- (instancetype)initWithNativeAd:(GADNativeAd *)nativeAd
+             countDownRemainingMs:(int64_t)countDownRemainingMs
+                      closeOnLeft:(BOOL)closeOnLeft
+                   numberOpposite:(BOOL)numberOpposite
+                       fullscreen:(BOOL)fullscreen
+                  backgroundAlpha:(float)backgroundAlpha
+             requestedPanelHeight:(CGFloat)requestedPanelHeight
+                          onClose:(dispatch_block_t)onClose {
+    self = [super initWithFrame:CGRectZero];
+    if (self == nil) return nil;
+
+    _nativeAd = nativeAd;
+    _countDownRemainingMs = MAX(0, countDownRemainingMs);
+    _closeOnLeft = closeOnLeft;
+    _numberOpposite = numberOpposite;
+    _fullscreen = fullscreen;
+    _backgroundAlpha = backgroundAlpha;
+    _onClose = [onClose copy];
+    _shrunkTexts = [NSMutableSet set];
+    [self ro_buildWithRequestedPanelHeight:requestedPanelHeight];
+
+    [NSNotificationCenter.defaultCenter
+            addObserver:self
+               selector:@selector(ro_applicationDidBecomeActive)
+                   name:UIApplicationDidBecomeActiveNotification
+                 object:nil];
+    return self;
+}
+
+- (void)dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+- (CGFloat)resolvedPanelHeight {
+    return _resolvedPanelHeight;
+}
+
+- (void)releaseContent {
+    if (_released) return;
+    _released = YES;
+
+    [_timer invalidate];
+    _timer = nil;
+    _nativeAdView.nativeAd = nil;
+    [_nativeAdView removeFromSuperview];
+    _nativeAdView = nil;
+    for (UIView *child in [self.subviews copy]) [child removeFromSuperview];
+    _countdown = nil;
+    _close = nil;
+}
+
+- (void)onPresented {
+    [self onPresentedWithRemainingMs:_countDownRemainingMs];
+}
+
+- (void)onPresentedWithRemainingMs:(int64_t)remainingMs {
+    if (_released) return;
+    _countDownRemainingMs = MAX(0, remainingMs);
+    [self ro_startCountdown];
+}
+
+- (void)onPaused {
+    [_timer invalidate];
+    _timer = nil;
+}
+
+- (int64_t)countDownRemainingMs {
+    return _countDownRemainingMs;
+}
+
+- (void)commitAdClick {
+    _clickCommitted = YES;
+}
+
+- (void)ro_applicationDidBecomeActive {
+    // The window-focus release of the Android latch: the store sheet or the
+    // browser the click opened has gone away.
+    _clickCommitted = NO;
+}
+
+// The latch: after a committed click every touch inside the ad is consumed
+// by this view instead of any child, so the SDK cannot register another.
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *hit = [super hitTest:point withEvent:event];
+    if (_clickCommitted && hit != nil && hit != _close) return self;
+    return hit;
+}
+
+// ---------------------------------------------------------------------------
+// Build
+// ---------------------------------------------------------------------------
+
+- (void)ro_buildWithRequestedPanelHeight:(CGFloat)requestedPanelHeight {
+    GADMediaContent *mediaContent = _nativeAd.mediaContent;
+    BOOL hasVideoContent = mediaContent.hasVideoContent;
+    UIImage *mainMediaImage = mediaContent.mainImage;
+    _fallbackMediaImage = (!hasVideoContent && mainMediaImage == nil)
+            ? [self ro_findFallbackMediaImage]
+            : nil;
+    _hasDisplayableMedia = hasVideoContent
+            || mainMediaImage != nil
+            || _fallbackMediaImage != nil;
+    _minimumMediaSize = hasVideoContent
+            ? kROMinVideoMediaSize
+            : kROMinImageMediaSize;
+    _mediaAspectRatio = [self ro_mediaAspectRatio];
+    CGSize hbScreen = UIScreen.mainScreen.bounds.size;
+    CGFloat sidePanelHeight = _fullscreen
+            ? hbScreen.height
+            : requestedPanelHeight;
+    _tickerLayout = !_fullscreen
+            && requestedPanelHeight < kROTickerMaxPanelHeight;
+    BOOL panelHostsMedia = _fullscreen
+            || requestedPanelHeight
+                    >= _minimumMediaSize + kROMinMediaLowerContent;
+    // With the media dropped - or a creative that never had any - the
+    // registered icon stands in for it, the way the in-feed slot works.
+    _iconHero = !_fullscreen
+            && !_tickerLayout
+            && (!_hasDisplayableMedia || !panelHostsMedia)
+            && _nativeAd.icon.image != nil;
+    _hasDisplayableMedia = _hasDisplayableMedia
+            && panelHostsMedia
+            && !_tickerLayout;
+    _sideMediaLayout = _hasDisplayableMedia
+            && [self ro_shouldUseSideMediaForPanelHeight:sidePanelHeight];
+
+    [self ro_configureBackground];
+
+    _nativeAdView = [[GADNativeAdView alloc] init];
+    _contentColumn = [[HBLinearLayoutView alloc] init];
+    _contentColumn.ro_vertical = YES;
+    _contentColumn.ro_gravity =
+            HBGravityCenterVertical | HBGravityCenterHorizontal;
+    _contentColumn.ro_padding = UIEdgeInsetsMake(
+            kROControlStripHeight
+          , kROHorizontalPadding
+          , 0
+          , kROHorizontalPadding);
+
+    _mediaView = [[GADMediaView alloc] init];
+    _mediaView.backgroundColor = UIColor.blackColor;
+    _mediaView.contentMode = UIViewContentModeScaleAspectFit;
+    _mediaView.ro_minimumSize =
+            CGSizeMake(_minimumMediaSize, _minimumMediaSize);
+    _mediaView.ro_layoutWidth = ROLayoutMatchParent;
+    _mediaView.ro_layoutHeight = _minimumMediaSize;
+    // The media is the one child allowed to ignore the side padding: it
+    // bleeds edge to edge through negative margins while every text stays
+    // inset.
+    _mediaView.ro_layoutMargins = UIEdgeInsetsMake(
+            0, -kROHorizontalPadding, 0, -kROHorizontalPadding);
+    if (hasVideoContent || mainMediaImage != nil) {
+        _mediaView.mediaContent = mediaContent;
+    } else if (_fallbackMediaImage != nil) {
+        _fallbackMediaImageView =
+                [[UIImageView alloc] initWithImage:_fallbackMediaImage];
+        _fallbackMediaImageView.contentMode = UIViewContentModeScaleAspectFit;
+        [_mediaView addSubview:_fallbackMediaImageView];
+    }
+
+    _identityRow = [[HBLinearLayoutView alloc] init];
+    _identityRow.ro_vertical = NO;
+    _identityRow.ro_gravity = HBGravityCenterVertical;
+    _identityRow.ro_padding = UIEdgeInsetsMake(
+            _fullscreen
+                    ? kROMaxIdentityVerticalPadding
+                    : kROMinIdentityVerticalPadding
+          , 0
+          , kROMinIdentityVerticalPadding
+          , 0);
+    _identityRow.ro_layoutWidth = ROLayoutMatchParent;
+
+    _icon = [[UIImageView alloc] init];
+    _icon.contentMode = UIViewContentModeScaleAspectFill;
+    _icon.clipsToBounds = YES;
+    _icon.ro_layoutWidth = kROMinIconSize;
+    _icon.ro_layoutHeight = kROMinIconSize;
+    _icon.ro_layoutMargins = UIEdgeInsetsMake(0, 0, 0, kROIconGap);
+    if (_iconHero) {
+        _icon.contentMode = UIViewContentModeScaleAspectFit;
+        _icon.clipsToBounds = NO;
+    } else {
+        [_identityRow addSubview:_icon];
+    }
+
+    _identityText = [[HBLinearLayoutView alloc] init];
+    _identityText.ro_vertical = YES;
+    _identityText.ro_gravity = HBGravityCenterVertical;
+    _identityText.ro_layoutWidth = 0;
+    _identityText.ro_layoutWeight = 1;
+
+    _headline = [[ROAdTextLabel alloc] init];
+    _headline.font = [UIFont boldSystemFontOfSize:
+            _fullscreen
+                    ? kROFullscreenHeadlineTextSize
+                    : kROMinHeadlineTextSize];
+    _headline.textColor = UIColor.whiteColor;
+    _headline.maxLines = NSIntegerMax;
+    _headline.ro_layoutWidth = ROLayoutMatchParent;
+
+    _advertiser = [[ROAdTextLabel alloc] init];
+    _advertiser.font = [UIFont systemFontOfSize:kROMinAdvertiserTextSize];
+    _advertiser.textColor = [UIColor colorWithWhite:1 alpha:0.8];
+    // The single line that does not fit scrolls rather than being cut.
+    _advertiser.marquee = YES;
+    _advertiser.ro_layoutWidth = ROLayoutMatchParent;
+
+    _starRating = [[RONativeAdMobStarRatingView alloc] init];
+    _starRating.ro_layoutGravity = HBGravityLeft;
+
+    [_identityText addSubview:_headline];
+    [_identityText addSubview:_advertiser];
+    [_identityText addSubview:_starRating];
+    [_identityRow addSubview:_identityText];
+
+    _body = [[ROAdTextLabel alloc] init];
+    _body.font = [UIFont systemFontOfSize:kROMinBodyTextSize];
+    _body.textColor = [UIColor colorWithWhite:1 alpha:0.8];
+    _body.maxLines = kROMaxBodyLineCount;
+    _body.ro_layoutWidth = ROLayoutMatchParent;
+    _body.ro_padding = UIEdgeInsetsMake(0, 0, kROMinBodyBottomPadding, 0);
+
+    _callToAction = [UIButton buttonWithType:UIButtonTypeCustom];
+    [self ro_styleCallToAction:_callToAction];
+    _callToAction.titleLabel.font =
+            [UIFont boldSystemFontOfSize:kROMinCallToActionTextSize];
+    _callToAction.titleLabel.numberOfLines = 0;
+    _callToAction.ro_minimumSize = CGSizeMake(0, kROMinCallToActionHeight);
+    _callToAction.ro_layoutWidth = ROLayoutMatchParent;
+
+    if (_sideMediaLayout) {
+        CGFloat sideMediaWidth =
+                [self ro_sideMediaWidthForPanelHeight:sidePanelHeight];
+        NSLog(@"%@: Full screen side-media layout: media %gx%g"
+              , kROTag, sideMediaWidth, sidePanelHeight);
+        _contentColumn.ro_padding = UIEdgeInsetsZero;
+        HBLinearLayoutView *sideRow = [[HBLinearLayoutView alloc] init];
+        sideRow.ro_vertical = NO;
+        _mediaView.ro_layoutWidth = sideMediaWidth;
+        _mediaView.ro_layoutHeight = ROLayoutMatchParent;
+        _mediaView.ro_layoutMargins = UIEdgeInsetsZero;
+        [sideRow addSubview:_mediaView];
+
+        HBLinearLayoutView *rail = [[HBLinearLayoutView alloc] init];
+        rail.ro_vertical = YES;
+        rail.ro_gravity = HBGravityCenterVertical;
+        // The corner controls and AdChoices sit over the rail's top, so only
+        // the rail keeps the strip inset; the media needs none.
+        rail.ro_padding = UIEdgeInsetsMake(
+                kROControlStripHeight
+              , kROHorizontalPadding
+              , 0
+              , kROHorizontalPadding);
+        [rail addSubview:_identityRow];
+        [rail addSubview:_body];
+        [rail addSubview:_callToAction];
+        rail.ro_layoutWidth = 0;
+        rail.ro_layoutHeight = ROLayoutMatchParent;
+        rail.ro_layoutWeight = 1;
+        [sideRow addSubview:rail];
+        sideRow.ro_layoutWidth = ROLayoutMatchParent;
+        sideRow.ro_layoutHeight = sidePanelHeight;
+        [_contentColumn addSubview:sideRow];
+    } else if (_tickerLayout) {
+        _contentColumn.ro_padding = UIEdgeInsetsZero;
+        _body.hidden = YES;
+        _advertiser.hidden = YES;
+        _starRating.hidden = YES;
+        _headline.maxLines = 1;
+        _callToAction.ro_minimumSize =
+                CGSizeMake(0, kROTickerCtaMinHeight);
+        _callToAction.ro_layoutWidth = ROLayoutWrapContent;
+        HBLinearLayoutView *ticker = [[HBLinearLayoutView alloc] init];
+        ticker.ro_vertical = NO;
+        ticker.ro_gravity = HBGravityCenterVertical;
+        CGFloat tickerControlReserve =
+                kROControlStripHeight + kRORightControlInset;
+        ticker.ro_padding = UIEdgeInsetsMake(
+                0, tickerControlReserve, 0, tickerControlReserve);
+        _identityRow.ro_padding = UIEdgeInsetsZero;
+        _identityRow.ro_layoutWidth = 0;
+        _identityRow.ro_layoutWeight = 1;
+        [ticker addSubview:_identityRow];
+        [ticker addSubview:_callToAction];
+        ticker.ro_layoutWidth = ROLayoutMatchParent;
+        [_contentColumn addSubview:ticker];
+    } else {
+        if (_hasDisplayableMedia) {
+            [_contentColumn addSubview:_mediaView];
+        } else if (_iconHero) {
+            _icon.ro_layoutWidth = ROLayoutMatchParent;
+            _icon.ro_layoutHeight = 0;
+            _icon.ro_layoutWeight = 1;
+            _icon.ro_layoutMargins = UIEdgeInsetsZero;
+            [_contentColumn addSubview:_icon];
+        }
+        [_contentColumn addSubview:_identityRow];
+        [_contentColumn addSubview:_body];
+        [_contentColumn addSubview:_callToAction];
+    }
+    [_nativeAdView addSubview:_contentColumn];
+
+    _attribution = [self ro_createAttributionLabel];
+    [_nativeAdView addSubview:_attribution];
+
+    _adChoicesReserve = [[UIView alloc] init];
+    _adChoicesReserve.userInteractionEnabled = NO;
+    [_nativeAdView addSubview:_adChoicesReserve];
+
+    if (_hasDisplayableMedia) _nativeAdView.mediaView = _mediaView;
+    _nativeAdView.iconView = _icon;
+    _nativeAdView.headlineView = _headline;
+    _nativeAdView.advertiserView = _advertiser;
+    _nativeAdView.starRatingView = _starRating;
+    _nativeAdView.bodyView = _body;
+    _nativeAdView.callToActionView = _callToAction;
+    [self ro_bindAssets];
+    if (!_fullscreen && !_tickerLayout) {
+        [self ro_configureResponsiveCollapsibleContentWithPanelHeight:
+                requestedPanelHeight];
+    }
+    _nativeAdView.nativeAd = _nativeAd;
+    [self addSubview:_nativeAdView];
+
+    _countdown = [self ro_createControlLabelWithText:
+                    [NSString stringWithFormat:@"%lld"
+                          , (long long)((_countDownRemainingMs + 999) / 1000)]
+                                            textSize:15
+                                     backgroundAlpha:0.4
+                                     backgroundWhite:0];
+    _close = [self ro_createControlLabelWithText:@"✕"
+                                        textSize:16
+                                 backgroundAlpha:0.66
+                                 backgroundWhite:0];
+    _close.hidden = YES;
+    _close.userInteractionEnabled = YES;
+    _close.isAccessibilityElement = YES;
+    _close.accessibilityLabel = @"Close ad";
+    [_close addGestureRecognizer:[[UITapGestureRecognizer alloc]
+            initWithTarget:self
+                    action:@selector(ro_closeTapped)]];
+    [self addSubview:_countdown];
+    [self addSubview:_close];
+
+    [self ro_resolveContentHeightWithRequestedPanelHeight:requestedPanelHeight];
+}
+
+- (void)ro_closeTapped {
+    if (_onClose != nil) _onClose();
+}
+
+- (void)ro_configureBackground {
+    uint32_t backgroundRgb = _fullscreen
+            ? kROFullScreenBackgroundRgb
+            : kROCollapsibleBackgroundRgb;
+    float defaultAlpha = _fullscreen
+            ? kROFullScreenDefaultAlpha
+            : kROCollapsibleDefaultAlpha;
+    float alpha = _backgroundAlpha;
+    if (isnan(alpha) || isinf(alpha)) {
+        NSLog(@"%@: backgroundAlpha is not finite; using the mode default"
+              , kROTag);
+        alpha = defaultAlpha;
+    } else if (alpha < 0) {
+        alpha = defaultAlpha;
+    } else {
+        float clamped = MAX(0.0f, MIN(1.0f, alpha));
+        if (clamped != alpha) {
+            NSLog(@"%@: backgroundAlpha must be within [0,1]; clamping it"
+                  , kROTag);
+        }
+        alpha = clamped;
+    }
+    self.backgroundColor = [HBArgb(0xFF000000 | backgroundRgb)
+            colorWithAlphaComponent:alpha];
+}
+
+- (HBPaddedLabel *)ro_createAttributionLabel {
+    HBPaddedLabel *attribution = [[HBPaddedLabel alloc] init];
+    attribution.text = kROAttributionText;
+    attribution.textColor = UIColor.blackColor;
+    attribution.font = [UIFont boldSystemFontOfSize:10];
+    attribution.textAlignment = NSTextAlignmentCenter;
+    attribution.backgroundColor = HBArgb(0xFFFFC107);
+    attribution.ro_contentInsets = UIEdgeInsetsMake(1, 5, 1, 5);
+    attribution.ro_minimumSize = CGSizeMake(
+            MAX(kROAttributionWidth, kROMinBadgeSize)
+          , MAX(kROAttributionHeight, kROMinBadgeSize));
+    attribution.userInteractionEnabled = NO;
+    return attribution;
+}
+
+- (HBPaddedLabel *)ro_createControlLabelWithText:(NSString *)text
+                                        textSize:(CGFloat)textSize
+                                 backgroundAlpha:(CGFloat)backgroundAlpha
+                                 backgroundWhite:(CGFloat)backgroundWhite {
+    HBPaddedLabel *control = [[HBPaddedLabel alloc] init];
+    control.text = text;
+    control.textColor = UIColor.whiteColor;
+    control.font = [UIFont systemFontOfSize:textSize];
+    control.textAlignment = NSTextAlignmentCenter;
+    control.backgroundColor = [UIColor colorWithWhite:backgroundWhite
+                                                alpha:backgroundAlpha];
+    return control;
+}
+
+// Same treatment as the in-feed button: its own filled and bordered
+// background rather than the platform default.
+- (void)ro_styleCallToAction:(UIButton *)callToAction {
+    callToAction.backgroundColor = HBArgb(0xFF2196F3);
+    callToAction.layer.borderColor = HBArgb(0xFF1565C0).CGColor;
+    callToAction.layer.borderWidth = 1;
+    [callToAction setTitleColor:UIColor.whiteColor
+                       forState:UIControlStateNormal];
+    callToAction.titleLabel.textAlignment = NSTextAlignmentCenter;
+    // The SDK owns the tap; the button never runs its own action.
+    callToAction.userInteractionEnabled = YES;
+}
+
+- (void)ro_bindAssets {
+    _headline.text = _nativeAd.headline;
+
+    UIImage *iconImage = _nativeAd.icon.image;
+    if (iconImage == nil) {
+        _icon.ro_gone = YES;
+        _icon.hidden = YES;
+    } else {
+        _icon.image = iconImage;
+    }
+
+    NSString *advertiserValue = _nativeAd.advertiser;
+    if (advertiserValue.length == 0) {
+        _advertiser.ro_gone = YES;
+        _advertiser.hidden = YES;
+    } else {
+        _advertiser.text = advertiserValue;
+    }
+
+    NSDecimalNumber *starRatingValue = _nativeAd.starRating;
+    double stars = starRatingValue.doubleValue;
+    if (starRatingValue == nil || stars <= 0 || isnan(stars) || isinf(stars)) {
+        _starRating.ro_gone = YES;
+        _starRating.hidden = YES;
+    } else {
+        _starRating.rating = MAX(0, MIN(5, stars));
+    }
+
+    NSString *bodyValue = _nativeAd.body;
+    if (bodyValue.length == 0) {
+        _body.ro_gone = YES;
+        _body.hidden = YES;
+    } else {
+        _body.text = bodyValue;
+    }
+
+    NSString *callToActionValue = _nativeAd.callToAction;
+    if (callToActionValue.length == 0) {
+        _callToAction.ro_gone = YES;
+        _callToAction.hidden = YES;
+    } else {
+        [_callToAction setTitle:callToActionValue
+                       forState:UIControlStateNormal];
+    }
+}
+
+- (UIImage *)ro_findFallbackMediaImage {
+    for (GADNativeAdImage *image in _nativeAd.images) {
+        if (image.image != nil) return image.image;
+    }
+    return nil;
+}
+
+- (CGFloat)ro_mediaAspectRatio {
+    if (_fallbackMediaImage != nil) {
+        CGSize size = _fallbackMediaImage.size;
+        if (size.width > 0 && size.height > 0) {
+            return size.width / size.height;
+        }
+        return kRODefaultMediaAspectRatio;
+    }
+
+    GADMediaContent *mediaContent = _nativeAd.mediaContent;
+    if (mediaContent == nil) return kRODefaultMediaAspectRatio;
+
+    if (!mediaContent.hasVideoContent) {
+        UIImage *mainImage = mediaContent.mainImage;
+        if (mainImage != nil
+                && mainImage.size.width > 0
+                && mainImage.size.height > 0) {
+            return mainImage.size.width / mainImage.size.height;
+        }
+    }
+
+    CGFloat aspectRatio = mediaContent.aspectRatio;
+    if (aspectRatio <= 0 || isnan(aspectRatio) || isinf(aspectRatio)) {
+        return kRODefaultMediaAspectRatio;
+    }
+    return aspectRatio;
+}
+
+// ---------------------------------------------------------------------------
+// Responsive collapsible ladder - a direct transcription: shed body lines,
+// then body, then rating, then advertiser until the minimum media fits, and
+// afterwards binary-search the largest uniform scale the natural media
+// still tolerates.
+// ---------------------------------------------------------------------------
+
+- (void)ro_configureResponsiveCollapsibleContentWithPanelHeight:
+        (CGFloat)panelHeight {
+    _headline.maxLines = kROCollapsibleHeadlineMaxLines;
+    _body.maxLines = kROMaxBodyLineCount;
+    [self ro_applyResponsiveContentScale:0];
+
+    BOOL contentFits =
+            [self ro_contentFitsWithMinimumMediaForPanelHeight:panelHeight];
+    while (!_body.ro_gone
+            && _body.maxLines > kROMinBodyLineCount
+            && !contentFits) {
+        _body.maxLines = _body.maxLines - 1;
+        contentFits = [self
+                ro_contentFitsWithMinimumMediaForPanelHeight:panelHeight];
+    }
+
+    if (!contentFits && !_body.ro_gone) {
+        _body.ro_gone = YES;
+        _body.hidden = YES;
+        contentFits = [self
+                ro_contentFitsWithMinimumMediaForPanelHeight:panelHeight];
+    }
+    if (!contentFits && !_starRating.ro_gone) {
+        _starRating.ro_gone = YES;
+        _starRating.hidden = YES;
+        contentFits = [self
+                ro_contentFitsWithMinimumMediaForPanelHeight:panelHeight];
+    }
+    if (!contentFits && !_advertiser.ro_gone) {
+        _advertiser.ro_gone = YES;
+        _advertiser.hidden = YES;
+        contentFits = [self
+                ro_contentFitsWithMinimumMediaForPanelHeight:panelHeight];
+    }
+
+    if (!contentFits) return;
+    if (![self ro_contentFitsWithNaturalMediaForPanelHeight:panelHeight]) {
+        return;
+    }
+
+    [self ro_applyResponsiveContentScale:1];
+    if ([self ro_contentFitsWithNaturalMediaForPanelHeight:panelHeight]) {
+        return;
+    }
+
+    CGFloat minimumScale = 0;
+    CGFloat maximumScale = 1;
+    for (NSInteger iteration = 0;
+         iteration < kROResponsiveScaleSearchIterations;
+         ++iteration) {
+        CGFloat candidateScale = (minimumScale + maximumScale) / 2;
+        [self ro_applyResponsiveContentScale:candidateScale];
+        if ([self ro_contentFitsWithNaturalMediaForPanelHeight:panelHeight]) {
+            minimumScale = candidateScale;
+        } else {
+            maximumScale = candidateScale;
+        }
+    }
+    [self ro_applyResponsiveContentScale:minimumScale];
+}
+
+static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
+    return minimum + (maximum - minimum) * scale;
+}
+
+- (void)ro_applyResponsiveContentScale:(CGFloat)scale {
+    CGFloat resolvedScale = MAX(0, MIN(1, scale));
+    _headline.font = [UIFont boldSystemFontOfSize:
+            HBInterpolate(
+                    kROMinHeadlineTextSize
+                  , kROMaxHeadlineTextSize
+                  , resolvedScale)];
+    _advertiser.font = [UIFont systemFontOfSize:
+            HBInterpolate(
+                    kROMinAdvertiserTextSize
+                  , kROMaxAdvertiserTextSize
+                  , resolvedScale)];
+    _body.font = [UIFont systemFontOfSize:
+            HBInterpolate(
+                    kROMinBodyTextSize
+                  , kROMaxBodyTextSize
+                  , resolvedScale)];
+    _callToAction.titleLabel.font = [UIFont boldSystemFontOfSize:
+            HBInterpolate(
+                    kROMinCallToActionTextSize
+                  , kROMaxCallToActionTextSize
+                  , resolvedScale)];
+
+    CGFloat identityVerticalPadding = round(
+            HBInterpolate(
+                    kROMinIdentityVerticalPadding
+                  , kROMaxIdentityVerticalPadding
+                  , resolvedScale));
+    _identityRow.ro_padding = UIEdgeInsetsMake(
+            identityVerticalPadding, 0, identityVerticalPadding, 0);
+    _body.ro_padding = UIEdgeInsetsMake(
+            0
+          , 0
+          , round(HBInterpolate(
+                    kROMinBodyBottomPadding
+                  , kROMaxBodyBottomPadding
+                  , resolvedScale))
+          , 0);
+
+    if (!_iconHero) {
+        CGFloat iconSize = round(
+                HBInterpolate(kROMinIconSize, kROMaxIconSize, resolvedScale));
+        _icon.ro_layoutWidth = iconSize;
+        _icon.ro_layoutHeight = iconSize;
+        _icon.ro_layoutMargins = UIEdgeInsetsMake(0, 0, 0, kROIconGap);
+    }
+
+    _callToAction.ro_minimumSize = CGSizeMake(
+            0
+          , round(HBInterpolate(
+                    kROMinCallToActionHeight
+                  , kROMaxCallToActionHeight
+                  , resolvedScale)));
+}
+
+- (BOOL)ro_shouldUseSideMediaForPanelHeight:(CGFloat)panelHeight {
+    if (_mediaAspectRatio >= kROSideMediaMaxAspect) return NO;
+
+    CGFloat mediaWidth = [self ro_sideMediaWidthForPanelHeight:panelHeight];
+    CGFloat railWidth =
+            UIScreen.mainScreen.bounds.size.width - mediaWidth;
+    return mediaWidth >= _minimumMediaSize
+            && railWidth >= kROSideMediaMinRail;
+}
+
+- (CGFloat)ro_sideMediaWidthForPanelHeight:(CGFloat)panelHeight {
+    return MIN(
+            round(panelHeight * _mediaAspectRatio)
+          , round(UIScreen.mainScreen.bounds.size.width
+                    * kROSideMediaMaxWidthShare));
+}
+
+- (CGFloat)ro_contentWidth {
+    return MAX(
+            0
+          , UIScreen.mainScreen.bounds.size.width - 2 * kROHorizontalPadding);
+}
+
+- (BOOL)ro_contentFitsWithMinimumMediaForPanelHeight:(CGFloat)panelHeight {
+    return [self ro_contentFitsWithMediaHeight:_minimumMediaSize
+                                   panelHeight:panelHeight];
+}
+
+- (BOOL)ro_contentFitsWithNaturalMediaForPanelHeight:(CGFloat)panelHeight {
+    CGFloat contentWidth = [self ro_contentWidth];
+    CGFloat naturalMediaHeight = MAX(
+            _minimumMediaSize
+          , round(contentWidth / _mediaAspectRatio));
+    return [self ro_contentFitsWithMediaHeight:naturalMediaHeight
+                                   panelHeight:panelHeight];
+}
+
+- (BOOL)ro_contentFitsWithMediaHeight:(CGFloat)mediaHeight
+                          panelHeight:(CGFloat)panelHeight {
+    CGFloat contentWidth = [self ro_contentWidth];
+    if (_hasDisplayableMedia && !_sideMediaLayout) {
+        CGFloat resolvedMediaHeight = MAX(_minimumMediaSize, mediaHeight);
+        CGFloat resolvedMediaWidth = MIN(
+                contentWidth
+              , MAX(
+                    _minimumMediaSize
+                  , round(resolvedMediaHeight * _mediaAspectRatio)));
+        _mediaView.ro_layoutWidth = resolvedMediaWidth;
+        _mediaView.ro_layoutHeight = resolvedMediaHeight;
+        _mediaView.ro_layoutGravity = HBGravityCenterHorizontal;
+    }
+
+    [_contentColumn ro_measureWithWidthSpec:
+                    HBMeasureSpecMake(
+                            HBMeasureSpecExactly
+                          , contentWidth + 2 * kROHorizontalPadding)
+                                 heightSpec:
+                    HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
+    return _contentColumn.ro_measuredSize.height <= panelHeight;
+}
+
+- (void)ro_resolveContentHeightWithRequestedPanelHeight:
+        (CGFloat)requestedPanelHeight {
+    CGSize screen = UIScreen.mainScreen.bounds.size;
+    CGFloat contentWidth = [self ro_contentWidth];
+    [_contentColumn ro_measureWithWidthSpec:
+                    HBMeasureSpecMake(HBMeasureSpecExactly, screen.width)
+                                 heightSpec:
+                    HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
+    if (_hasDisplayableMedia && !_sideMediaLayout) {
+        // Controls and badges draw on top with their own opaque backgrounds,
+        // and with media as the first child the strip can only ever cover
+        // media, never text - so the inset's height belongs to the media.
+        UIEdgeInsets columnInset = _contentColumn.ro_padding;
+        columnInset.top = 0;
+        _contentColumn.ro_padding = columnInset;
+        [_contentColumn ro_measureWithWidthSpec:
+                        HBMeasureSpecMake(HBMeasureSpecExactly, screen.width)
+                                     heightSpec:
+                        HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
+        CGFloat lowerContentHeight = MAX(
+                0
+              , _contentColumn.ro_measuredSize.height - _minimumMediaSize);
+        CGFloat panelHeight = _fullscreen
+                ? screen.height
+                : requestedPanelHeight;
+        CGFloat availableMediaHeight = panelHeight - lowerContentHeight;
+        CGFloat naturalMediaHeight = MAX(
+                _minimumMediaSize
+              , round(screen.width / _mediaAspectRatio));
+        CGFloat resolvedMediaHeight = MAX(
+                _minimumMediaSize
+              , MIN(
+                    naturalMediaHeight
+                  , MAX(_minimumMediaSize, availableMediaHeight)));
+        CGFloat resolvedMediaWidth = MIN(
+                screen.width
+              , MAX(
+                    _minimumMediaSize
+                  , round(resolvedMediaHeight * _mediaAspectRatio)));
+        _mediaView.ro_layoutWidth = resolvedMediaWidth;
+        _mediaView.ro_layoutHeight = resolvedMediaHeight;
+        _mediaView.ro_layoutGravity = HBGravityCenterHorizontal;
+        [_contentColumn ro_measureWithWidthSpec:
+                        HBMeasureSpecMake(HBMeasureSpecExactly, screen.width)
+                                     heightSpec:
+                        HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
+    }
+
+    CGFloat requiredPanelHeight = _contentColumn.ro_measuredSize.height;
+    _resolvedPanelHeight = _fullscreen
+            ? screen.height
+            : MIN(
+                    screen.height
+                  , MAX(requestedPanelHeight, requiredPanelHeight));
+}
+
+// ---------------------------------------------------------------------------
+// Layout - the explicit pass Android got from its view hierarchy. Runs the
+// measure model over the content column, overlays the badges, aligns the
+// controls to the attribution's edge, then applies the whole-or-scrolling
+// rule to whatever the pass truncated.
+// ---------------------------------------------------------------------------
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (_released || _nativeAdView == nil) return;
+
+    CGRect bounds = self.bounds;
+    CGFloat cutoutInset = _fullscreen ? self.safeAreaInsets.top : 0;
+    CGRect adFrame = CGRectMake(
+            0
+          , cutoutInset
+          , bounds.size.width
+          , bounds.size.height - cutoutInset);
+    _nativeAdView.frame = adFrame;
+
+    [_contentColumn ro_measureWithWidthSpec:
+                    HBMeasureSpecMake(HBMeasureSpecExactly, adFrame.size.width)
+                                 heightSpec:
+                    HBMeasureSpecMake(HBMeasureSpecExactly, adFrame.size.height)];
+    [_contentColumn ro_layoutWithFrame:
+            CGRectMake(0, 0, adFrame.size.width, adFrame.size.height)];
+    if (_fallbackMediaImageView != nil) {
+        _fallbackMediaImageView.frame = _mediaView.bounds;
+    }
+
+    [_attribution ro_measureWithWidthSpec:
+                    HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)
+                               heightSpec:
+                    HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
+    CGSize attributionSize = _attribution.ro_measuredSize;
+    _attribution.frame = CGRectMake(
+            0, 0, attributionSize.width, attributionSize.height);
+
+    CGFloat adChoicesSize = MAX(kROAdChoicesReserveSize, kROMinBadgeSize);
+    _adChoicesReserve.frame = CGRectMake(
+            adFrame.size.width - adChoicesSize, 0, adChoicesSize, adChoicesSize);
+
+    CGFloat controlSize = kROControlStripHeight;
+    CGFloat leftControlInset =
+            CGRectGetMaxX(_attribution.frame) + kROControlGap;
+    CGFloat rightControlInset = kRORightControlInset;
+    BOOL closeLeft = _closeOnLeft;
+    BOOL numberLeft = _numberOpposite ? !closeLeft : closeLeft;
+    _close.frame = CGRectMake(
+            closeLeft
+                    ? leftControlInset
+                    : bounds.size.width - rightControlInset - controlSize
+          , cutoutInset
+          , controlSize
+          , controlSize);
+    _countdown.frame = CGRectMake(
+            numberLeft
+                    ? leftControlInset
+                    : bounds.size.width - rightControlInset - controlSize
+          , cutoutInset
+          , controlSize
+          , controlSize);
+
+    [self ro_matchIconSizeToIdentityText];
+    [self ro_keepTextWholeOrScrolling:_headline];
+    [self ro_keepTextWholeOrScrolling:_body];
+    [self ro_keepTextWholeOrScrolling:_advertiser];
+}
+
+- (void)ro_matchIconSizeToIdentityText {
+    if (_icon.ro_gone) return;
+
+    CGFloat textHeight = _identityText.ro_measuredSize.height;
+    CGFloat rowWidth = _identityRow.ro_measuredSize.width;
+    if (textHeight <= 0 || rowWidth <= 0) return;
+
+    CGFloat minimumIconSize = MAX(
+            kROMinIconSize
+          , MAX(_icon.ro_layoutWidth, _icon.ro_layoutHeight));
+    CGFloat maximumIconSize = MAX(
+            minimumIconSize
+          , MIN(kROMaxIconSize, round(rowWidth * kROMaxIconRowWidthRatio)));
+    CGFloat resolvedIconSize = MAX(
+            minimumIconSize
+          , MIN(textHeight, maximumIconSize));
+    if (_icon.ro_layoutWidth == resolvedIconSize
+            && _icon.ro_layoutHeight == resolvedIconSize) {
+        return;
+    }
+
+    _icon.ro_layoutWidth = resolvedIconSize;
+    _icon.ro_layoutHeight = resolvedIconSize;
+    [self setNeedsLayout];
+}
+
+// The same rule the in-feed layout follows: a value is shown whole, or on
+// one line that scrolls at a smaller size - never cut.
+- (void)ro_keepTextWholeOrScrolling:(ROAdTextLabel *)text {
+    if (text == nil || text.ro_gone || text.hidden) return;
+
+    NSValue *identity = [NSValue valueWithNonretainedObject:text];
+    CGFloat width = text.bounds.size.width;
+    if (width <= 0) return;
+
+    if (text.marquee) {
+        if ([_shrunkTexts containsObject:identity]) return;
+        if ([text ro_showsEntireTextForWidth:width]
+                && text.bounds.size.width > 0
+                && [text sizeThatFits:
+                        CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX)].width <= width) {
+            return;
+        }
+        [_shrunkTexts addObject:identity];
+        text.font = [text.font fontWithSize:
+                text.font.pointSize * kROMarqueeTextShrink];
+        [self setNeedsLayout];
+        return;
+    }
+
+    if ([text ro_showsEntireTextForWidth:width]) return;
+
+    [_shrunkTexts addObject:identity];
+    CGFloat shrunkSize = text.font.pointSize * kROMarqueeTextShrink;
+    text.marquee = YES;
+    text.font = [text.font fontWithSize:shrunkSize];
+    [self setNeedsLayout];
+}
+
+// ---------------------------------------------------------------------------
+// Countdown
+// ---------------------------------------------------------------------------
+
+- (void)ro_startCountdown {
+    if (_countdown == nil || _close == nil) return;
+    [_timer invalidate];
+    _timer = nil;
+
+    int64_t remainingMs = MAX(0, _countDownRemainingMs);
+    _countdown.text = [NSString stringWithFormat:@"%lld"
+          , (long long)((remainingMs + 999) / 1000)];
+    _countdown.hidden = NO;
+    _close.hidden = YES;
+    if (remainingMs <= 0) {
+        _countdown.hidden = YES;
+        _close.hidden = NO;
+        return;
+    }
+
+    NSDate *finishAt =
+            [NSDate dateWithTimeIntervalSinceNow:remainingMs / 1000.0];
+    __weak RONativeAdMobFullScreenContentView *weakSelf = self;
+    _timer = [NSTimer scheduledTimerWithTimeInterval:kROCountdownInterval
+                                             repeats:YES
+                                               block:^(NSTimer *timer) {
+        RONativeAdMobFullScreenContentView *strongSelf = weakSelf;
+        if (strongSelf == nil) {
+            [timer invalidate];
+            return;
+        }
+        NSTimeInterval remaining = finishAt.timeIntervalSinceNow;
+        strongSelf->_countDownRemainingMs =
+                MAX(0, (int64_t)(remaining * 1000));
+        if (remaining > 0) {
+            strongSelf->_countdown.text =
+                    [NSString stringWithFormat:@"%ld"
+                          , (long)ceil(remaining)];
+            return;
+        }
+        [timer invalidate];
+        strongSelf->_timer = nil;
+        strongSelf->_countDownRemainingMs = 0;
+        strongSelf->_countdown.hidden = YES;
+        strongSelf->_close.hidden = NO;
+    }];
+}
+
+@end

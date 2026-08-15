@@ -1,0 +1,27 @@
+apply plugin: 'com.android.library'
+
+android {
+    namespace "com.riseon.nativeadmob"
+    compileSdkVersion 34
+
+    defaultConfig {
+        minSdkVersion 24
+        targetSdkVersion 34
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    // App da co Google Mobile Ads qua GMA Unity plugin => compileOnly de KHONG dong goi trung.
+    // Dong bo voi Google Mobile Ads ma host project dang resolve.
+    compileOnly "com.google.android.gms:play-services-ads:25.3.0"
+}
