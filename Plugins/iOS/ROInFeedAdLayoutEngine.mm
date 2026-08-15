@@ -313,19 +313,9 @@ static const NSInteger kRONudgeTextMaxSteps = 5;
                                desiredHeight:desiredHeight
                                  screenWidth:screenWidth
                                 screenHeight:screenHeight]];
-                [self ro_updateVariantBest:videoVariants
-                                 candidate:[self ro_evaluatePlanForTemplate:ROInFeedTemplateMediaBackground
-                                        tier:(ROInFeedTier)tier
-                                   showMedia:YES
-                                 renderVideo:YES
-                                    showBody:showBody
-                              showAdvertiser:showAdvertiser
-                                  showRating:showRating
-                                    showIcon:showIcon
-                              candidateWidth:width
-                               desiredHeight:desiredHeight
-                                 screenWidth:screenWidth
-                                screenHeight:screenHeight]];
+                // Video never serves as a background: a veil over a playing
+                // video is a viewability problem, not a layout. The
+                // background template is images only.
                 // No still-image fallback for a video creative: the only
                 // safe way down from a video plan that does not fit is a
                 // layout with no media at all.

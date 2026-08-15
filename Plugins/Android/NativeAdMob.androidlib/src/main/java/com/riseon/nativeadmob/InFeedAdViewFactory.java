@@ -88,6 +88,9 @@ final class InFeedAdViewFactory {
     // warrant the badges carry for sitting on the media. Painted as one veil
     // over the whole cell, never as a band that stops short of an edge.
     private static final String SCRIM_BACKGROUND_COLOR = "#B3000000";
+    // The dimming over the ambient backdrop - dark enough that the fitted
+    // creative in front stays the one that reads as the picture.
+    private static final int AMBIENT_DIM_COLOR = 0x8C000000;
     // The least line width worth giving a headline next to an icon. Below
     // it even a marquee reads as a sliver, so the icon leaves the line and
     // the text takes the full width instead.
@@ -1537,6 +1540,26 @@ final class InFeedAdViewFactory {
             throw new IllegalStateException(
                     "Main image is required for an image fallback layout");
         }
+        // Ambient fill for a band media: the same picture, cropped to cover
+        // and dimmed, stands behind the fitted one so an aspect mismatch
+        // shows the creative's own colours instead of dead bars.
+        if (!backgroundTemplate) {
+            Drawable ambientDrawable = mainImage.getConstantState() != null
+                    ? mainImage.getConstantState().newDrawable().mutate()
+                    : mainImage;
+            ImageView ambientBackdrop = new ImageView(activity);
+            ambientBackdrop.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            ambientBackdrop.setImageDrawable(ambientDrawable);
+            ambientBackdrop.setColorFilter(
+                    AMBIENT_DIM_COLOR
+                  , android.graphics.PorterDuff.Mode.SRC_ATOP);
+            mediaView.addView(
+                    ambientBackdrop
+                  , new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                      , ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+
         ImageView fallbackImageView = new ImageView(activity);
         fallbackImageView.setScaleType(
                 backgroundTemplate

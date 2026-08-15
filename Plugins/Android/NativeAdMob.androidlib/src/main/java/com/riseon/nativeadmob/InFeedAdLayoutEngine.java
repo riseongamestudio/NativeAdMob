@@ -249,22 +249,9 @@ final class InFeedAdLayoutEngine {
                                   , desiredHeight
                                   , screenWidth
                                   , screenHeight));
-                        UpdateVariantBest(
-                                videoVariants
-                              , EvaluatePlan(
-                                    TEMPLATE_MEDIA_BACKGROUND
-                                  , tier
-                                  , true
-                                  , true
-                                  , showBody
-                                  , showAdvertiser
-                                  , showRating
-                                  , showIcon
-                                  , width
-                                  , desiredWidth
-                                  , desiredHeight
-                                  , screenWidth
-                                  , screenHeight));
+                        // Video never serves as a background: a veil over a
+                        // playing video is a viewability problem, not a
+                        // layout. The background template is images only.
                         // No still-image fallback for a video creative. The
                         // validator flags any MediaView registered below the
                         // video minimum once the bound ad carries video, no

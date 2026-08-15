@@ -123,7 +123,13 @@ final class OverlayAdContentView extends FrameLayout {
     // Below this aspect the media takes the panel's full height on the left
     // and everything else moves into a rail beside it - provided the media
     // still meets its policy minimum and the rail keeps enough width to read.
-    private static final float SIDE_MEDIA_MAX_ASPECT = 0.85f;
+    // The bar sits just past square: a square creative still profits from
+    // the rail, and a video that never reported its ratio (which reads as
+    // 1.0) is not locked out of the layout that suits portrait video best.
+    private static final float SIDE_MEDIA_MAX_ASPECT = 1.05f;
+    // The veil of dimming over the ambient backdrop - dark enough that the
+    // fitted creative in front stays the one that reads as the picture.
+    private static final int AMBIENT_DIM_COLOR = 0x8C000000;
     private static final float SIDE_MEDIA_MAX_WIDTH_SHARE = 0.62f;
     private static final int SIDE_MEDIA_MIN_RAIL_DP = 120;
     // A panel meaningfully taller than wide reads as a page: media belongs
@@ -156,13 +162,14 @@ final class OverlayAdContentView extends FrameLayout {
     private boolean sideMediaLayout;
     private int sideMediaWidthPx;
     private boolean mediaAvoidsControlStrip;
-    private boolean fullscreenAvoidsControls;
+    private boolean controlAvoidanceActive;
     private boolean controlsAtEdgesBelowBadges;
     private LinearLayout avoidanceColumn;
     private MediaView avoidanceMediaView;
     private float avoidanceMediaAspect;
     private int avoidanceMinimumMediaSize;
     private int avoidanceHorizontalPadding;
+    private int avoidancePanelHeight;
     private final boolean closeOnLeft;
     private final boolean numberOpposite;
     private final boolean fullscreen;
@@ -721,13 +728,14 @@ final class OverlayAdContentView extends FrameLayout {
                   , density);
         }
         if (fullscreen && hasDisplayableMedia && !sideMediaLayout) {
-            EnableFullscreenControlAvoidance(
+            EnableControlAvoidance(
                     displayMetrics
                   , horizontalPadding
                   , minimumMediaSize
                   , mediaAspectRatio
                   , contentColumn
-                  , mediaView);
+                  , mediaView
+                  , displayMetrics.heightPixels);
         }
         nativeAdView.setNativeAd(nativeAd);
         nativeAdContainer = new SingleClickNativeAdContainer(context);
@@ -810,7 +818,7 @@ final class OverlayAdContentView extends FrameLayout {
               , contentColumn
               , mediaView);
         if (hasDisplayableMedia && !sideMediaLayout
-                && !fullscreenAvoidsControls) {
+                && !controlAvoidanceActive) {
             ObserveMediaSize(
                     minimumMediaSize
                   , contentColumn
@@ -885,7 +893,20 @@ final class OverlayAdContentView extends FrameLayout {
                       , contentColumn
                       , mediaView);
             }
-            if (contentFits) return;
+            if (contentFits) {
+                // The half panel runs the same maximiser as the full
+                // screen: the media's band grows toward the controls and
+                // the controls move where the band grows largest.
+                EnableControlAvoidance(
+                        displayMetrics
+                      , horizontalPadding
+                      , minimumMediaSize
+                      , mediaAspectRatio
+                      , contentColumn
+                      , mediaView
+                      , requestedPanelHeight);
+                return;
+            }
 
             mediaAvoidsControlStrip = false;
             SetMediaSideBleed(mediaView, horizontalPadding);
@@ -1477,25 +1498,58 @@ final class OverlayAdContentView extends FrameLayout {
     // up largest wins. Badges may sit over media; controls avoid it.
     // ------------------------------------------------------------------
 
-    private void EnableFullscreenControlAvoidance(
+    private void EnableControlAvoidance(
             DisplayMetrics displayMetrics
           , int horizontalPadding
           , int minimumMediaSize
           , float mediaAspectRatio
           , LinearLayout contentColumn
-          , MediaView mediaView) {
-        fullscreenAvoidsControls = true;
+          , MediaView mediaView
+          , int panelHeight) {
+        controlAvoidanceActive = true;
         avoidanceColumn = contentColumn;
         avoidanceMediaView = mediaView;
         avoidanceMediaAspect = mediaAspectRatio;
         avoidanceMinimumMediaSize = minimumMediaSize;
         avoidanceHorizontalPadding = horizontalPadding;
+        avoidancePanelHeight = panelHeight;
         contentColumn.setGravity(
                 Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         SetMediaSideBleed(mediaView, 0);
-        RecomputeFullscreenMediaAvoidance(
+        InstallAmbientBackdrop(mediaView);
+        RecomputeMediaControlAvoidance(
                 displayMetrics.widthPixels
-              , displayMetrics.heightPixels);
+              , panelHeight);
+    }
+
+    // Ambient fill: the creative's own picture, cropped to cover and dimmed,
+    // stands behind the fitted media so an aspect mismatch shows the
+    // creative's colours running to the edges instead of dead bars or blank
+    // panel. Video paints its own stage over it; the backdrop then simply
+    // never shows.
+    private void InstallAmbientBackdrop(MediaView mediaView) {
+        Drawable source = null;
+        com.google.android.gms.ads.MediaContent mediaContent =
+                nativeAd.getMediaContent();
+        if (mediaContent != null) source = mediaContent.getMainImage();
+        if (source == null) source = FindFallbackMediaImage();
+        if (source == null) return;
+
+        Drawable backdropDrawable = source.getConstantState() != null
+                ? source.getConstantState().newDrawable().mutate()
+                : source;
+        ImageView backdrop = new ImageView(getContext());
+        backdrop.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        backdrop.setImageDrawable(backdropDrawable);
+        backdrop.setColorFilter(
+                AMBIENT_DIM_COLOR
+              , android.graphics.PorterDuff.Mode.SRC_ATOP);
+        mediaView.addView(
+                backdrop
+              , 0
+              , new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                  , ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
     @Override
@@ -1505,17 +1559,19 @@ final class OverlayAdContentView extends FrameLayout {
           , int oldWidth
           , int oldHeight) {
         super.onSizeChanged(width, height, oldWidth, oldHeight);
-        if (fullscreenAvoidsControls && width > 0 && height > 0) {
-            RecomputeFullscreenMediaAvoidance(
+        if (controlAvoidanceActive && width > 0 && height > 0) {
+            RecomputeMediaControlAvoidance(
                     width
-                  , height - getPaddingTop());
+                  , fullscreen
+                            ? height - getPaddingTop()
+                            : Math.min(height, avoidancePanelHeight));
         }
     }
 
-    private void RecomputeFullscreenMediaAvoidance(
+    private void RecomputeMediaControlAvoidance(
             int panelWidth
           , int panelHeight) {
-        if (!fullscreenAvoidsControls
+        if (!controlAvoidanceActive
                 || avoidanceColumn == null
                 || avoidanceMediaView == null
                 || panelWidth <= 0
@@ -1597,8 +1653,7 @@ final class OverlayAdContentView extends FrameLayout {
                   , 1 }
         };
         long bestArea = -1L;
-        int bestWidth = 0;
-        int bestHeight = 0;
+        int bestBoxWidth = Math.max(contentWidth, avoidanceMinimumMediaSize);
         int bestTop = controlSize + controlGap;
         boolean bestEdges = false;
         for (int[] candidate : candidates) {
@@ -1624,8 +1679,7 @@ final class OverlayAdContentView extends FrameLayout {
             long area = (long) width * height;
             if (area > bestArea) {
                 bestArea = area;
-                bestWidth = width;
-                bestHeight = height;
+                bestBoxWidth = widthCap;
                 bestTop = top;
                 bestEdges = candidate[2] == 1;
             }
@@ -1635,18 +1689,19 @@ final class OverlayAdContentView extends FrameLayout {
             // avoiding the controls; they overlay it, as they always could.
             bestTop = 0;
             bestEdges = false;
-            bestHeight = Math.max(avoidanceMinimumMediaSize, availableHeight);
-            bestWidth = Math.min(
-                    Math.max(contentWidth, avoidanceMinimumMediaSize)
-                  , Math.max(
-                        avoidanceMinimumMediaSize
-                      , Math.round(bestHeight * avoidanceMediaAspect)));
+            bestBoxWidth = Math.max(contentWidth, avoidanceMinimumMediaSize);
         }
 
+        // The media takes the whole chosen band as its box: the creative
+        // fits centred inside it and the ambient backdrop carries its
+        // colours to the edges, so no gap is left above or beside it.
+        int bandHeight = Math.max(
+                avoidanceMinimumMediaSize
+              , availableHeight - bestTop);
         controlsAtEdgesBelowBadges = bestEdges;
         SetTopInset(avoidanceColumn, bestTop);
-        mediaLayoutParams.width = bestWidth;
-        mediaLayoutParams.height = bestHeight;
+        mediaLayoutParams.width = bestBoxWidth;
+        mediaLayoutParams.height = bandHeight;
         mediaLayoutParams.gravity = Gravity.CENTER_HORIZONTAL;
         avoidanceMediaView.setLayoutParams(mediaLayoutParams);
         requestLayout();
@@ -1931,7 +1986,7 @@ final class OverlayAdContentView extends FrameLayout {
         // Only a media-free layout keeps it, because there the top row is
         // text.
         if (hasDisplayableMedia && !sideMediaLayout
-                && !fullscreenAvoidsControls) {
+                && !controlAvoidanceActive) {
             if (!mediaAvoidsControlStrip) SetTopInset(contentColumn, 0);
             SizeMediaForBudget(
                     displayMetrics

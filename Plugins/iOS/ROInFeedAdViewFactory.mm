@@ -13,6 +13,9 @@ static const CGFloat kROMinImageMediaSize = 48;
 // even a marquee reads as a sliver, so the icon leaves the line and the
 // text takes the full width instead.
 static const CGFloat kROInFeedMinIconRowTextWidth = 72;
+// The dimming over the ambient backdrop - dark enough that the fitted
+// creative in front stays the one that reads as the picture.
+static const CGFloat kROInFeedAmbientDimAlpha = 0.55f;
 static const CGFloat kROMinAttributionSizePx = 15;
 static const CGFloat kROAttributionWidth = 24;
 static const CGFloat kROAttributionHeight = 18;
@@ -130,12 +133,14 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
 // A GADMediaView whose still-image fallback child always fills it.
 @interface ROInFeedMediaView : GADMediaView
 @property (nonatomic, strong, nullable) UIImageView *fallbackImageView;
+@property (nonatomic, strong, nullable) UIView *ambientBackdropView;
 @end
 
 @implementation ROInFeedMediaView
 
 - (void)layoutSubviews {
     [super layoutSubviews];
+    self.ambientBackdropView.frame = self.bounds;
     self.fallbackImageView.frame = self.bounds;
 }
 
@@ -1194,6 +1199,25 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
                     format:@"Main image is required for an image fallback "
                             "layout"];
     }
+    // Ambient fill for a band media: the same picture, cropped to cover and
+    // dimmed, stands behind the fitted one so an aspect mismatch shows the
+    // creative's own colours instead of dead bars.
+    if (!backgroundTemplate) {
+        UIImageView *ambientBackdrop =
+                [[UIImageView alloc] initWithImage:mainImage];
+        ambientBackdrop.contentMode = UIViewContentModeScaleAspectFill;
+        ambientBackdrop.clipsToBounds = YES;
+        UIView *ambientDim = [[UIView alloc] init];
+        ambientDim.backgroundColor =
+                [UIColor colorWithWhite:0 alpha:kROInFeedAmbientDimAlpha];
+        ambientDim.autoresizingMask = UIViewAutoresizingFlexibleWidth
+                | UIViewAutoresizingFlexibleHeight;
+        ambientDim.frame = ambientBackdrop.bounds;
+        [ambientBackdrop addSubview:ambientDim];
+        [mediaView addSubview:ambientBackdrop];
+        mediaView.ambientBackdropView = ambientBackdrop;
+    }
+
     UIImageView *fallbackImageView =
             [[UIImageView alloc] initWithImage:mainImage];
     fallbackImageView.contentMode = backgroundTemplate

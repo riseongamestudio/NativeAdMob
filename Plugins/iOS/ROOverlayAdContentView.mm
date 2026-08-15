@@ -23,8 +23,14 @@ static const CGFloat kROControlGap = 2;
 static const CGFloat kRORightControlInset = 18;
 // A portrait creative fills the panel's height on the left and everything
 // else moves into a rail beside it, provided the media still meets its policy
-// minimum and the rail keeps enough width to read.
-static const CGFloat kROSideMediaMaxAspect = 0.85f;
+// minimum and the rail keeps enough width to read. The bar sits just past
+// square: a square creative still profits from the rail, and a video that
+// never reported its ratio (which reads as 1.0) is not locked out of the
+// layout that suits portrait video best.
+static const CGFloat kROSideMediaMaxAspect = 1.05f;
+// The dimming over the ambient backdrop - dark enough that the fitted
+// creative in front stays the one that reads as the picture.
+static const CGFloat kROAmbientDimAlpha = 0.55f;
 static const CGFloat kROSideMediaMaxWidthShare = 0.62f;
 static const CGFloat kROSideMediaMinRail = 120;
 // A panel meaningfully taller than wide reads as a page: media belongs
@@ -139,8 +145,9 @@ static UIColor *HBArgb(uint32_t argb) {
     BOOL _sideMediaLayout;
     CGFloat _sideMediaWidthPx;
     BOOL _mediaAvoidsControlStrip;
-    BOOL _fullscreenAvoidsControls;
+    BOOL _controlAvoidanceActive;
     BOOL _controlsAtEdgesBelowBadges;
+    CGFloat _avoidancePanelHeight;
     HBLinearLayoutView *_sideRail;
     BOOL _iconHero;
     BOOL _tickerLayout;
@@ -534,10 +541,7 @@ static UIColor *HBArgb(uint32_t argb) {
         // The stack hugs the bottom and the media grows toward the corner
         // controls; the exact fit runs in the layout pass, where the true
         // frame is known.
-        _fullscreenAvoidsControls = YES;
-        _contentColumn.ro_gravity =
-                HBGravityBottom | HBGravityCenterHorizontal;
-        _mediaView.ro_layoutMargins = UIEdgeInsetsZero;
+        [self ro_enableControlAvoidanceWithPanelHeight:0];
     }
     _nativeAdView.nativeAd = _nativeAd;
     [self addSubview:_nativeAdView];
@@ -743,7 +747,13 @@ static UIColor *HBArgb(uint32_t argb) {
             contentFits = [self
                     ro_contentFitsWithMinimumMediaForPanelHeight:panelHeight];
         }
-        if (contentFits) return;
+        if (contentFits) {
+            // The half panel runs the same maximiser as the full screen:
+            // the media's band grows toward the controls and the controls
+            // move where the band grows largest.
+            [self ro_enableControlAvoidanceWithPanelHeight:panelHeight];
+            return;
+        }
 
         _mediaAvoidsControlStrip = NO;
         _mediaView.ro_layoutMargins = UIEdgeInsetsMake(
@@ -1048,7 +1058,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
                                  heightSpec:
                     HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
     if (_hasDisplayableMedia && !_sideMediaLayout
-            && !_fullscreenAvoidsControls) {
+            && !_controlAvoidanceActive) {
         // Controls and badges draw on top with their own opaque backgrounds,
         // and with media as the first child the strip can only ever cover
         // media, never text - so the inset's height belongs to the media.
@@ -1125,8 +1135,8 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
           , bounds.size.height - cutoutInset);
     _nativeAdView.frame = adFrame;
 
-    if (_fullscreenAvoidsControls) {
-        [self ro_recomputeFullscreenAvoidanceWithWidth:adFrame.size.width
+    if (_controlAvoidanceActive) {
+        [self ro_recomputeMediaControlAvoidanceWithWidth:adFrame.size.width
                                                 height:adFrame.size.height];
     }
 
@@ -1199,13 +1209,48 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     [self ro_keepTextWholeOrScrolling:_advertiser];
 }
 
-// Full-screen control avoidance, the Android transcription: the stack hugs
-// the bottom, four candidates compete - the media rising through the gap of
-// the top control row, sitting below that row, rising between edge-hugging
-// controls below the badges, or sitting below those - and the placement
-// that leaves the media largest wins. Badges may sit over media; the close
-// and timer controls avoid it.
-- (void)ro_recomputeFullscreenAvoidanceWithWidth:(CGFloat)panelWidth
+- (void)ro_enableControlAvoidanceWithPanelHeight:(CGFloat)panelHeight {
+    _controlAvoidanceActive = YES;
+    _avoidancePanelHeight = panelHeight;
+    _contentColumn.ro_gravity =
+            HBGravityBottom | HBGravityCenterHorizontal;
+    _mediaView.ro_layoutMargins = UIEdgeInsetsZero;
+    [self ro_installAmbientBackdrop];
+}
+
+// Ambient fill: the creative's own picture, cropped to cover and dimmed,
+// stands behind the fitted media so an aspect mismatch shows the creative's
+// colours running to the edges instead of dead bars or blank panel. Video
+// paints its own stage over it; the backdrop then simply never shows.
+- (void)ro_installAmbientBackdrop {
+    UIImage *source = _nativeAd.mediaContent.mainImage;
+    if (source == nil) source = _fallbackMediaImage;
+    if (source == nil) return;
+
+    UIImageView *backdrop = [[UIImageView alloc] initWithImage:source];
+    backdrop.contentMode = UIViewContentModeScaleAspectFill;
+    backdrop.clipsToBounds = YES;
+    backdrop.autoresizingMask = UIViewAutoresizingFlexibleWidth
+            | UIViewAutoresizingFlexibleHeight;
+    backdrop.frame = _mediaView.bounds;
+    UIView *dim = [[UIView alloc] initWithFrame:backdrop.bounds];
+    dim.backgroundColor =
+            [UIColor colorWithWhite:0 alpha:kROAmbientDimAlpha];
+    dim.autoresizingMask = UIViewAutoresizingFlexibleWidth
+            | UIViewAutoresizingFlexibleHeight;
+    [backdrop addSubview:dim];
+    [_mediaView insertSubview:backdrop atIndex:0];
+}
+
+// Control avoidance, the Android transcription: the stack hugs the bottom,
+// four candidates compete - the media rising through the gap of the top
+// control row, sitting below that row, rising between edge-hugging controls
+// below the badges, or sitting below those - and the placement that leaves
+// the media largest wins. The chosen band then becomes the media's box:
+// the creative fits centred inside it and the ambient backdrop carries its
+// colours to the edges. Badges may sit over media; the close and timer
+// controls avoid it.
+- (void)ro_recomputeMediaControlAvoidanceWithWidth:(CGFloat)panelWidth
                                           height:(CGFloat)panelHeight {
     if (panelWidth <= 0 || panelHeight <= 0) return;
 
@@ -1270,8 +1315,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
           , contentWidth };
     BOOL candidateEdges[4] = { NO, NO, YES, YES };
     CGFloat bestArea = -1;
-    CGFloat bestWidth = 0;
-    CGFloat bestHeight = 0;
+    CGFloat bestBoxWidth = MAX(contentWidth, _minimumMediaSize);
     CGFloat bestTop = controlSize + controlGap;
     BOOL bestAtEdges = NO;
     for (NSInteger index = 0; index < 4; ++index) {
@@ -1294,8 +1338,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
         CGFloat area = width * height;
         if (area > bestArea) {
             bestArea = area;
-            bestWidth = width;
-            bestHeight = height;
+            bestBoxWidth = widthCap;
             bestTop = top;
             bestAtEdges = candidateEdges[index];
         }
@@ -1305,19 +1348,17 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
         // the controls; they overlay it, as they always could.
         bestTop = 0;
         bestAtEdges = NO;
-        bestHeight = MAX(_minimumMediaSize, availableHeight);
-        bestWidth = MIN(
-                MAX(contentWidth, _minimumMediaSize)
-              , MAX(
-                    _minimumMediaSize
-                  , round(bestHeight * _mediaAspectRatio)));
+        bestBoxWidth = MAX(contentWidth, _minimumMediaSize);
     }
 
+    CGFloat bandHeight = MAX(
+            _minimumMediaSize
+          , availableHeight - bestTop);
     _controlsAtEdgesBelowBadges = bestAtEdges;
     columnPadding.top = bestTop;
     _contentColumn.ro_padding = columnPadding;
-    _mediaView.ro_layoutWidth = bestWidth;
-    _mediaView.ro_layoutHeight = bestHeight;
+    _mediaView.ro_layoutWidth = bestBoxWidth;
+    _mediaView.ro_layoutHeight = bandHeight;
     _mediaView.ro_layoutWeight = 0;
     _mediaView.ro_layoutGravity = HBGravityCenterHorizontal;
 }
