@@ -394,8 +394,10 @@ final class OverlayAdContentView extends FrameLayout {
         MediaView mediaView = new MediaView(context);
         mediaView.setMinimumWidth(minimumMediaSize);
         mediaView.setMinimumHeight(minimumMediaSize);
-        mediaView.setBackgroundColor(
-                hasVideoContent ? Color.BLACK : Color.TRANSPARENT);
+        // Deliberately black, not the panel colour: when a creative reports
+        // one ratio but renders less inside it, the black ground makes the
+        // shortfall visible instead of hiding it.
+        mediaView.setBackgroundColor(Color.BLACK);
         mediaView.setImageScaleType(ImageView.ScaleType.FIT_CENTER);
         LinearLayout.LayoutParams mediaCreateParams =
                 new LinearLayout.LayoutParams(

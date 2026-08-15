@@ -1190,12 +1190,48 @@ namespace RiseOn.NativeAdMob.Editor {
             return label;
         }
 
-        // The border the device buttons carry: a thin dark rim so a solid
-        // element reads as a control against any background.
+        // The border the device buttons carry: a thin rim drawn INSIDE the
+        // element's own bounds - an inner stroke, the way GradientDrawable
+        // strokes on Android - so the border never grows the element.
+        private const float INNER_STROKE_WIDTH_DP = 1.5f;
+
         private static void AddOutline(Graphic graphic, Color color) {
-            var outline = graphic.gameObject.AddComponent<Outline>();
-            outline.effectColor = color;
-            outline.effectDistance = new(1.5f, -1.5f);
+            var target = graphic.rectTransform;
+            CreateStrokeEdge(
+                target, color, new(0f, 1f), new(1f, 1f)
+              , new(0.5f, 1f), new(0f, INNER_STROKE_WIDTH_DP));
+            CreateStrokeEdge(
+                target, color, new(0f, 0f), new(1f, 0f)
+              , new(0.5f, 0f), new(0f, INNER_STROKE_WIDTH_DP));
+            CreateStrokeEdge(
+                target, color, new(0f, 0f), new(0f, 1f)
+              , new(0f, 0.5f), new(INNER_STROKE_WIDTH_DP, 0f));
+            CreateStrokeEdge(
+                target, color, new(1f, 0f), new(1f, 1f)
+              , new(1f, 0.5f), new(INNER_STROKE_WIDTH_DP, 0f));
+        }
+
+        private static void CreateStrokeEdge(
+            RectTransform parent
+          , Color color
+          , Vector2 anchorMin
+          , Vector2 anchorMax
+          , Vector2 pivot
+          , Vector2 size) {
+            var edgeObject = new GameObject(
+                "Stroke"
+              , typeof(RectTransform)
+              , typeof(Image));
+            edgeObject.transform.SetParent(parent, false);
+            var rect = edgeObject.GetComponent<RectTransform>();
+            rect.anchorMin = anchorMin;
+            rect.anchorMax = anchorMax;
+            rect.pivot = pivot;
+            rect.anchoredPosition = Vector2.zero;
+            rect.sizeDelta = size;
+            var image = edgeObject.GetComponent<Image>();
+            image.color = color;
+            image.raycastTarget = false;
         }
 
         private static void Stretch(RectTransform rect) {

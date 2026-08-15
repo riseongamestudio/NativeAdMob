@@ -1508,13 +1508,11 @@ final class InFeedAdViewFactory {
         MediaView mediaView = new MediaView(activity);
         boolean backgroundTemplate = plan.template
                 == InFeedAdLayoutEngine.TEMPLATE_MEDIA_BACKGROUND;
-        // The picture is always shown whole; a band media letterboxes
-        // against the panel colour instead of black, and only video keeps
-        // the black stage its player paints anyway. The background template
-        // fills what the fitted picture leaves with the ambient backdrop
-        // below.
-        mediaView.setBackgroundColor(
-                plan.renderVideo ? Color.BLACK : Color.TRANSPARENT);
+        // The picture is always shown whole on a deliberately black ground:
+        // when a creative reports one ratio but renders less inside it, the
+        // black makes the shortfall visible instead of hiding it. The
+        // background template covers the ground with its ambient backdrop.
+        mediaView.setBackgroundColor(Color.BLACK);
         mediaView.setImageScaleType(ImageView.ScaleType.FIT_CENTER);
         views.media = mediaView;
         views.mediaSlot = mediaView;

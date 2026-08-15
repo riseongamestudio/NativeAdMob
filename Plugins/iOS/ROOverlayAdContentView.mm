@@ -324,9 +324,9 @@ static UIColor *HBArgb(uint32_t argb) {
           , kROHorizontalPadding);
 
     _mediaView = [[GADMediaView alloc] init];
-    _mediaView.backgroundColor = hasVideoContent
-            ? UIColor.blackColor
-            : UIColor.clearColor;
+    // Deliberately black: when a creative reports one ratio but renders
+    // less inside it, the black ground makes the shortfall visible.
+    _mediaView.backgroundColor = UIColor.blackColor;
     _mediaView.contentMode = UIViewContentModeScaleAspectFit;
     _mediaView.ro_minimumSize =
             CGSizeMake(_minimumMediaSize, _minimumMediaSize);

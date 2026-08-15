@@ -1166,13 +1166,11 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
     ROInFeedMediaView *mediaView = [[ROInFeedMediaView alloc] init];
     BOOL backgroundTemplate =
             plan.layoutTemplate == ROInFeedTemplateMediaBackground;
-    // The picture is always shown whole; a band media letterboxes against
-    // the panel colour instead of black, and only video keeps the black
-    // stage its player paints. The background template fills what the
-    // fitted picture leaves with the ambient backdrop below.
-    mediaView.backgroundColor = plan.renderVideo
-            ? UIColor.blackColor
-            : UIColor.clearColor;
+    // The picture is always shown whole on a deliberately black ground:
+    // when a creative reports one ratio but renders less inside it, the
+    // black makes the shortfall visible instead of hiding it. The
+    // background template covers the ground with its ambient backdrop.
+    mediaView.backgroundColor = UIColor.blackColor;
     mediaView.clipsToBounds = YES;
     mediaView.contentMode = UIViewContentModeScaleAspectFit;
     views.media = mediaView;
