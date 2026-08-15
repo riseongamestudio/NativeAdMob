@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
@@ -55,6 +56,9 @@ namespace RiseOn.NativeAdMob {
 
         public int SlotCount => items.Length;
 
+        // An indexer's metadata name defaults to "Item", which would collide
+        // with the nested Item type; only the metadata name changes here.
+        [IndexerName("Slots")]
         public ref readonly Item this[int index] => ref items[index];
 
         public InFeed(in Settings settings)
