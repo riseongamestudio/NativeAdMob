@@ -10,9 +10,10 @@ static const CGFloat kROMinVideoMediaSize = 120;
 // The 120pt floor is video's; a creative with no video keeps its picture
 // in shorter panels instead of handing the band to the icon.
 static const CGFloat kROMinImageMediaSize = 48;
-// When a creative never reports its ratio, assume landscape video - the
-// common case - rather than a square frame nothing fills.
-static const CGFloat kRODefaultMediaAspectRatio = 16.0 / 9.0;
+// A probe value only, for the fit checks that need a number. It never
+// frames the media: a creative with an unreported ratio is handed the
+// whole band and renders inside it as it pleases.
+static const CGFloat kRODefaultMediaAspectRatio = 1;
 static const float kRODefaultHeightRatio = 0.5f;
 static const float kROOverlayDefaultAlpha = 0.80f;
 static const float kROCollapsibleDefaultAlpha = 0.95f;
@@ -164,6 +165,7 @@ static UIColor *HBArgb(uint32_t argb) {
     BOOL _sideMediaLayout;
     CGFloat _sideMediaWidthPx;
     BOOL _mediaAvoidsControlStrip;
+    BOOL _mediaAspectReported;
     BOOL _controlAvoidanceActive;
     BOOL _controlsAtEdgesBelowBadges;
     CGFloat _avoidancePanelHeight;
@@ -723,31 +725,35 @@ static UIColor *HBArgb(uint32_t argb) {
 }
 
 - (CGFloat)ro_mediaAspectRatio {
-    if (_fallbackMediaImage != nil) {
-        CGSize size = _fallbackMediaImage.size;
-        if (size.width > 0 && size.height > 0) {
-            return size.width / size.height;
-        }
-        return kRODefaultMediaAspectRatio;
+    _mediaAspectReported = YES;
+    if (_fallbackMediaImage != nil
+            && _fallbackMediaImage.size.width > 0
+            && _fallbackMediaImage.size.height > 0) {
+        return _fallbackMediaImage.size.width
+                / _fallbackMediaImage.size.height;
     }
 
     GADMediaContent *mediaContent = _nativeAd.mediaContent;
-    if (mediaContent == nil) return kRODefaultMediaAspectRatio;
+    if (mediaContent != nil) {
+        if (!mediaContent.hasVideoContent) {
+            UIImage *mainImage = mediaContent.mainImage;
+            if (mainImage != nil
+                    && mainImage.size.width > 0
+                    && mainImage.size.height > 0) {
+                return mainImage.size.width / mainImage.size.height;
+            }
+        }
 
-    if (!mediaContent.hasVideoContent) {
-        UIImage *mainImage = mediaContent.mainImage;
-        if (mainImage != nil
-                && mainImage.size.width > 0
-                && mainImage.size.height > 0) {
-            return mainImage.size.width / mainImage.size.height;
+        CGFloat aspectRatio = mediaContent.aspectRatio;
+        if (aspectRatio > 0
+                && !isnan(aspectRatio)
+                && !isinf(aspectRatio)) {
+            return aspectRatio;
         }
     }
 
-    CGFloat aspectRatio = mediaContent.aspectRatio;
-    if (aspectRatio <= 0 || isnan(aspectRatio) || isinf(aspectRatio)) {
-        return kRODefaultMediaAspectRatio;
-    }
-    return aspectRatio;
+    _mediaAspectReported = NO;
+    return kRODefaultMediaAspectRatio;
 }
 
 // ---------------------------------------------------------------------------
@@ -1424,65 +1430,51 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
           , edgeGapWidth
           , panelWidth };
     BOOL candidateEdges[4] = { NO, NO, YES, YES };
-    CGFloat bestArea = -1;
-    CGFloat bestWidth = 0;
-    CGFloat bestHeight = 0;
-    CGFloat bestTop = controlSize + controlGap;
+    // The media takes the WHOLE chosen band - it always touches the
+    // band's edges, and what its creative cannot cover shows the black
+    // ground. A known ratio only decides WHICH band, by the creative area
+    // each one would display; an unreported ratio scores by the band
+    // itself, since no number exists to reason with.
+    CGFloat bestScore = -1;
+    CGFloat bestBoxWidth = MAX(panelWidth, _minimumMediaSize);
+    CGFloat bestBoxHeight = MAX(_minimumMediaSize, availableHeight);
+    CGFloat bestTop = 0;
     BOOL bestAtEdges = NO;
     for (NSInteger index = 0; index < 4; ++index) {
         CGFloat top = candidateTops[index];
         CGFloat widthCap = candidateCaps[index];
         if (widthCap < _minimumMediaSize) continue;
 
-        CGFloat height = availableHeight - top;
-        if (height < _minimumMediaSize) continue;
+        CGFloat bandHeight = availableHeight - top;
+        if (bandHeight < _minimumMediaSize) continue;
 
-        CGFloat width = round(height * _mediaAspectRatio);
-        if (width > widthCap) {
-            width = widthCap;
-            height = MIN(height, round(width / _mediaAspectRatio));
+        CGFloat score;
+        if (_mediaAspectReported) {
+            CGFloat fitHeight = MIN(
+                    bandHeight
+                  , round(widthCap / _mediaAspectRatio));
+            CGFloat fitWidth = MIN(
+                    widthCap
+                  , round(fitHeight * _mediaAspectRatio));
+            score = fitWidth * fitHeight;
+        } else {
+            score = widthCap * bandHeight;
         }
-        if (width < _minimumMediaSize || height < _minimumMediaSize) {
-            continue;
-        }
-
-        CGFloat area = width * height;
-        if (area > bestArea) {
-            bestArea = area;
-            bestWidth = width;
-            bestHeight = height;
+        if (score > bestScore) {
+            bestScore = score;
+            bestBoxWidth = widthCap;
+            bestBoxHeight = bandHeight;
             bestTop = top;
             bestAtEdges = candidateEdges[index];
         }
     }
-    if (bestArea < 0) {
-        // No placement hosts the media at its policy floor while avoiding
-        // the controls; they overlay it, as they always could.
-        bestTop = 0;
-        bestAtEdges = NO;
-        bestHeight = MAX(_minimumMediaSize, availableHeight);
-        bestWidth = MIN(
-                MAX(panelWidth, _minimumMediaSize)
-              , MAX(
-                    _minimumMediaSize
-                  , round(bestHeight * _mediaAspectRatio)));
-        bestHeight = MIN(
-                bestHeight
-              , MAX(
-                    _minimumMediaSize
-                  , round(bestWidth / _mediaAspectRatio)));
-    }
 
-    // The media keeps the creative's exact size; the slack the band has
-    // left splits evenly, so the whole block sits centred between the
-    // controls and the panel's bottom edge.
-    CGFloat slack = MAX(0, availableHeight - bestTop - bestHeight);
     _controlsAtEdgesBelowBadges = bestAtEdges;
     columnPadding.top = bestTop;
-    columnPadding.bottom = slack / 2;
+    columnPadding.bottom = 0;
     _contentColumn.ro_padding = columnPadding;
-    _mediaView.ro_layoutWidth = bestWidth;
-    _mediaView.ro_layoutHeight = bestHeight;
+    _mediaView.ro_layoutWidth = bestBoxWidth;
+    _mediaView.ro_layoutHeight = bestBoxHeight;
     _mediaView.ro_layoutWeight = 0;
     _mediaView.ro_layoutGravity = HBGravityCenterHorizontal;
 }

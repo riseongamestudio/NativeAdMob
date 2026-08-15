@@ -72,9 +72,10 @@ final class OverlayAdContentView extends FrameLayout {
     // The 120dp floor is video's; a creative with no video keeps its picture
     // in shorter panels instead of handing the band to the icon.
     private static final float MIN_IMAGE_MEDIA_SIZE_DP = 48f;
-    // When a creative never reports its ratio, assume landscape video -
-    // the common case - rather than a square frame nothing fills.
-    private static final float DEFAULT_MEDIA_ASPECT_RATIO = 16f / 9f;
+    // A probe value only, for the fit checks that need a number. It never
+    // frames the media: a creative with an unreported ratio is handed the
+    // whole band and renders inside it as it pleases.
+    private static final float DEFAULT_MEDIA_ASPECT_RATIO = 1f;
     private static final float DEFAULT_HEIGHT_RATIO = 0.5f;
     private static final float MAX_COLOR_CHANNEL = 255f;
     private static final float FULL_SCREEN_DEFAULT_ALPHA = 0.80f;
@@ -182,6 +183,7 @@ final class OverlayAdContentView extends FrameLayout {
     private boolean sideMediaLayout;
     private int sideMediaWidthPx;
     private boolean mediaAvoidsControlStrip;
+    private boolean mediaAspectReported;
     private boolean controlAvoidanceActive;
     private boolean controlsAtEdgesBelowBadges;
     private LinearLayout avoidanceColumn;
@@ -1814,70 +1816,55 @@ final class OverlayAdContentView extends FrameLayout {
                   , panelWidth
                   , 1 }
         };
-        long bestArea = -1L;
-        int bestWidth = 0;
-        int bestHeight = 0;
-        int bestTop = controlSize + controlGap;
+        // The media takes the WHOLE chosen band - it always touches the
+        // band's edges, and what its creative cannot cover shows the black
+        // ground. A known ratio only decides WHICH band, by the creative
+        // area each one would display; an unreported ratio scores by the
+        // band itself, since no number exists to reason with.
+        long bestScore = -1L;
+        int bestBoxWidth = Math.max(panelWidth, avoidanceMinimumMediaSize);
+        int bestBoxHeight = Math.max(
+                avoidanceMinimumMediaSize
+              , availableHeight);
+        int bestTop = 0;
         boolean bestEdges = false;
         for (int[] candidate : candidates) {
             int top = candidate[0];
             int widthCap = candidate[1];
             if (widthCap < avoidanceMinimumMediaSize) continue;
 
-            int height = availableHeight - top;
-            if (height < avoidanceMinimumMediaSize) continue;
+            int bandHeight = availableHeight - top;
+            if (bandHeight < avoidanceMinimumMediaSize) continue;
 
-            int width = Math.round(height * avoidanceMediaAspect);
-            if (width > widthCap) {
-                width = widthCap;
-                height = Math.min(
-                        height
-                      , Math.round(width / avoidanceMediaAspect));
+            long score;
+            if (mediaAspectReported) {
+                int fitHeight = Math.min(
+                        bandHeight
+                      , Math.round(widthCap / avoidanceMediaAspect));
+                int fitWidth = Math.min(
+                        widthCap
+                      , Math.round(fitHeight * avoidanceMediaAspect));
+                score = (long) fitWidth * fitHeight;
+            } else {
+                score = (long) widthCap * bandHeight;
             }
-            if (width < avoidanceMinimumMediaSize
-                    || height < avoidanceMinimumMediaSize) {
-                continue;
-            }
-
-            long area = (long) width * height;
-            if (area > bestArea) {
-                bestArea = area;
-                bestWidth = width;
-                bestHeight = height;
+            if (score > bestScore) {
+                bestScore = score;
+                bestBoxWidth = widthCap;
+                bestBoxHeight = bandHeight;
                 bestTop = top;
                 bestEdges = candidate[2] == 1;
             }
         }
-        if (bestArea < 0L) {
-            // No placement hosts the media at its policy floor while
-            // avoiding the controls; they overlay it, as they always could.
-            bestTop = 0;
-            bestEdges = false;
-            bestHeight = Math.max(avoidanceMinimumMediaSize, availableHeight);
-            bestWidth = Math.min(
-                    Math.max(panelWidth, avoidanceMinimumMediaSize)
-                  , Math.max(
-                        avoidanceMinimumMediaSize
-                      , Math.round(bestHeight * avoidanceMediaAspect)));
-            bestHeight = Math.min(
-                    bestHeight
-                  , Math.max(
-                        avoidanceMinimumMediaSize
-                      , Math.round(bestWidth / avoidanceMediaAspect)));
-        }
 
-        // The media keeps the creative's exact size; the slack the band has
-        // left splits evenly, so the whole block sits centred between the
-        // controls and the panel's bottom edge.
-        int slack = Math.max(0, availableHeight - bestTop - bestHeight);
         controlsAtEdgesBelowBadges = bestEdges;
         avoidanceColumn.setPadding(
                 avoidanceColumn.getPaddingLeft()
               , bestTop
               , avoidanceColumn.getPaddingRight()
-              , slack / 2);
-        mediaLayoutParams.width = bestWidth;
-        mediaLayoutParams.height = bestHeight;
+              , 0);
+        mediaLayoutParams.width = bestBoxWidth;
+        mediaLayoutParams.height = bestBoxHeight;
         mediaLayoutParams.gravity = Gravity.CENTER_HORIZONTAL;
         avoidanceMediaView.setLayoutParams(mediaLayoutParams);
         requestLayout();
@@ -2498,33 +2485,37 @@ final class OverlayAdContentView extends FrameLayout {
     }
 
     private float GetMediaAspectRatio(Drawable fallbackMediaImage) {
-        if (fallbackMediaImage != null) {
-            return GetDrawableAspectRatio(fallbackMediaImage);
+        mediaAspectReported = true;
+        if (fallbackMediaImage != null
+                && fallbackMediaImage.getIntrinsicWidth() > 0
+                && fallbackMediaImage.getIntrinsicHeight() > 0) {
+            return fallbackMediaImage.getIntrinsicWidth()
+                    / (float) fallbackMediaImage.getIntrinsicHeight();
         }
 
         com.google.android.gms.ads.MediaContent mediaContent =
                 nativeAd.getMediaContent();
-        if (mediaContent == null) {
-            return DEFAULT_MEDIA_ASPECT_RATIO;
-        }
+        if (mediaContent != null) {
+            if (!mediaContent.hasVideoContent()) {
+                Drawable mainImage = mediaContent.getMainImage();
+                if (mainImage != null
+                        && mainImage.getIntrinsicWidth() > 0
+                        && mainImage.getIntrinsicHeight() > 0) {
+                    return mainImage.getIntrinsicWidth()
+                            / (float) mainImage.getIntrinsicHeight();
+                }
+            }
 
-        if (!mediaContent.hasVideoContent()) {
-            Drawable mainImage = mediaContent.getMainImage();
-            if (mainImage != null
-                    && mainImage.getIntrinsicWidth() > 0
-                    && mainImage.getIntrinsicHeight() > 0) {
-                return mainImage.getIntrinsicWidth()
-                        / (float) mainImage.getIntrinsicHeight();
+            float aspectRatio = mediaContent.getAspectRatio();
+            if (aspectRatio > 0f
+                    && !Float.isNaN(aspectRatio)
+                    && !Float.isInfinite(aspectRatio)) {
+                return aspectRatio;
             }
         }
 
-        float aspectRatio = mediaContent.getAspectRatio();
-        if (aspectRatio <= 0f
-                || Float.isNaN(aspectRatio)
-                || Float.isInfinite(aspectRatio)) {
-            return DEFAULT_MEDIA_ASPECT_RATIO;
-        }
-        return aspectRatio;
+        mediaAspectReported = false;
+        return DEFAULT_MEDIA_ASPECT_RATIO;
     }
 
     private static float GetDrawableAspectRatio(Drawable image) {
