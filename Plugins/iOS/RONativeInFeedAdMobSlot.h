@@ -6,7 +6,7 @@
 #import <Foundation/Foundation.h>
 #import <GoogleMobileAds/GoogleMobileAds.h>
 
-#import "RONativeAdMobInFeed.h"
+#import "RONativeInFeedAdMob.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -25,7 +25,7 @@ NSTimeInterval ROInFeedBackoffDelay(
 
 @interface ROInFeedSlot : NSObject
 
-- (instancetype)initWithOwner:(RONativeAdMobInFeed *)owner
+- (instancetype)initWithOwner:(RONativeInFeedAdMob *)owner
                         index:(NSInteger)index;
 
 - (void)configureWithX:(CGFloat)xPt
@@ -47,7 +47,7 @@ NSTimeInterval ROInFeedBackoffDelay(
 @end
 
 // The owner surface the slots consume.
-@interface RONativeAdMobInFeed (SlotSupport)
+@interface RONativeInFeedAdMob (SlotSupport)
 - (BOOL)hasCachedAd;
 - (nullable ROInFeedCachedAd *)takeCachedAd;
 - (NSInteger)cachedCount;

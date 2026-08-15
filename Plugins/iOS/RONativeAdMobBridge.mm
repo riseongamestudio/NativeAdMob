@@ -6,8 +6,8 @@
 
 #import <UIKit/UIKit.h>
 
-#import "RONativeAdMobOverlay.h"
-#import "RONativeAdMobInFeed.h"
+#import "RONativeOverlayAdMob.h"
+#import "RONativeInFeedAdMob.h"
 
 static CGFloat HBPointsFromPixels(int32_t px) {
     return px / MAX(1, UIScreen.mainScreen.nativeScale);
@@ -40,7 +40,7 @@ static RONativeAdMobListenerCallbacks HBMakeCallbacks(
 // In-feed
 // ---------------------------------------------------------------------------
 
-void* RONativeAdMobInFeed_Create(
+void* RONativeInFeedAdMob_Create(
         const char* adUnitId
       , int32_t slotCount
       , int32_t cacheSize
@@ -48,8 +48,8 @@ void* RONativeAdMobInFeed_Create(
       , int32_t instanceId) {
     NSString *unit = HBStringFromUtf8(adUnitId);
     if (unit.length == 0) return NULL;
-    RONativeAdMobInFeed *ad =
-            [[RONativeAdMobInFeed alloc] initWithAdUnitId:unit
+    RONativeInFeedAdMob *ad =
+            [[RONativeInFeedAdMob alloc] initWithAdUnitId:unit
                                                 slotCount:slotCount
                                                 cacheSize:cacheSize
                                           backgroundAlpha:backgroundAlpha
@@ -57,17 +57,17 @@ void* RONativeAdMobInFeed_Create(
     return (void *)CFBridgingRetain(ad);
 }
 
-void RONativeAdMobInFeed_SetListener(
+void RONativeInFeedAdMob_SetListener(
         void* handle
       , RONativeAdMobLoadingStartedCallback loadingStarted
       , RONativeAdMobLoadingCompletedCallback loadingCompleted
       , RONativeAdMobPaidCallback adPaid
-      , RONativeAdMobInFeedSlotDisplayedCallback slotDisplayed
-      , RONativeAdMobInFeedSlotShowNotReadyCallback slotShowNotReady
-      , RONativeAdMobInFeedSlotPresentationFailedCallback slotPresentationFailed) {
+      , RONativeInFeedAdMobSlotDisplayedCallback slotDisplayed
+      , RONativeInFeedAdMobSlotShowNotReadyCallback slotShowNotReady
+      , RONativeInFeedAdMobSlotPresentationFailedCallback slotPresentationFailed) {
     if (handle == NULL) return;
-    RONativeAdMobInFeed *ad = (__bridge RONativeAdMobInFeed *)handle;
-    RONativeAdMobInFeedListenerCallbacks callbacks;
+    RONativeInFeedAdMob *ad = (__bridge RONativeInFeedAdMob *)handle;
+    RONativeInFeedAdMobListenerCallbacks callbacks;
     callbacks.loadingStarted = loadingStarted;
     callbacks.loadingCompleted = loadingCompleted;
     callbacks.adPaid = adPaid;
@@ -77,7 +77,7 @@ void RONativeAdMobInFeed_SetListener(
     [ad setInFeedListenerCallbacks:callbacks];
 }
 
-void RONativeAdMobInFeed_Configure(
+void RONativeInFeedAdMob_Configure(
         void* handle
       , int32_t slotIndex
       , int32_t xPx
@@ -85,7 +85,7 @@ void RONativeAdMobInFeed_Configure(
       , int32_t widthPx
       , int32_t heightPx) {
     if (handle == NULL) return;
-    RONativeAdMobInFeed *ad = (__bridge RONativeAdMobInFeed *)handle;
+    RONativeInFeedAdMob *ad = (__bridge RONativeInFeedAdMob *)handle;
     [ad configureSlot:slotIndex
                     x:HBPointsFromPixels(xPx)
                     y:HBPointsFromPixels(yPx)
@@ -93,31 +93,31 @@ void RONativeAdMobInFeed_Configure(
                height:HBPointsFromPixels(heightPx)];
 }
 
-void RONativeAdMobInFeed_Show(void* handle, int32_t slotIndex) {
+void RONativeInFeedAdMob_Show(void* handle, int32_t slotIndex) {
     if (handle == NULL) return;
-    [(__bridge RONativeAdMobInFeed *)handle showSlot:slotIndex];
+    [(__bridge RONativeInFeedAdMob *)handle showSlot:slotIndex];
 }
 
-void RONativeAdMobInFeed_Hide(void* handle, int32_t slotIndex) {
+void RONativeInFeedAdMob_Hide(void* handle, int32_t slotIndex) {
     if (handle == NULL) return;
-    [(__bridge RONativeAdMobInFeed *)handle hideSlot:slotIndex];
+    [(__bridge RONativeInFeedAdMob *)handle hideSlot:slotIndex];
 }
 
-void RONativeAdMobInFeed_SetPosition(
+void RONativeInFeedAdMob_SetPosition(
         void* handle
       , int32_t slotIndex
       , int32_t xPx
       , int32_t yPx) {
     if (handle == NULL) return;
-    [(__bridge RONativeAdMobInFeed *)handle
+    [(__bridge RONativeInFeedAdMob *)handle
             setSlot:slotIndex
           positionX:HBPointsFromPixels(xPx)
                   y:HBPointsFromPixels(yPx)];
 }
 
-void RONativeAdMobInFeed_Release(void* handle) {
+void RONativeInFeedAdMob_Release(void* handle) {
     if (handle == NULL) return;
-    RONativeAdMobInFeed *ad = (RONativeAdMobInFeed *)CFBridgingRelease(handle);
+    RONativeInFeedAdMob *ad = (RONativeInFeedAdMob *)CFBridgingRelease(handle);
     [ad releaseAd];
 }
 
@@ -125,16 +125,16 @@ void RONativeAdMobInFeed_Release(void* handle) {
 // Full screen
 // ---------------------------------------------------------------------------
 
-void* RONativeAdMobOverlay_Create(const char* adUnitId, int32_t instanceId) {
+void* RONativeOverlayAdMob_Create(const char* adUnitId, int32_t instanceId) {
     NSString *unit = HBStringFromUtf8(adUnitId);
     if (unit.length == 0) return NULL;
-    RONativeAdMobOverlay *ad =
-            [[RONativeAdMobOverlay alloc] initWithAdUnitId:unit
+    RONativeOverlayAdMob *ad =
+            [[RONativeOverlayAdMob alloc] initWithAdUnitId:unit
                                                 instanceId:instanceId];
     return (void *)CFBridgingRetain(ad);
 }
 
-void RONativeAdMobOverlay_SetListener(
+void RONativeOverlayAdMob_SetListener(
         void* handle
       , RONativeAdMobLoadingStartedCallback loadingStarted
       , RONativeAdMobLoadingCompletedCallback loadingCompleted
@@ -144,7 +144,7 @@ void RONativeAdMobOverlay_SetListener(
       , RONativeAdMobStateChangedCallback stateChanged
       , RONativeAdMobShowNotReadyCallback showNotReady) {
     if (handle == NULL) return;
-    RONativeAdMobOverlay *ad = (__bridge RONativeAdMobOverlay *)handle;
+    RONativeOverlayAdMob *ad = (__bridge RONativeOverlayAdMob *)handle;
     [ad setListenerCallbacks:HBMakeCallbacks(
             loadingStarted
           , loadingCompleted
@@ -155,7 +155,7 @@ void RONativeAdMobOverlay_SetListener(
           , showNotReady)];
 }
 
-void RONativeAdMobOverlay_Configure(
+void RONativeOverlayAdMob_Configure(
         void* handle
       , bool fullscreen
       , int32_t countdownSec
@@ -164,7 +164,7 @@ void RONativeAdMobOverlay_Configure(
       , float heightRatio
       , float backgroundAlpha) {
     if (handle == NULL) return;
-    [(__bridge RONativeAdMobOverlay *)handle
+    [(__bridge RONativeOverlayAdMob *)handle
             configureWithFullscreen:fullscreen
                        countdownSec:countdownSec
                         xRandomSide:xRandomSide
@@ -173,17 +173,17 @@ void RONativeAdMobOverlay_Configure(
                     backgroundAlpha:backgroundAlpha];
 }
 
-void RONativeAdMobOverlay_SetCountdownSec(void* handle, int32_t countdownSec) {
+void RONativeOverlayAdMob_SetCountdownSec(void* handle, int32_t countdownSec) {
     if (handle == NULL) return;
-    [(__bridge RONativeAdMobOverlay *)handle setCountdownSec:countdownSec];
+    [(__bridge RONativeOverlayAdMob *)handle setCountdownSec:countdownSec];
 }
 
-void RONativeAdMobOverlay_LoadAd(void* handle) {
+void RONativeOverlayAdMob_LoadAd(void* handle) {
     if (handle == NULL) return;
-    [(__bridge RONativeAdMobOverlay *)handle loadAd];
+    [(__bridge RONativeOverlayAdMob *)handle loadAd];
 }
 
-void RONativeAdMobOverlay_ShowAd(
+void RONativeOverlayAdMob_ShowAd(
         void* handle
       , int32_t showId
       , RONativeAdMobShowCompletedCallback onCompleted) {
@@ -193,18 +193,18 @@ void RONativeAdMobOverlay_ShowAd(
         }
         return;
     }
-    [(__bridge RONativeAdMobOverlay *)handle showAdWithShowId:showId
+    [(__bridge RONativeOverlayAdMob *)handle showAdWithShowId:showId
                                                   onCompleted:onCompleted];
 }
 
-void RONativeAdMobOverlay_HideAd(void* handle) {
+void RONativeOverlayAdMob_HideAd(void* handle) {
     if (handle == NULL) return;
-    [(__bridge RONativeAdMobOverlay *)handle hideAd];
+    [(__bridge RONativeOverlayAdMob *)handle hideAd];
 }
 
-void RONativeAdMobOverlay_Release(void* handle) {
+void RONativeOverlayAdMob_Release(void* handle) {
     if (handle == NULL) return;
-    RONativeAdMobOverlay *ad =
-            (RONativeAdMobOverlay *)CFBridgingRelease(handle);
+    RONativeOverlayAdMob *ad =
+            (RONativeOverlayAdMob *)CFBridgingRelease(handle);
     [ad releaseAd];
 }

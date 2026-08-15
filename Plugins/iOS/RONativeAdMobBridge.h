@@ -64,13 +64,13 @@ typedef void (*RONativeAdMobShowCompletedCallback)(
 // The slot-indexed half of the InFeedListener interface on Android: one
 // in-feed unit owns several display slots, and these callbacks say which
 // one is speaking.
-typedef void (*RONativeAdMobInFeedSlotDisplayedCallback)(
+typedef void (*RONativeInFeedAdMobSlotDisplayedCallback)(
         int32_t instanceId
       , int32_t slotIndex);
-typedef void (*RONativeAdMobInFeedSlotShowNotReadyCallback)(
+typedef void (*RONativeInFeedAdMobSlotShowNotReadyCallback)(
         int32_t instanceId
       , int32_t slotIndex);
-typedef void (*RONativeAdMobInFeedSlotPresentationFailedCallback)(
+typedef void (*RONativeInFeedAdMobSlotPresentationFailedCallback)(
         int32_t instanceId
       , int32_t slotIndex
       , int32_t errorCode
@@ -83,41 +83,41 @@ typedef void (*RONativeAdMobInFeedSlotPresentationFailedCallback)(
 // produce; the native side converts to points internally the way the Java
 // side converts to dp.
 // ---------------------------------------------------------------------------
-void* RONativeAdMobInFeed_Create(
+void* RONativeInFeedAdMob_Create(
         const char* adUnitId
       , int32_t slotCount
       , int32_t cacheSize
       , float backgroundAlpha
       , int32_t instanceId);
-void RONativeAdMobInFeed_SetListener(
+void RONativeInFeedAdMob_SetListener(
         void* handle
       , RONativeAdMobLoadingStartedCallback loadingStarted
       , RONativeAdMobLoadingCompletedCallback loadingCompleted
       , RONativeAdMobPaidCallback adPaid
-      , RONativeAdMobInFeedSlotDisplayedCallback slotDisplayed
-      , RONativeAdMobInFeedSlotShowNotReadyCallback slotShowNotReady
-      , RONativeAdMobInFeedSlotPresentationFailedCallback slotPresentationFailed);
-void RONativeAdMobInFeed_Configure(
+      , RONativeInFeedAdMobSlotDisplayedCallback slotDisplayed
+      , RONativeInFeedAdMobSlotShowNotReadyCallback slotShowNotReady
+      , RONativeInFeedAdMobSlotPresentationFailedCallback slotPresentationFailed);
+void RONativeInFeedAdMob_Configure(
         void* handle
       , int32_t slotIndex
       , int32_t xPx
       , int32_t yPx
       , int32_t widthPx
       , int32_t heightPx);
-void RONativeAdMobInFeed_Show(void* handle, int32_t slotIndex);
-void RONativeAdMobInFeed_Hide(void* handle, int32_t slotIndex);
-void RONativeAdMobInFeed_SetPosition(
+void RONativeInFeedAdMob_Show(void* handle, int32_t slotIndex);
+void RONativeInFeedAdMob_Hide(void* handle, int32_t slotIndex);
+void RONativeInFeedAdMob_SetPosition(
         void* handle
       , int32_t slotIndex
       , int32_t xPx
       , int32_t yPx);
-void RONativeAdMobInFeed_Release(void* handle);
+void RONativeInFeedAdMob_Release(void* handle);
 
 // ---------------------------------------------------------------------------
 // Full screen - com.riseon.nativeadmob.Overlay.
 // ---------------------------------------------------------------------------
-void* RONativeAdMobOverlay_Create(const char* adUnitId, int32_t instanceId);
-void RONativeAdMobOverlay_SetListener(
+void* RONativeOverlayAdMob_Create(const char* adUnitId, int32_t instanceId);
+void RONativeOverlayAdMob_SetListener(
         void* handle
       , RONativeAdMobLoadingStartedCallback loadingStarted
       , RONativeAdMobLoadingCompletedCallback loadingCompleted
@@ -126,7 +126,7 @@ void RONativeAdMobOverlay_SetListener(
       , RONativeAdMobPresentationFailedCallback presentationFailed
       , RONativeAdMobStateChangedCallback stateChanged
       , RONativeAdMobShowNotReadyCallback showNotReady);
-void RONativeAdMobOverlay_Configure(
+void RONativeOverlayAdMob_Configure(
         void* handle
       , bool fullscreen
       , int32_t countdownSec
@@ -134,14 +134,14 @@ void RONativeAdMobOverlay_Configure(
       , bool numberOppositeSide
       , float heightRatio
       , float backgroundAlpha);
-void RONativeAdMobOverlay_SetCountdownSec(void* handle, int32_t countdownSec);
-void RONativeAdMobOverlay_LoadAd(void* handle);
-void RONativeAdMobOverlay_ShowAd(
+void RONativeOverlayAdMob_SetCountdownSec(void* handle, int32_t countdownSec);
+void RONativeOverlayAdMob_LoadAd(void* handle);
+void RONativeOverlayAdMob_ShowAd(
         void* handle
       , int32_t showId
       , RONativeAdMobShowCompletedCallback onCompleted);
-void RONativeAdMobOverlay_HideAd(void* handle);
-void RONativeAdMobOverlay_Release(void* handle);
+void RONativeOverlayAdMob_HideAd(void* handle);
+void RONativeOverlayAdMob_Release(void* handle);
 
 #ifdef __cplusplus
 }

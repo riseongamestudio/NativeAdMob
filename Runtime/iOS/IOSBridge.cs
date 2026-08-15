@@ -55,14 +55,14 @@ namespace RiseOn.NativeAdMob {
             int instanceId, int slotIndex, int errorCode, string errorMessage);
 
         [DllImport("__Internal")]
-        internal static extern IntPtr RONativeAdMobInFeed_Create(
+        internal static extern IntPtr RONativeInFeedAdMob_Create(
             string adUnitId
           , int slotCount
           , int cacheSize
           , float backgroundAlpha
           , int instanceId);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobInFeed_SetListener(
+        internal static extern void RONativeInFeedAdMob_SetListener(
             IntPtr handle
           , LoadingStartedDelegate loadingStarted
           , LoadingCompletedDelegate loadingCompleted
@@ -71,7 +71,7 @@ namespace RiseOn.NativeAdMob {
           , SlotShowNotReadyDelegate slotShowNotReady
           , SlotPresentationFailedDelegate slotPresentationFailed);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobInFeed_Configure(
+        internal static extern void RONativeInFeedAdMob_Configure(
             IntPtr handle
           , int slotIndex
           , int xPx
@@ -79,22 +79,22 @@ namespace RiseOn.NativeAdMob {
           , int widthPx
           , int heightPx);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobInFeed_Show(
+        internal static extern void RONativeInFeedAdMob_Show(
             IntPtr handle, int slotIndex);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobInFeed_Hide(
+        internal static extern void RONativeInFeedAdMob_Hide(
             IntPtr handle, int slotIndex);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobInFeed_SetPosition(
+        internal static extern void RONativeInFeedAdMob_SetPosition(
             IntPtr handle, int slotIndex, int xPx, int yPx);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobInFeed_Release(IntPtr handle);
+        internal static extern void RONativeInFeedAdMob_Release(IntPtr handle);
 
         [DllImport("__Internal")]
-        internal static extern IntPtr RONativeAdMobOverlay_Create(
+        internal static extern IntPtr RONativeOverlayAdMob_Create(
             string adUnitId, int instanceId);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobOverlay_SetListener(
+        internal static extern void RONativeOverlayAdMob_SetListener(
             IntPtr handle
           , LoadingStartedDelegate loadingStarted
           , LoadingCompletedDelegate loadingCompleted
@@ -104,7 +104,7 @@ namespace RiseOn.NativeAdMob {
           , StateChangedDelegate stateChanged
           , ShowNotReadyDelegate showNotReady);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobOverlay_Configure(
+        internal static extern void RONativeOverlayAdMob_Configure(
             IntPtr handle
           , [MarshalAs(UnmanagedType.I1)] bool fullscreen
           , int countdownSec
@@ -113,17 +113,17 @@ namespace RiseOn.NativeAdMob {
           , float heightRatio
           , float backgroundAlpha);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobOverlay_SetCountdownSec(
+        internal static extern void RONativeOverlayAdMob_SetCountdownSec(
             IntPtr handle, int countdownSec);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobOverlay_LoadAd(IntPtr handle);
+        internal static extern void RONativeOverlayAdMob_LoadAd(IntPtr handle);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobOverlay_ShowAd(
+        internal static extern void RONativeOverlayAdMob_ShowAd(
             IntPtr handle, int showId, ShowCompletedDelegate onCompleted);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobOverlay_HideAd(IntPtr handle);
+        internal static extern void RONativeOverlayAdMob_HideAd(IntPtr handle);
         [DllImport("__Internal")]
-        internal static extern void RONativeAdMobOverlay_Release(IntPtr handle);
+        internal static extern void RONativeOverlayAdMob_Release(IntPtr handle);
 
         // Static references keep the delegates alive while native code
         // still holds their function pointers.

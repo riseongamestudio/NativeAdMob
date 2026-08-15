@@ -9,7 +9,7 @@
 
 #import "ROAdTextLabel.h"
 #import "ROMeasureLayout.h"
-#import "RONativeAdMobInFeedLayoutTypes.h"
+#import "RONativeInFeedAdMobLayoutTypes.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -51,7 +51,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
-@interface RONativeAdMobInFeedViewFactory : NSObject
+@interface RONativeInFeedAdMobViewFactory : NSObject
 
 - (instancetype)initWithNativeAd:(GADNativeAd *)nativeAd
                  slotShortSidePt:(CGFloat)slotShortSidePt;

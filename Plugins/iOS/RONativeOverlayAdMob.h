@@ -10,7 +10,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface RONativeAdMobOverlay : RONativeAdMob
+@interface RONativeOverlayAdMob : RONativeAdMob
 
 - (instancetype)initWithAdUnitId:(NSString *)adUnitId
                       instanceId:(int32_t)instanceId;

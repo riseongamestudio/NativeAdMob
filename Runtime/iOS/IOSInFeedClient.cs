@@ -12,7 +12,7 @@ namespace RiseOn.NativeAdMob {
           , IInFeedCallbacks callbacks) {
             this.callbacks = callbacks;
             instanceId = IOSBridge.Register(this);
-            handle = IOSBridge.RONativeAdMobInFeed_Create(
+            handle = IOSBridge.RONativeInFeedAdMob_Create(
                 settings.AdUnitId
               , settings.SlotCount
               , settings.CacheSize
@@ -20,7 +20,7 @@ namespace RiseOn.NativeAdMob {
               , instanceId);
             if (handle == IntPtr.Zero) return;
 
-            IOSBridge.RONativeAdMobInFeed_SetListener(
+            IOSBridge.RONativeInFeedAdMob_SetListener(
                 handle
               , IOSBridge.OnLoadingStartedCallback
               , IOSBridge.OnLoadingCompletedCallback
@@ -36,7 +36,7 @@ namespace RiseOn.NativeAdMob {
           , Vector2Int sizePx) {
             if (handle == IntPtr.Zero) return;
 
-            IOSBridge.RONativeAdMobInFeed_Configure(
+            IOSBridge.RONativeInFeedAdMob_Configure(
                 handle
               , slotIndex
               , positionPx.x
@@ -48,19 +48,19 @@ namespace RiseOn.NativeAdMob {
         public void ShowSlot(int slotIndex) {
             if (handle == IntPtr.Zero) return;
 
-            IOSBridge.RONativeAdMobInFeed_Show(handle, slotIndex);
+            IOSBridge.RONativeInFeedAdMob_Show(handle, slotIndex);
         }
 
         public void HideSlot(int slotIndex) {
             if (handle == IntPtr.Zero) return;
 
-            IOSBridge.RONativeAdMobInFeed_Hide(handle, slotIndex);
+            IOSBridge.RONativeInFeedAdMob_Hide(handle, slotIndex);
         }
 
         public void SetSlotPosition(int slotIndex, Vector2Int positionPx) {
             if (handle == IntPtr.Zero) return;
 
-            IOSBridge.RONativeAdMobInFeed_SetPosition(
+            IOSBridge.RONativeInFeedAdMob_SetPosition(
                 handle
               , slotIndex
               , positionPx.x
@@ -71,7 +71,7 @@ namespace RiseOn.NativeAdMob {
             var releasedHandle = handle;
             handle = IntPtr.Zero;
             if (releasedHandle != IntPtr.Zero) {
-                IOSBridge.RONativeAdMobInFeed_Release(releasedHandle);
+                IOSBridge.RONativeInFeedAdMob_Release(releasedHandle);
             }
             IOSBridge.Unregister(instanceId);
         }

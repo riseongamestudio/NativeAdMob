@@ -16,13 +16,13 @@ typedef struct {
     RONativeAdMobLoadingStartedCallback _Nullable loadingStarted;
     RONativeAdMobLoadingCompletedCallback _Nullable loadingCompleted;
     RONativeAdMobPaidCallback _Nullable adPaid;
-    RONativeAdMobInFeedSlotDisplayedCallback _Nullable slotDisplayed;
-    RONativeAdMobInFeedSlotShowNotReadyCallback _Nullable slotShowNotReady;
-    RONativeAdMobInFeedSlotPresentationFailedCallback
+    RONativeInFeedAdMobSlotDisplayedCallback _Nullable slotDisplayed;
+    RONativeInFeedAdMobSlotShowNotReadyCallback _Nullable slotShowNotReady;
+    RONativeInFeedAdMobSlotPresentationFailedCallback
             _Nullable slotPresentationFailed;
-} RONativeAdMobInFeedListenerCallbacks;
+} RONativeInFeedAdMobListenerCallbacks;
 
-@interface RONativeAdMobInFeed : RONativeAdMob
+@interface RONativeInFeedAdMob : RONativeAdMob
 
 - (instancetype)initWithAdUnitId:(NSString *)adUnitId
                        slotCount:(NSInteger)slotCount
@@ -31,7 +31,7 @@ typedef struct {
                       instanceId:(int32_t)instanceId;
 
 - (void)setInFeedListenerCallbacks:
-        (RONativeAdMobInFeedListenerCallbacks)callbacks;
+        (RONativeInFeedAdMobListenerCallbacks)callbacks;
 
 // Points, converted from Unity's pixels at the bridge boundary.
 - (void)configureSlot:(NSInteger)slotIndex

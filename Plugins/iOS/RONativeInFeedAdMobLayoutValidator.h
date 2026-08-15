@@ -6,14 +6,14 @@
 #import <UIKit/UIKit.h>
 #import <GoogleMobileAds/GoogleMobileAds.h>
 
-#import "RONativeAdMobInFeedViewFactory.h"
+#import "RONativeInFeedAdMobViewFactory.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface RONativeAdMobInFeedLayoutValidator : NSObject
+@interface RONativeInFeedAdMobLayoutValidator : NSObject
 
 - (instancetype)initWithNativeAd:(GADNativeAd *)nativeAd
-                     viewFactory:(RONativeAdMobInFeedViewFactory *)viewFactory;
+                     viewFactory:(RONativeInFeedAdMobViewFactory *)viewFactory;
 
 - (BOOL)validateAssetGeometryForRoot:(UIView *)rootView
                                views:(ROInFeedAssetViews *_Nullable)views

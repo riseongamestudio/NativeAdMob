@@ -1,6 +1,6 @@
-#import "RONativeAdMobInFeed.h"
+#import "RONativeInFeedAdMob.h"
 
-#import "RONativeAdMobInFeedSlot.h"
+#import "RONativeInFeedAdMobSlot.h"
 
 static NSString *const kROTag = @"InFeed";
 
@@ -24,11 +24,11 @@ NSTimeInterval ROInFeedBackoffDelay(
 
 static float ROResolveBackgroundAlpha(float value);
 
-@interface RONativeAdMobInFeed () <GADNativeAdLoaderDelegate
+@interface RONativeInFeedAdMob () <GADNativeAdLoaderDelegate
                               , GADNativeAdDelegate>
 @end
 
-@implementation RONativeAdMobInFeed {
+@implementation RONativeInFeedAdMob {
     NSString *_adUnitId;
     NSInteger _cacheSize;
     float _backgroundAlpha;
@@ -47,7 +47,7 @@ static float ROResolveBackgroundAlpha(float value);
 
     // Read on SDK threads, written from Unity's thread; the struct swap is
     // guarded so a reader never sees half of an update.
-    RONativeAdMobInFeedListenerCallbacks _inFeedCallbacks;
+    RONativeInFeedAdMobListenerCallbacks _inFeedCallbacks;
     NSObject *_inFeedCallbacksLock;
 }
 
@@ -100,14 +100,14 @@ static float ROResolveBackgroundAlpha(float value) {
 }
 
 - (void)setInFeedListenerCallbacks:
-        (RONativeAdMobInFeedListenerCallbacks)callbacks {
+        (RONativeInFeedAdMobListenerCallbacks)callbacks {
     if (self.released) return;
     @synchronized (_inFeedCallbacksLock) {
         _inFeedCallbacks = callbacks;
     }
 }
 
-- (RONativeAdMobInFeedListenerCallbacks)ro_currentInFeedCallbacks {
+- (RONativeInFeedAdMobListenerCallbacks)ro_currentInFeedCallbacks {
     @synchronized (_inFeedCallbacksLock) {
         return _inFeedCallbacks;
     }
@@ -197,7 +197,7 @@ static float ROResolveBackgroundAlpha(float value) {
         }
         [self->_cachedAds removeAllObjects];
         self->_adLoader = nil;
-        RONativeAdMobInFeedListenerCallbacks empty = {0};
+        RONativeInFeedAdMobListenerCallbacks empty = {0};
         @synchronized (self->_inFeedCallbacksLock) {
             self->_inFeedCallbacks = empty;
         }
@@ -264,12 +264,12 @@ static float ROResolveBackgroundAlpha(float value) {
         cached.loadedAt = RONow();
         [self->_cachedAds addObject:cached];
         [self ro_scheduleCacheExpiry];
-        __weak RONativeAdMobInFeed *weakSelf = self;
+        __weak RONativeInFeedAdMob *weakSelf = self;
         __weak GADNativeAd *weakAd = nativeAd;
         [self bindPaidEventForAd:nativeAd
                     paidAdUnitId:self->_adUnitId
                      isCurrentAd:^BOOL{
-            RONativeAdMobInFeed *strongSelf = weakSelf;
+            RONativeInFeedAdMob *strongSelf = weakSelf;
             GADNativeAd *strongAd = weakAd;
             if (strongSelf == nil || strongAd == nil) return NO;
             @synchronized (strongSelf->_ownedAds) {
@@ -351,7 +351,7 @@ static float ROResolveBackgroundAlpha(float value) {
     if (self.released) return kROInFeedNoRetryScheduled;
 
     _retryScheduled = YES;
-    __weak RONativeAdMobInFeed *weakSelf = self;
+    __weak RONativeInFeedAdMob *weakSelf = self;
     _retryTimer = [NSTimer scheduledTimerWithTimeInterval:MAX(0.01, delay)
                                                   repeats:NO
                                                     block:^(NSTimer *timer) {
@@ -391,7 +391,7 @@ static float ROResolveBackgroundAlpha(float value) {
     }
     if (nextExpiryAt == DBL_MAX) return;
 
-    __weak RONativeAdMobInFeed *weakSelf = self;
+    __weak RONativeInFeedAdMob *weakSelf = self;
     _cacheExpiryTimer = [NSTimer
             scheduledTimerWithTimeInterval:MAX(0.01, nextExpiryAt - RONow())
                                    repeats:NO
@@ -449,7 +449,7 @@ static float ROResolveBackgroundAlpha(float value) {
 }
 
 - (void)ro_notifyLoadingStarted {
-    RONativeAdMobInFeedListenerCallbacks callbacks =
+    RONativeInFeedAdMobListenerCallbacks callbacks =
             [self ro_currentInFeedCallbacks];
     if (callbacks.loadingStarted == NULL) return;
     callbacks.loadingStarted(self.instanceId);
@@ -457,7 +457,7 @@ static float ROResolveBackgroundAlpha(float value) {
 
 - (void)ro_notifyLoadingCompletedWithCode:(int32_t)errorCode
                                   message:(NSString *)errorMessage {
-    RONativeAdMobInFeedListenerCallbacks callbacks =
+    RONativeInFeedAdMobListenerCallbacks callbacks =
             [self ro_currentInFeedCallbacks];
     if (callbacks.loadingCompleted == NULL) return;
     callbacks.loadingCompleted(
@@ -472,7 +472,7 @@ static float ROResolveBackgroundAlpha(float value) {
                          value:(double)value
                   currencyCode:(NSString *)currencyCode
                      precision:(int32_t)precision {
-    RONativeAdMobInFeedListenerCallbacks callbacks =
+    RONativeInFeedAdMobListenerCallbacks callbacks =
             [self ro_currentInFeedCallbacks];
     if (callbacks.adPaid == NULL) return;
     callbacks.adPaid(
@@ -485,14 +485,14 @@ static float ROResolveBackgroundAlpha(float value) {
 }
 
 - (void)notifySlotDisplayed:(NSInteger)slotIndex {
-    RONativeAdMobInFeedListenerCallbacks callbacks =
+    RONativeInFeedAdMobListenerCallbacks callbacks =
             [self ro_currentInFeedCallbacks];
     if (callbacks.slotDisplayed == NULL) return;
     callbacks.slotDisplayed(self.instanceId, (int32_t)slotIndex);
 }
 
 - (void)notifySlotShowNotReady:(NSInteger)slotIndex {
-    RONativeAdMobInFeedListenerCallbacks callbacks =
+    RONativeInFeedAdMobListenerCallbacks callbacks =
             [self ro_currentInFeedCallbacks];
     if (callbacks.slotShowNotReady == NULL) return;
     callbacks.slotShowNotReady(self.instanceId, (int32_t)slotIndex);
@@ -501,7 +501,7 @@ static float ROResolveBackgroundAlpha(float value) {
 - (void)notifySlotPresentationFailed:(NSInteger)slotIndex
                                 code:(int32_t)errorCode
                              message:(NSString *)errorMessage {
-    RONativeAdMobInFeedListenerCallbacks callbacks =
+    RONativeInFeedAdMobListenerCallbacks callbacks =
             [self ro_currentInFeedCallbacks];
     if (callbacks.slotPresentationFailed == NULL) return;
     callbacks.slotPresentationFailed(

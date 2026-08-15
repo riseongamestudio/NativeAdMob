@@ -17,7 +17,7 @@ import java.text.Normalizer;
 import java.util.ArrayList;
 
 final class InFeedLayoutValidator {
-    private static final String TAG = "NativeAdMobInFeed";
+    private static final String TAG = "NativeInFeedAdMob";
     private static final float MIN_VIDEO_MEDIA_DP = 120f;
     private static final int MIN_VIDEO_LONG_SIDE_PX = 256;
     private static final int MIN_VISIBLE_ASSET_SIZE_PX = 1;

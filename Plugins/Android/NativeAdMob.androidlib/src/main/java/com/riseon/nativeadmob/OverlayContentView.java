@@ -55,7 +55,7 @@ final class OverlayContentView extends FrameLayout {
         }
     }
 
-    private static final String TAG = "NativeAdMobOverlay";
+    private static final String TAG = "NativeOverlayAdMob";
     private static final String ATTRIBUTION_TEXT = "Ad";
     private static final String SECONDARY_TEXT_COLOR = "#CCFFFFFF";
     private static final String ATTRIBUTION_BACKGROUND_COLOR = "#FFFFC107";

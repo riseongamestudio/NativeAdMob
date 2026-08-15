@@ -1,4 +1,4 @@
-#import "RONativeAdMobInFeedViewFactory.h"
+#import "RONativeInFeedAdMobViewFactory.h"
 
 static NSString *const kROTag = @"InFeed";
 
@@ -137,7 +137,7 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
 
 @end
 
-@implementation RONativeAdMobInFeedViewFactory {
+@implementation RONativeInFeedAdMobViewFactory {
     GADNativeAd *_nativeAd;
     CGFloat _slotShortSide;
     CGFloat _screenScale;

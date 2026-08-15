@@ -24,7 +24,7 @@ import java.util.ArrayList;
 
 final class InFeedPresentation extends FrameLayout
         implements AdPresentation {
-    private static final String TAG = "NativeAdMobInFeed";
+    private static final String TAG = "NativeInFeedAdMob";
     private static final int MIN_STABLE_LAYOUT_PASSES = 3;
     private static final long MIN_FINAL_LAYOUT_OBSERVATION_MS = 80L;
     private static final long MAX_FINAL_LAYOUT_OBSERVATION_MS = 500L;

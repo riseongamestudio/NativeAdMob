@@ -1,4 +1,4 @@
-#import "RONativeAdMobOverlayContentView.h"
+#import "RONativeOverlayAdMobContentView.h"
 
 #import "ROAdTextLabel.h"
 #import "RONativeAdMobStarRatingView.h"
@@ -98,7 +98,7 @@ static UIColor *HBArgb(uint32_t argb) {
 
 @end
 
-@implementation RONativeAdMobOverlayContentView {
+@implementation RONativeOverlayAdMobContentView {
     GADNativeAd *_nativeAd;
     int64_t _countDownRemainingMs;
     BOOL _closeOnLeft;
@@ -1053,11 +1053,11 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
 
     NSDate *finishAt =
             [NSDate dateWithTimeIntervalSinceNow:remainingMs / 1000.0];
-    __weak RONativeAdMobOverlayContentView *weakSelf = self;
+    __weak RONativeOverlayAdMobContentView *weakSelf = self;
     _timer = [NSTimer scheduledTimerWithTimeInterval:kROCountdownInterval
                                              repeats:YES
                                                block:^(NSTimer *timer) {
-        RONativeAdMobOverlayContentView *strongSelf = weakSelf;
+        RONativeOverlayAdMobContentView *strongSelf = weakSelf;
         if (strongSelf == nil) {
             [timer invalidate];
             return;

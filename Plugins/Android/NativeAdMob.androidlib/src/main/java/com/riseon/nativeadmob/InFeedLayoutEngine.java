@@ -31,7 +31,7 @@ final class InFeedLayoutEngine {
     static final int TIER_REGULAR = 1;
     static final int TIER_ROOMY = 2;
 
-    private static final String TAG = "NativeAdMobInFeed";
+    private static final String TAG = "NativeInFeedAdMob";
     private static final float MIN_NATIVE_AD_DP = 32f;
     private static final int WIDTH_REFINEMENT_PASSES = 4;
     private static final int WIDTH_REFINEMENT_SAMPLES = 6;

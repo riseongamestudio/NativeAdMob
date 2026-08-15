@@ -1,17 +1,17 @@
-#import "RONativeAdMobOverlayPresentation.h"
+#import "RONativeOverlayAdMobPresentation.h"
 
-#import "RONativeAdMobOverlayContentView.h"
+#import "RONativeOverlayAdMobContentView.h"
 
 static NSString *const kROTag = @"Overlay";
 
 // The Activity: a translucent full-screen controller whose whole content is
 // the ad face. Status bar and home indicator step back the way the Android
 // immersive flags pushed the system bars away.
-@interface RONativeAdMobOverlayViewController : UIViewController
-@property (nonatomic, strong, nullable) RONativeAdMobOverlayContentView *contentView;
+@interface RONativeOverlayAdMobViewController : UIViewController
+@property (nonatomic, strong, nullable) RONativeOverlayAdMobContentView *contentView;
 @end
 
-@implementation RONativeAdMobOverlayViewController
+@implementation RONativeOverlayAdMobViewController
 
 - (void)viewDidLoad {
     [super viewDidLoad];
@@ -35,7 +35,7 @@ static NSString *const kROTag = @"Overlay";
 
 @end
 
-@implementation RONativeAdMobOverlayPresentation {
+@implementation RONativeOverlayAdMobPresentation {
     __weak UIViewController *_hostViewController;
     GADNativeAd *_nativeAd;
     int32_t _countdownSec;
@@ -45,8 +45,8 @@ static NSString *const kROTag = @"Overlay";
     float _heightRatio;
     float _backgroundAlpha;
 
-    RONativeAdMobOverlayContentView *_contentView;
-    RONativeAdMobOverlayViewController *_presentedController;
+    RONativeOverlayAdMobContentView *_contentView;
+    RONativeOverlayAdMobViewController *_presentedController;
     BOOL _showing;
     BOOL _dismissed;
     BOOL _observingLifecycle;
@@ -83,12 +83,12 @@ static NSString *const kROTag = @"Overlay";
     if (_contentView != nil) return YES;
 
     BOOL hasVideoContent = _nativeAd.mediaContent.hasVideoContent;
-    CGFloat requestedPanelHeight = [RONativeAdMobOverlayContentView
+    CGFloat requestedPanelHeight = [RONativeOverlayAdMobContentView
             resolveInitialPanelHeightForFullscreen:_fullscreen
                                        heightRatio:_heightRatio
                                    hasVideoContent:hasVideoContent];
-    __weak RONativeAdMobOverlayPresentation *weakSelf = self;
-    _contentView = [[RONativeAdMobOverlayContentView alloc]
+    __weak RONativeOverlayAdMobPresentation *weakSelf = self;
+    _contentView = [[RONativeOverlayAdMobContentView alloc]
             initWithNativeAd:_nativeAd
         countDownRemainingMs:(int64_t)_countdownSec * 1000
                  closeOnLeft:_closeOnLeft
@@ -112,7 +112,7 @@ static NSString *const kROTag = @"Overlay";
 
     if (_fullscreen) {
         _presentedController =
-                [[RONativeAdMobOverlayViewController alloc] init];
+                [[RONativeOverlayAdMobViewController alloc] init];
         _presentedController.contentView = _contentView;
         _presentedController.modalPresentationStyle =
                 UIModalPresentationOverOverlay;
@@ -173,7 +173,7 @@ static NSString *const kROTag = @"Overlay";
     [_contentView removeFromSuperview];
     _contentView = nil;
 
-    RONativeAdMobOverlayViewController *presented = _presentedController;
+    RONativeOverlayAdMobViewController *presented = _presentedController;
     _presentedController = nil;
     if (presented != nil && presented.presentingViewController != nil) {
         [presented dismissViewControllerAnimated:NO completion:nil];

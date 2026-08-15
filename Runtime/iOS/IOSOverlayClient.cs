@@ -11,12 +11,12 @@ namespace RiseOn.NativeAdMob {
           , IOverlayCallbacks callbacks) {
             this.callbacks = callbacks;
             instanceId = IOSBridge.Register(this);
-            handle = IOSBridge.RONativeAdMobOverlay_Create(
+            handle = IOSBridge.RONativeOverlayAdMob_Create(
                 settings.AdUnitId
               , instanceId);
             if (handle == IntPtr.Zero) return;
 
-            IOSBridge.RONativeAdMobOverlay_Configure(
+            IOSBridge.RONativeOverlayAdMob_Configure(
                 handle
               , settings.CoversFullScreen
               , settings.CountdownSec
@@ -24,7 +24,7 @@ namespace RiseOn.NativeAdMob {
               , settings.NumberOppositeSide
               , settings.HeightRatio
               , settings.BackgroundAlpha);
-            IOSBridge.RONativeAdMobOverlay_SetListener(
+            IOSBridge.RONativeOverlayAdMob_SetListener(
                 handle
               , IOSBridge.OnLoadingStartedCallback
               , IOSBridge.OnLoadingCompletedCallback
@@ -38,7 +38,7 @@ namespace RiseOn.NativeAdMob {
         public void SetCountdownSec(int countdownSec) {
             if (handle == IntPtr.Zero) return;
 
-            IOSBridge.RONativeAdMobOverlay_SetCountdownSec(
+            IOSBridge.RONativeOverlayAdMob_SetCountdownSec(
                 handle
               , countdownSec);
         }
@@ -46,7 +46,7 @@ namespace RiseOn.NativeAdMob {
         public void LoadAd() {
             if (handle == IntPtr.Zero) return;
 
-            IOSBridge.RONativeAdMobOverlay_LoadAd(handle);
+            IOSBridge.RONativeOverlayAdMob_LoadAd(handle);
         }
 
         public void ShowAd(int showId) {
@@ -55,7 +55,7 @@ namespace RiseOn.NativeAdMob {
                 return;
             }
 
-            IOSBridge.RONativeAdMobOverlay_ShowAd(
+            IOSBridge.RONativeOverlayAdMob_ShowAd(
                 handle
               , showId
               , IOSBridge.OnShowCompletedCallback);
@@ -64,14 +64,14 @@ namespace RiseOn.NativeAdMob {
         public void HideAd() {
             if (handle == IntPtr.Zero) return;
 
-            IOSBridge.RONativeAdMobOverlay_HideAd(handle);
+            IOSBridge.RONativeOverlayAdMob_HideAd(handle);
         }
 
         public void Release() {
             var releasedHandle = handle;
             handle = IntPtr.Zero;
             if (releasedHandle != IntPtr.Zero) {
-                IOSBridge.RONativeAdMobOverlay_Release(releasedHandle);
+                IOSBridge.RONativeOverlayAdMob_Release(releasedHandle);
             }
             IOSBridge.Unregister(instanceId);
         }

@@ -1,4 +1,4 @@
-#import "RONativeAdMobInFeedLayoutEngine.h"
+#import "RONativeInFeedAdMobLayoutEngine.h"
 
 static NSString *const kROTag = @"InFeed";
 
@@ -110,14 +110,14 @@ NSString *ROInFeedDescribePlan(ROInFeedLayoutPlan *plan) {
 @implementation HBCachedProbeLayout
 @end
 
-@implementation RONativeAdMobInFeedLayoutEngine {
+@implementation RONativeInFeedAdMobLayoutEngine {
     GADNativeAd *_nativeAd;
     CGFloat _requestedX;
     CGFloat _requestedY;
     CGFloat _requestedWidth;
     CGFloat _requestedHeight;
-    RONativeAdMobInFeedViewFactory *_viewFactory;
-    RONativeAdMobInFeedLayoutValidator *_validator;
+    RONativeInFeedAdMobViewFactory *_viewFactory;
+    RONativeInFeedAdMobLayoutValidator *_validator;
     NSMutableArray<HBCachedProbeLayout *> *_probeLayouts;
     NSMutableDictionary<NSNumber *, NSString *> *_rejectionReasons;
     CGFloat _screenScale;
@@ -128,8 +128,8 @@ NSString *ROInFeedDescribePlan(ROInFeedLayoutPlan *plan) {
                       requestedY:(CGFloat)requestedY
                   requestedWidth:(CGFloat)requestedWidth
                  requestedHeight:(CGFloat)requestedHeight
-                     viewFactory:(RONativeAdMobInFeedViewFactory *)viewFactory
-                       validator:(RONativeAdMobInFeedLayoutValidator *)validator {
+                     viewFactory:(RONativeInFeedAdMobViewFactory *)viewFactory
+                       validator:(RONativeInFeedAdMobLayoutValidator *)validator {
     self = [super init];
     if (self == nil) return nil;
     _nativeAd = nativeAd;

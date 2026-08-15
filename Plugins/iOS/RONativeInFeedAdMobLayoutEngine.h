@@ -7,21 +7,21 @@
 #import <Foundation/Foundation.h>
 #import <GoogleMobileAds/GoogleMobileAds.h>
 
-#import "RONativeAdMobInFeedLayoutTypes.h"
-#import "RONativeAdMobInFeedLayoutValidator.h"
-#import "RONativeAdMobInFeedViewFactory.h"
+#import "RONativeInFeedAdMobLayoutTypes.h"
+#import "RONativeInFeedAdMobLayoutValidator.h"
+#import "RONativeInFeedAdMobViewFactory.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface RONativeAdMobInFeedLayoutEngine : NSObject
+@interface RONativeInFeedAdMobLayoutEngine : NSObject
 
 - (instancetype)initWithNativeAd:(GADNativeAd *)nativeAd
                       requestedX:(CGFloat)requestedX
                       requestedY:(CGFloat)requestedY
                   requestedWidth:(CGFloat)requestedWidth
                  requestedHeight:(CGFloat)requestedHeight
-                     viewFactory:(RONativeAdMobInFeedViewFactory *)viewFactory
-                       validator:(RONativeAdMobInFeedLayoutValidator *)validator;
+                     viewFactory:(RONativeInFeedAdMobViewFactory *)viewFactory
+                       validator:(RONativeInFeedAdMobLayoutValidator *)validator;
 
 - (void)setPositionX:(CGFloat)xPt y:(CGFloat)yPt;
 - (NSArray<ROInFeedLayoutPlan *> *)choosePlansForScreenWidth:(CGFloat)screenWidth

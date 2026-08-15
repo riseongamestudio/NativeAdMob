@@ -16,7 +16,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)inFeedPresentationActualVisibilityChanged:(BOOL)isActuallyVisible;
 @end
 
-@interface RONativeAdMobInFeedPresentation : UIView
+@interface RONativeInFeedAdMobPresentation : UIView
 
 - (instancetype)initWithHostViewController:(UIViewController *)hostViewController
                                   nativeAd:(GADNativeAd *)nativeAd

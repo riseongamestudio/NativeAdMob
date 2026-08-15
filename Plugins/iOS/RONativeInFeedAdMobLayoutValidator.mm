@@ -1,4 +1,4 @@
-#import "RONativeAdMobInFeedLayoutValidator.h"
+#import "RONativeInFeedAdMobLayoutValidator.h"
 
 static NSString *const kROTag = @"InFeed";
 
@@ -13,14 +13,14 @@ static const CGFloat kROMaxMediaAspectRatio = 5.0f;
 static const int64_t kROGeometryHashOffset = 1469598103934665603LL;
 static const int64_t kROGeometryHashPrime = 1099511628211LL;
 
-@implementation RONativeAdMobInFeedLayoutValidator {
+@implementation RONativeInFeedAdMobLayoutValidator {
     GADNativeAd *_nativeAd;
-    RONativeAdMobInFeedViewFactory *_viewFactory;
+    RONativeInFeedAdMobViewFactory *_viewFactory;
     CGFloat _screenScale;
 }
 
 - (instancetype)initWithNativeAd:(GADNativeAd *)nativeAd
-                     viewFactory:(RONativeAdMobInFeedViewFactory *)viewFactory {
+                     viewFactory:(RONativeInFeedAdMobViewFactory *)viewFactory {
     self = [super init];
     if (self == nil) return nil;
     _nativeAd = nativeAd;

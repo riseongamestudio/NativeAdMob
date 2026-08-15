@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 public final class OverlayActivity extends Activity {
-    private static final String TAG = "NativeAdMobOverlay";
+    private static final String TAG = "NativeOverlayAdMob";
     private static final String EXTRA_SESSION_ID =
             "com.riseon.nativeadmob.extra.NATIVE_FULLSCREEN_SESSION_ID";
     private static final String SESSION_ID_PREFIX =

@@ -1,10 +1,10 @@
-#import "RONativeAdMobInFeedPresentation.h"
+#import "RONativeInFeedAdMobPresentation.h"
 
 #import "ROMeasureLayout.h"
-#import "RONativeAdMobInFeedLayoutEngine.h"
-#import "RONativeAdMobInFeedLayoutTypes.h"
-#import "RONativeAdMobInFeedLayoutValidator.h"
-#import "RONativeAdMobInFeedViewFactory.h"
+#import "RONativeInFeedAdMobLayoutEngine.h"
+#import "RONativeInFeedAdMobLayoutTypes.h"
+#import "RONativeInFeedAdMobLayoutValidator.h"
+#import "RONativeInFeedAdMobViewFactory.h"
 
 static NSString *const kROTag = @"InFeed";
 
@@ -15,7 +15,7 @@ static const NSTimeInterval kRORootReadyRecheckDelay = 0.05;
 static const NSTimeInterval kROMaxRootWait = 10.0;
 static const uint32_t kROBackgroundRgb = 0x1B2029;
 
-@implementation RONativeAdMobInFeedPresentation {
+@implementation RONativeInFeedAdMobPresentation {
     __weak UIViewController *_hostViewController;
     GADNativeAd *_nativeAd;
     CGFloat _requestedX;
@@ -25,9 +25,9 @@ static const uint32_t kROBackgroundRgb = 0x1B2029;
     float _backgroundAlpha;
     __weak id<ROInFeedPresentationListener> _listener;
 
-    RONativeAdMobInFeedViewFactory *_viewFactory;
-    RONativeAdMobInFeedLayoutValidator *_validator;
-    RONativeAdMobInFeedLayoutEngine *_layoutEngine;
+    RONativeInFeedAdMobViewFactory *_viewFactory;
+    RONativeInFeedAdMobLayoutValidator *_validator;
+    RONativeInFeedAdMobLayoutEngine *_layoutEngine;
     NSMutableArray<ROInFeedLayoutPlan *> *_layoutPlans;
 
     GADNativeAdView *_nativeAdView;
@@ -76,19 +76,19 @@ static const uint32_t kROBackgroundRgb = 0x1B2029;
     _requestedY = yPt;
     _requestedWidth = MAX(1, widthPt);
     _requestedHeight = MAX(1, heightPt);
-    _backgroundAlpha = [RONativeAdMobInFeedPresentation
+    _backgroundAlpha = [RONativeInFeedAdMobPresentation
             ro_resolveBackgroundAlpha:backgroundAlpha];
     _listener = listener;
     _visibleRequested = YES;
     _layoutPlans = [NSMutableArray array];
 
-    _viewFactory = [[RONativeAdMobInFeedViewFactory alloc]
+    _viewFactory = [[RONativeInFeedAdMobViewFactory alloc]
             initWithNativeAd:nativeAd
              slotShortSidePt:MIN(_requestedWidth, _requestedHeight)];
-    _validator = [[RONativeAdMobInFeedLayoutValidator alloc]
+    _validator = [[RONativeInFeedAdMobLayoutValidator alloc]
             initWithNativeAd:nativeAd
                  viewFactory:_viewFactory];
-    _layoutEngine = [[RONativeAdMobInFeedLayoutEngine alloc]
+    _layoutEngine = [[RONativeInFeedAdMobLayoutEngine alloc]
             initWithNativeAd:nativeAd
                   requestedX:xPt
                   requestedY:yPt
@@ -242,7 +242,7 @@ static const uint32_t kROBackgroundRgb = 0x1B2029;
 }
 
 - (void)ro_scheduleRootReadyRecheck {
-    __weak RONativeAdMobInFeedPresentation *weakSelf = self;
+    __weak RONativeInFeedAdMobPresentation *weakSelf = self;
     dispatch_after(
             dispatch_time(DISPATCH_TIME_NOW
                   , (int64_t)(kRORootReadyRecheckDelay * NSEC_PER_SEC))
@@ -517,9 +517,9 @@ static const uint32_t kROBackgroundRgb = 0x1B2029;
     if (_displayedNotified || _displayNotificationPending) return;
 
     _displayNotificationPending = YES;
-    __weak RONativeAdMobInFeedPresentation *weakSelf = self;
+    __weak RONativeInFeedAdMobPresentation *weakSelf = self;
     dispatch_async(dispatch_get_main_queue(), ^{
-        RONativeAdMobInFeedPresentation *strongSelf = weakSelf;
+        RONativeInFeedAdMobPresentation *strongSelf = weakSelf;
         if (strongSelf == nil) return;
         strongSelf->_displayNotificationPending = NO;
         if (!strongSelf->_dismissed

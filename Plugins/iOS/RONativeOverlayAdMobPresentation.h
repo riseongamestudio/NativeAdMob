@@ -13,7 +13,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface RONativeAdMobOverlayPresentation : NSObject
+@interface RONativeOverlayAdMobPresentation : NSObject
 
 - (instancetype)initWithViewController:(UIViewController *)viewController
                               nativeAd:(GADNativeAd *)nativeAd

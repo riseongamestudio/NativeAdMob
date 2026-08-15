@@ -11,7 +11,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface RONativeAdMobOverlayContentView : UIView
+@interface RONativeOverlayAdMobContentView : UIView
 
 - (instancetype)initWithNativeAd:(GADNativeAd *)nativeAd
              countDownRemainingMs:(int64_t)countDownRemainingMs

@@ -22,7 +22,7 @@ import com.google.android.gms.ads.nativead.NativeAdOptions;
 // Everything rect-shaped (layout, dwell, rotation, watchdogs) lives in
 // InFeedSlot.
 public final class InFeed extends Ad {
-    static final String TAG = "NativeAdMobInFeed";
+    static final String TAG = "NativeInFeedAdMob";
     private static final int LOAD_SUCCESS_CODE = 0;
     private static final int MAX_RETRY_EXPONENT = 5;
     private static final long RETRY_BASE_DELAY_MS = 1_000L;

@@ -14,13 +14,13 @@ cùng layout engine, cùng ngưỡng chính sách, cùng format dòng log.
 | (View/LinearLayout/FrameLayout measure model) | `ROMeasureLayout.h/.mm` | ✅ |
 | (TextView + ApplyTextMode + marquee) | `ROAdTextLabel.h/.mm` | ✅ |
 | `NativeAdMobStarRatingView.java` | `RONativeAdMobStarRatingView.h/.mm` | ✅ |
-| `InFeed.java` | `RONativeAdMobInFeed.h/.mm` | ✅ |
-| `NativeAdMobInFeedPresentation.java` | `RONativeAdMobInFeedPresentation.h/.mm` | ✅ |
-| `NativeAdMobInFeedLayoutEngine.java` | `RONativeAdMobInFeedLayoutEngine.h/.mm` | ✅ |
-| `NativeAdMobInFeedLayoutValidator.java` | `RONativeAdMobInFeedLayoutValidator.h/.mm` | ✅ |
-| `NativeAdMobInFeedViewFactory.java` | `RONativeAdMobInFeedViewFactory.h/.mm` | ✅ |
-| `Overlay.java` | `RONativeAdMobOverlay.h/.mm` | ✅ |
-| `NativeAdMobOverlayContentView.java` | `RONativeAdMobOverlayContentView.h/.mm` | ✅ |
+| `InFeed.java` | `RONativeInFeedAdMob.h/.mm` | ✅ |
+| `NativeAdMobInFeedPresentation.java` | `RONativeInFeedAdMobPresentation.h/.mm` | ✅ |
+| `NativeAdMobInFeedLayoutEngine.java` | `RONativeInFeedAdMobLayoutEngine.h/.mm` | ✅ |
+| `NativeAdMobInFeedLayoutValidator.java` | `RONativeInFeedAdMobLayoutValidator.h/.mm` | ✅ |
+| `NativeAdMobInFeedViewFactory.java` | `RONativeInFeedAdMobViewFactory.h/.mm` | ✅ |
+| `Overlay.java` | `RONativeOverlayAdMob.h/.mm` | ✅ |
+| `NativeAdMobOverlayContentView.java` | `RONativeOverlayAdMobContentView.h/.mm` | ✅ |
 | `NativeAdMobOverlayActivity/Presentation` | gộp vào presentation (UIViewController) | chưa |
 
 ## Quy ước chuyển đổi

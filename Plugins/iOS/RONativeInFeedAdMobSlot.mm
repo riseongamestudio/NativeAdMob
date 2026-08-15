@@ -1,6 +1,6 @@
-#import "RONativeAdMobInFeedSlot.h"
+#import "RONativeInFeedAdMobSlot.h"
 
-#import "RONativeAdMobInFeedPresentation.h"
+#import "RONativeInFeedAdMobPresentation.h"
 
 static NSString *const kROTag = @"InFeed";
 
@@ -33,7 +33,7 @@ static const NSTimeInterval kRONoTimestamp = -1;
 
 @interface ROInFeedDisplayEntry : NSObject
 @property (nonatomic, strong) GADNativeAd *ad;
-@property (nonatomic, strong) RONativeAdMobInFeedPresentation *presentation;
+@property (nonatomic, strong) RONativeInFeedAdMobPresentation *presentation;
 @property (nonatomic) NSTimeInterval loadedAt;
 @property (nonatomic) NSTimeInterval accumulatedVisible;
 @property (nonatomic) NSTimeInterval visibleStartedAt;
@@ -63,7 +63,7 @@ static const NSTimeInterval kRONoTimestamp = -1;
 @implementation ROInFeedSlot {
     // The owner holds the slots for the life of the unit; weak back-reference
     // so the pair cannot keep each other alive after Release.
-    __weak RONativeAdMobInFeed *_owner;
+    __weak RONativeInFeedAdMob *_owner;
     NSInteger _index;
     ROInFeedSlotRect *_rect;
     ROInFeedDisplayEntry *_activeEntry;
@@ -89,7 +89,7 @@ static NSTimeInterval RONow(void) {
     return [NSProcessInfo processInfo].systemUptime;
 }
 
-- (instancetype)initWithOwner:(RONativeAdMobInFeed *)owner
+- (instancetype)initWithOwner:(RONativeInFeedAdMob *)owner
                         index:(NSInteger)index {
     self = [super init];
     if (self == nil) return nil;
@@ -101,7 +101,7 @@ static NSTimeInterval RONow(void) {
 }
 
 - (BOOL)ro_isReleased {
-    RONativeAdMobInFeed *owner = _owner;
+    RONativeInFeedAdMob *owner = _owner;
     return owner == nil || owner.released;
 }
 
@@ -146,7 +146,7 @@ static NSTimeInterval RONow(void) {
     _rect = newRect;
     _configured = YES;
     [self ro_removeExpiredEntries];
-    RONativeAdMobInFeed *owner = _owner;
+    RONativeInFeedAdMob *owner = _owner;
     if (owner == nil) return;
     if ([owner hasCachedAd]) {
         [self presentCachedAd];
@@ -162,7 +162,7 @@ static NSTimeInterval RONow(void) {
 }
 
 - (void)ro_showCore {
-    RONativeAdMobInFeed *owner = _owner;
+    RONativeInFeedAdMob *owner = _owner;
     if (owner == nil || owner.released || !_configured) {
         NSLog(@"%@: Show ignored before Configure or after Release", kROTag);
         return;
@@ -213,7 +213,7 @@ static NSTimeInterval RONow(void) {
 - (void)hide {
     if ([self ro_isReleased]) return;
 
-    RONativeAdMobInFeed *owner = _owner;
+    RONativeInFeedAdMob *owner = _owner;
     NSLog(@"%@: Hide[%ld]: active=%@ materializing=%@ cached=%ld"
           , kROTag
           , (long)_index
@@ -303,7 +303,7 @@ static NSTimeInterval RONow(void) {
 }
 
 - (void)presentCachedAd {
-    RONativeAdMobInFeed *owner = _owner;
+    RONativeInFeedAdMob *owner = _owner;
     UIViewController *host = [RONativeAdMob unityViewController];
     if (owner == nil
             || owner.released
@@ -329,8 +329,8 @@ static NSTimeInterval RONow(void) {
     ROInFeedDisplayEntry *entry = [[ROInFeedDisplayEntry alloc] init];
     entry.ad = next.ad;
     entry.loadedAt = next.loadedAt;
-    RONativeAdMobInFeedPresentation *presentation =
-            [[RONativeAdMobInFeedPresentation alloc]
+    RONativeInFeedAdMobPresentation *presentation =
+            [[RONativeInFeedAdMobPresentation alloc]
                     initWithHostViewController:host
                                       nativeAd:next.ad
                                              x:_rect.x
@@ -368,7 +368,7 @@ static NSTimeInterval RONow(void) {
 }
 
 - (void)inFeedPresentationDisplayed {
-    RONativeAdMobInFeed *owner = _owner;
+    RONativeInFeedAdMob *owner = _owner;
     ROInFeedDisplayEntry *entry = _materializingEntry ?: _activeEntry;
     if (owner == nil || owner.released || entry == nil) return;
     if (!_visibleRequested) {
@@ -429,7 +429,7 @@ static NSTimeInterval RONow(void) {
 - (void)inFeedPresentationDismissed {
     // Failure paths funnel through dismissal; whichever entry lost its
     // presentation is cleared and the retry ladder decides what follows.
-    RONativeAdMobInFeed *owner = _owner;
+    RONativeInFeedAdMob *owner = _owner;
     if (owner == nil) return;
 
     ROInFeedDisplayEntry *dismissed = nil;
@@ -482,7 +482,7 @@ static NSTimeInterval RONow(void) {
 // Rotate to a warm ad once the one on screen has had its turn; swaps are
 // spaced so a burst of show and hide cannot drain the cache.
 - (void)ro_trySwapActiveEntry {
-    RONativeAdMobInFeed *owner = _owner;
+    RONativeInFeedAdMob *owner = _owner;
     if (owner == nil
             || owner.released
             || _materializingEntry != nil
@@ -596,7 +596,7 @@ static NSTimeInterval RONow(void) {
 
 - (void)ro_handleLayoutRetry {
     _layoutRetryScheduled = NO;
-    RONativeAdMobInFeed *owner = _owner;
+    RONativeInFeedAdMob *owner = _owner;
     if (owner == nil || owner.released || !_configured) return;
     if ([owner hasCachedAd]) {
         [self presentCachedAd];
@@ -697,7 +697,7 @@ static NSTimeInterval RONow(void) {
 }
 
 - (void)ro_requestReplacementAd {
-    RONativeAdMobInFeed *owner = _owner;
+    RONativeInFeedAdMob *owner = _owner;
     if (owner != nil && [owner hasCachedAd]) {
         [self presentCachedAd];
         return;
@@ -710,7 +710,7 @@ static NSTimeInterval RONow(void) {
 - (void)ro_scheduleForegroundRecheck {
     [_foregroundRecheckTimer invalidate];
     _foregroundRecheckTimer = nil;
-    RONativeAdMobInFeed *owner = _owner;
+    RONativeInFeedAdMob *owner = _owner;
     if (owner == nil || owner.released || [self ro_isHostVisible]) return;
     if (!_visibleRequested && !(_configured && [owner hasCachedAd])) return;
 
@@ -724,7 +724,7 @@ static NSTimeInterval RONow(void) {
 }
 
 - (void)ro_handleForegroundRecheck {
-    RONativeAdMobInFeed *owner = _owner;
+    RONativeInFeedAdMob *owner = _owner;
     if (owner == nil || owner.released) return;
     if (![self ro_isHostVisible]) {
         [self ro_scheduleForegroundRecheck];
@@ -764,7 +764,7 @@ static NSTimeInterval RONow(void) {
 }
 
 - (void)ro_handleEntryExpiry {
-    RONativeAdMobInFeed *owner = _owner;
+    RONativeInFeedAdMob *owner = _owner;
     if (owner == nil || owner.released || _visibleRequested) return;
 
     [self ro_removeExpiredEntries];
@@ -855,7 +855,7 @@ static NSTimeInterval RONow(void) {
 
 - (NSString *)ro_failureMessage:(NSString *)reason
                      retryDelay:(NSTimeInterval)retryDelay {
-    RONativeAdMobInFeed *owner = _owner;
+    RONativeInFeedAdMob *owner = _owner;
     NSString *retryDescription = retryDelay == kROInFeedNoRetryScheduled
             ? @"not scheduled"
             : [NSString stringWithFormat:@"%lldms"
