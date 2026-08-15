@@ -2,22 +2,18 @@ using System;
 using UnityEngine;
 
 namespace RiseOn.NativeAdMob.Editor {
-    // Mirrors the device lifecycle rather than shortcutting it: loading
-    // takes real time, readiness travels through OnStateChanged like both
-    // native platforms, and a show consumes the cached ad and completes
-    // through OnShowCompleted so the wrapper's automatic replacement load
-    // kicks in exactly as it does on device.
+    // The wrapper serializes every call under its own lock and the Editor is
+    // single-threaded, so this client needs no locking of its own. Readiness
+    // is reported through OnStateChanged like the device platforms, so the
+    // wrapper's cache flags are the one source of truth.
     internal sealed class OverlayAdClient : IOverlayAdClient {
-        private const float LOAD_DELAY_SECONDS = 1.0f;
-        private const int SUCCESS_CODE = 0;
         private const string AD_NOT_READY_ERROR = "Ad not ready";
 
         private readonly IOverlayAdCallbacks callbacks;
         private readonly EditorAdConfig config;
-        private EditorAd view;
+        private EditorAd preview;
         private bool adReady;
         private bool adLoading;
-        private bool released;
 
         internal OverlayAdClient(
             OverlayAdSettings settings
@@ -38,23 +34,20 @@ namespace RiseOn.NativeAdMob.Editor {
         }
 
         public void LoadAd() {
-            if (released || adLoading || adReady) return;
+            if (adLoading || adReady) return;
 
             adLoading = true;
             callbacks.OnStateChanged(false, true);
             callbacks.OnLoadingStarted();
-            EditorAdScheduler.Instance.Schedule(LOAD_DELAY_SECONDS, () => {
-                if (released) return;
 
-                adLoading = false;
-                adReady   = true;
-                callbacks.OnStateChanged(true, false);
-                callbacks.OnLoadingCompleted(SUCCESS_CODE, string.Empty);
-            });
+            adLoading = false;
+            adReady   = true;
+            callbacks.OnStateChanged(true, false);
+            callbacks.OnLoadingCompleted(0, string.Empty);
         }
 
         public void ShowAd(int showId) {
-            if (released || !adReady) {
+            if (!adReady) {
                 callbacks.OnShowCompleted(showId, AD_NOT_READY_ERROR, false);
                 return;
             }
@@ -62,10 +55,10 @@ namespace RiseOn.NativeAdMob.Editor {
             adReady = false;
             callbacks.OnStateChanged(false, adLoading);
             try {
-                view = EditorAd.Show(
+                preview = EditorAd.Show(
                     config.Snapshot()
                   , () => {
-                        view = null;
+                        preview = null;
                         callbacks.OnShowCompleted(showId, string.Empty, true);
                     });
                 callbacks.OnDisplayed();
@@ -76,14 +69,13 @@ namespace RiseOn.NativeAdMob.Editor {
         }
 
         public void HideAd() {
-            var current = view;
+            var current = preview;
             if (current) current.Dismiss();
         }
 
         public void Release() {
-            released = true;
-            var current = view;
-            view = null;
+            var current = preview;
+            preview = null;
             if (current) current.Release();
         }
     }

@@ -189,7 +189,7 @@ public final class OverlayAd extends NativeAd {
         if (configured) {
             Log.e(
                     TAG
-                  , "Configure may only be called once per NativeAd instance");
+                  , "Configure may only be called once per Ad instance");
             return;
         }
 
