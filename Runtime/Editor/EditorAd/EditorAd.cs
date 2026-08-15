@@ -2,6 +2,12 @@ using System;
 using UnityEngine;
 using UnityEngine.UI;
 namespace RiseOn.NativeAdMob.Editor {
+    // The in-Editor stand-in for a device native ad. It mirrors the device
+    // renderer's representative layouts - the stacked overlay with its
+    // full-bleed media and corner controls, and the in-feed cell as either
+    // the scrim-over-media template or the media-top column - so a developer
+    // sees in play mode roughly what the device will draw, without any of
+    // the device's loading behaviour.
     internal sealed class EditorAd : MonoBehaviour {
         private enum InFeedTier {
             Compact
@@ -9,102 +15,96 @@ namespace RiseOn.NativeAdMob.Editor {
           , Roomy
         }
 
-        private enum InFeedMediaMode {
-            None
-          , Image
-          , Video
-        }
-
-        private const string AD_OBJECT_NAME      = "Native Editor Ad";
-        private const string BUILT_IN_FONT_NAME       = "LegacyRuntime.ttf";
-        private const string AD_ATTRIBUTION_TEXT      = "Ad";
-        private const string AD_CHOICES_TEXT          = "AdChoices";
-        private const string HEADLINE_TEXT            = "Native Editor Ad";
-        private const string ADVERTISER_TEXT          = "Google Mobile Ads placeholder";
-        private const string STAR_RATING_TEXT         = "★★★★☆  4.0";
-        private const string BODY_TEXT                = "This GameObject simulates the native ad lifecycle in the Unity Editor.";
-        private const string CALL_TO_ACTION_TEXT      = "Install";
-        private const string IMAGE_MEDIA_TEXT         = "IMAGE MEDIA";
-        private const string VIDEO_MEDIA_TEXT         = "VIDEO MEDIA";
-        private const string FLEXIBLE_MEDIA_TEXT      = "IMAGE / VIDEO MEDIA";
-        private const string CLICK_LOG_TEXT           = "Native ad preview click";
+        private const string AD_OBJECT_NAME            = "Native Editor Ad";
+        private const string BUILT_IN_FONT_NAME        = "LegacyRuntime.ttf";
+        private const string AD_ATTRIBUTION_TEXT       = "Ad";
+        private const string AD_CHOICES_TEXT           = "AdChoices";
+        private const string HEADLINE_TEXT             = "Native Editor Ad";
+        private const string ADVERTISER_TEXT           = "Google Mobile Ads placeholder";
+        private const string STAR_RATING_TEXT          = "★★★★☆  4.0";
+        private const string BODY_TEXT                 = "This GameObject previews the native ad layout in the Unity Editor.";
+        private const string CALL_TO_ACTION_TEXT       = "Install";
+        private const string IMAGE_MEDIA_TEXT          = "IMAGE MEDIA";
+        private const string FLEXIBLE_MEDIA_TEXT       = "IMAGE / VIDEO MEDIA";
+        private const string CLICK_LOG_TEXT            = "Native ad preview click";
         private const string TEST_AD_CLICK_URL         = "https://google.com";
-        private const string AD_CHOICES_URL   = "https://support.google.com/My-Ad-Center-Help/answer/12155764";
+        private const string AD_CHOICES_URL            = "https://support.google.com/My-Ad-Center-Help/answer/12155764";
         private const string AD_CHOICES_CLICK_LOG_TEXT = "Native AdChoices preview click";
-        private const string PANEL_OBJECT_NAME        = "Native Ad Panel";
-        private const string CONTENT_OBJECT_NAME      = "Content";
-        private const string DETAILS_OBJECT_NAME      = "Details";
-        private const string IDENTITY_ROW_OBJECT_NAME = "Identity Row";
+        private const string PANEL_OBJECT_NAME         = "Native Ad Panel";
+        private const string CONTENT_OBJECT_NAME       = "Content";
+        private const string DETAILS_OBJECT_NAME       = "Details";
+        private const string IDENTITY_ROW_OBJECT_NAME  = "Identity Row";
         private const string IDENTITY_TEXT_OBJECT_NAME = "Identity Text";
-        private const string ICON_OBJECT_NAME         = "Icon";
-        private const string ICON_TEXT                = "APP";
-        private const string MEDIA_OBJECT_NAME        = "Media";
-        private const string CLOSE_OBJECT_NAME        = "Close";
-        private const string COUNTDOWN_OBJECT_NAME    = "Countdown";
-        private const string CLOSE_TEXT               = "×";
+        private const string ICON_OBJECT_NAME          = "Icon";
+        private const string ICON_TEXT                 = "APP";
+        private const string MEDIA_OBJECT_NAME         = "Media";
+        private const string SCRIM_OBJECT_NAME         = "Scrim";
+        private const string CLOSE_OBJECT_NAME         = "Close";
+        private const string COUNTDOWN_OBJECT_NAME     = "Countdown";
+        private const string CLOSE_TEXT                = "×";
 
-        private const int FULLSCREEN_CANVAS_SORTING_ORDER  = short.MaxValue;
+        private const int FULLSCREEN_CANVAS_SORTING_ORDER = short.MaxValue;
         private const int NON_FULLSCREEN_CANVAS_SORTING_ORDER =
                 FULLSCREEN_CANVAS_SORTING_ORDER - 1;
         private const int IN_FEED_CANVAS_SORTING_ORDER =
                 NON_FULLSCREEN_CANVAS_SORTING_ORDER - 1;
-        private const int CONTENT_HORIZONTAL_PADDING_DP    = 20;
-        private const int CONTENT_SPACING_DP               = 4;
-        private const int CONTROL_SIZE_DP                  = 34;
-        private const int CONTROL_BADGE_SPACING_DP         = 2;
-        private const int AD_CHOICES_SIZE_DP       = 18;
+        // The device spends 8dp a side, not the 20dp gutters an early build
+        // had - and only on text: the media bleeds edge to edge.
+        private const int CONTENT_HORIZONTAL_PADDING_DP     = 8;
+        private const int CONTENT_SPACING_DP                = 4;
+        private const int CONTROL_SIZE_DP                   = 34;
+        private const int CONTROL_BADGE_SPACING_DP          = 2;
+        private const int AD_CHOICES_SIZE_DP                = 18;
         private const int CONTROL_RIGHT_INSET_DP =
                 AD_CHOICES_SIZE_DP
               + CONTROL_BADGE_SPACING_DP;
-        private const int ATTRIBUTION_WIDTH_DP             = 24;
+        private const int ATTRIBUTION_WIDTH_DP              = 24;
         private const int CONTROL_LEFT_INSET_DP =
                 ATTRIBUTION_WIDTH_DP
               + CONTROL_BADGE_SPACING_DP;
-        private const int ATTRIBUTION_HEIGHT_DP            = 18;
-        private const int ATTRIBUTION_FONT_SIZE            = 10;
+        private const int ATTRIBUTION_HEIGHT_DP             = 18;
+        private const int ATTRIBUTION_FONT_SIZE             = 10;
         private const int ICON_SIZE_DP                      = 36;
         private const int ICON_GAP_DP                       = 8;
         private const int ICON_FONT_SIZE                    = 10;
         private const float MAX_ICON_ROW_WIDTH_RATIO        = 0.33f;
-        private const int MEDIA_MIN_SIZE_DP                = 120;
-        private const int IN_FEED_NATIVE_MIN_SIZE_DP       = 32;
-        private const int IN_FEED_IMAGE_MIN_SIZE_DP        = 32;
-        private const int IN_FEED_VIDEO_MIN_SIZE_DP        = 120;
-        private const int IN_FEED_VIDEO_MIN_LONG_SIDE_PX   = 256;
-        private const int IN_FEED_COMPACT_PADDING_DP       = 0;
-        private const int IN_FEED_REGULAR_PADDING_DP       = 2;
-        private const int IN_FEED_ROOMY_PADDING_DP         = 4;
-        private const int IN_FEED_COMPACT_SPACING_DP       = 1;
-        private const int IN_FEED_REGULAR_SPACING_DP       = 3;
-        private const int IN_FEED_ROOMY_SPACING_DP         = 5;
-        private const int IN_FEED_CTA_MIN_HEIGHT_DP        = 18;
-        private const int IN_FEED_CTA_MAX_HEIGHT_DP        = 36;
-        private const int IN_FEED_COMPACT_FONT_SIZE        = 12;
-        private const int IN_FEED_CTA_MIN_FONT_SIZE        = 10;
+        private const int MEDIA_MIN_SIZE_DP                 = 120;
+        private const float SCRIM_ALPHA                     = 0.7f;
+        // The device rule verbatim: a headline line beside an icon keeps at
+        // least this width, otherwise the icon stands alone and the text
+        // takes the full width below it.
+        private const int MIN_ICON_ROW_TEXT_WIDTH_DP        = 72;
+        private const int IN_FEED_CTA_MIN_HEIGHT_DP         = 18;
+        private const int IN_FEED_CTA_MAX_HEIGHT_DP         = 36;
+        private const int IN_FEED_COMPACT_FONT_SIZE         = 12;
+        private const int IN_FEED_CTA_MIN_FONT_SIZE         = 10;
         private const int IN_FEED_ATTRIBUTION_MIN_FONT_SIZE = 5;
-        private const int MIN_BADGE_SIZE_PX                = 15;
-        private const int IN_FEED_REGULAR_SHORT_SIDE_DP    = 150;
-        private const int IN_FEED_ROOMY_SHORT_SIDE_DP      = 280;
-        private const int FULLSCREEN_HEADLINE_FONT_SIZE    = 18;
-        private const int COMPACT_HEADLINE_FONT_SIZE       = 15;
-        private const int ADVERTISER_FONT_SIZE             = 12;
-        private const int RATING_FONT_SIZE                 = 12;
-        private const int BODY_FONT_SIZE                   = 13;
-        private const int MEDIA_LABEL_FONT_SIZE            = 15;
-        private const int CLOSE_FONT_SIZE                  = 16;
-        private const int COUNTDOWN_FONT_SIZE              = 15;
-        private const int CALL_TO_ACTION_FONT_SIZE         = 14;
-        private const int CALL_TO_ACTION_HEIGHT_DP         = 40;
-        private const float FULL_TIME_SCALE                = 1f;
-        private const float PAUSED_TIME_SCALE              = 0f;
-        private const float CANVAS_MATCH_WIDTH_OR_HEIGHT   = 0.5f;
-        private const float SCREEN_CHANGE_TOLERANCE        = 0.001f;
-        private const int IN_FEED_LAYOUT_RETRY_FRAMES       = 2;
-        private const float TEXT_HEIGHT_MULTIPLIER         = 1.5f;
-        private const float ANDROID_BASELINE_DPI           = 160f;
-        private const float MIN_DEVICE_SIMULATOR_DPI       = 160f;
-        private const float IN_FEED_ROW_ASPECT_THRESHOLD    = 1.35f;
-        private const float IN_FEED_ROW_MEDIA_WIDTH_RATIO   = 0.42f;
+        private const int MIN_BADGE_SIZE_PX                 = 15;
+        private const int IN_FEED_REGULAR_SHORT_SIDE_DP     = 150;
+        private const int IN_FEED_ROOMY_SHORT_SIDE_DP       = 280;
+        private const int IN_FEED_COMPACT_ICON_DP           = 24;
+        private const int IN_FEED_REGULAR_ICON_DP           = 36;
+        private const int IN_FEED_ROOMY_ICON_DP             = 48;
+        private const int IN_FEED_COMPACT_GAP_DP            = 1;
+        private const int IN_FEED_REGULAR_GAP_DP            = 3;
+        private const int IN_FEED_ROOMY_GAP_DP              = 5;
+        private const int FULLSCREEN_HEADLINE_FONT_SIZE     = 18;
+        private const int COMPACT_HEADLINE_FONT_SIZE        = 15;
+        private const int ADVERTISER_FONT_SIZE              = 12;
+        private const int RATING_FONT_SIZE                  = 12;
+        private const int BODY_FONT_SIZE                    = 13;
+        private const int MEDIA_LABEL_FONT_SIZE             = 15;
+        private const int CLOSE_FONT_SIZE                   = 16;
+        private const int COUNTDOWN_FONT_SIZE               = 15;
+        private const int CALL_TO_ACTION_FONT_SIZE          = 14;
+        private const int CALL_TO_ACTION_HEIGHT_DP          = 44;
+        private const float FULL_TIME_SCALE                 = 1f;
+        private const float PAUSED_TIME_SCALE               = 0f;
+        private const float CANVAS_MATCH_WIDTH_OR_HEIGHT    = 0.5f;
+        private const float SCREEN_CHANGE_TOLERANCE         = 0.001f;
+        private const float TEXT_HEIGHT_MULTIPLIER          = 1.5f;
+        private const float ANDROID_BASELINE_DPI            = 160f;
+        private const float MIN_DEVICE_SIMULATOR_DPI        = 160f;
         private const float IN_FEED_CTA_SHORT_SIDE_RATIO    = 0.18f;
         private const float IN_FEED_BADGE_SHORT_SIDE_RATIO  = 0.10f;
         private const float IN_FEED_ATTRIBUTION_ASPECT_RATIO = 4f / 3f;
@@ -121,8 +121,9 @@ namespace RiseOn.NativeAdMob.Editor {
                 new(0f, 0f, 0f, 0.7f);
         private static readonly Color AttributionColor =
                 new(1f, 0.76f, 0.03f, 1f);
+        // The device call to action verbatim: #2196F3.
         private static readonly Color CallToActionColor =
-                new(0.16f, 0.54f, 0.92f, 1f);
+                new(0x21 / 255f, 0x96 / 255f, 0xF3 / 255f, 1f);
 
         private Action onDismissed;
         private EditorAdConfig config;
@@ -157,9 +158,6 @@ namespace RiseOn.NativeAdMob.Editor {
         private Rect lastSafeArea;
         private bool pausesGame;
         private bool dismissed;
-        private bool inFeedLayoutUnavailable;
-        private bool inFeedLayoutWarningIssued;
-        private int  inFeedLayoutRetryFramesRemaining;
         private bool externalUrlOpening;
         private bool externalUrlFocusLost;
 
@@ -216,7 +214,11 @@ namespace RiseOn.NativeAdMob.Editor {
             canvasScaler.scaleFactor = ResolveUiScale();
 
             panel = CreatePanel(config);
-            content = CreateContent(panel, config);
+            if (config.Mode == EditorAdMode.InFeed) {
+                content = CreateInFeedContent(panel, config);
+            } else {
+                content = CreateContent(panel, config);
+            }
             adChoicesRect = CreateBadges(panel);
             CreateControls(panel, config);
             Canvas.ForceUpdateCanvases();
@@ -337,9 +339,16 @@ namespace RiseOn.NativeAdMob.Editor {
             panel.sizeDelta = new(width, height);
         }
 
+        // ------------------------------------------------------------------
+        // Overlay content - the stacked layout the device renders: media
+        // bleeding edge to edge, the identity row, the body and a full-width
+        // call to action, with the corner controls overlaid at the top.
+        // ------------------------------------------------------------------
+
         private RectTransform CreateContent(
             RectTransform panel
           , EditorAdConfig config) {
+            var fullscreen = config.Mode == EditorAdMode.FullScreen;
             var contentObject = new GameObject(
                 CONTENT_OBJECT_NAME
               , typeof(RectTransform)
@@ -349,12 +358,22 @@ namespace RiseOn.NativeAdMob.Editor {
             var content = contentObject.GetComponent<RectTransform>();
             content.anchorMin = Vector2.zero;
             content.anchorMax = Vector2.one;
-            content.offsetMin = new(
-                CONTENT_HORIZONTAL_PADDING_DP
-              , 0f);
-            content.offsetMax = new(
-                -CONTENT_HORIZONTAL_PADDING_DP
-              , -CONTROL_SIZE_DP);
+            // Full screen: the media may use the whole width and reach under
+            // the corner controls, the way the device centres its column
+            // over the full surface; only the text stack keeps an inset.
+            // Collapsible: everything sits inset below the control strip -
+            // the strip-avoiding layout the device prefers.
+            if (fullscreen) {
+                content.offsetMin = Vector2.zero;
+                content.offsetMax = Vector2.zero;
+            } else {
+                content.offsetMin = new(
+                    CONTENT_HORIZONTAL_PADDING_DP
+                  , 0f);
+                content.offsetMax = new(
+                    -CONTENT_HORIZONTAL_PADDING_DP
+                  , -CONTROL_SIZE_DP);
+            }
 
             contentLayout =
                     contentObject
@@ -364,15 +383,11 @@ namespace RiseOn.NativeAdMob.Editor {
             var mediaText = config.AllowsVideo
                     ? FLEXIBLE_MEDIA_TEXT
                     : IMAGE_MEDIA_TEXT;
-            var mediaMinHeight =
-                    config.Mode == EditorAdMode.InFeed
-                            ? 0f
-                            : MEDIA_MIN_SIZE_DP;
             mediaLayoutElement =
                     CreateMedia(
                         content
                       , mediaText
-                      , mediaMinHeight
+                      , MEDIA_MIN_SIZE_DP
                       , out mediaLabel);
 
             var detailsObject = new GameObject(
@@ -392,15 +407,19 @@ namespace RiseOn.NativeAdMob.Editor {
             detailsLayout.childControlHeight = true;
             detailsLayout.childForceExpandWidth = true;
             detailsLayout.childForceExpandHeight = false;
+            if (fullscreen) {
+                detailsLayout.padding = new(
+                    CONTENT_HORIZONTAL_PADDING_DP
+                  , CONTENT_HORIZONTAL_PADDING_DP
+                  , 0
+                  , 0);
+            }
 
             var identityTextParent =
-                    config.Mode == EditorAdMode.InFeed
-                            ? detailsObject.transform
-                            : CreateIdentityRow(detailsObject.transform);
-            var headlineFontSize =
-                    config.Mode == EditorAdMode.FullScreen
-                            ? FULLSCREEN_HEADLINE_FONT_SIZE
-                            : COMPACT_HEADLINE_FONT_SIZE;
+                    CreateIdentityRow(detailsObject.transform);
+            var headlineFontSize = fullscreen
+                    ? FULLSCREEN_HEADLINE_FONT_SIZE
+                    : COMPACT_HEADLINE_FONT_SIZE;
             headlineText = CreateText(
                 identityTextParent
               , HEADLINE_TEXT
@@ -410,30 +429,30 @@ namespace RiseOn.NativeAdMob.Editor {
             headlineLayoutElement =
                     headlineText.GetComponent<LayoutElement>();
 
-            if (config.Mode == EditorAdMode.FullScreen) {
-                CreateText(
-                    identityTextParent
-                  , ADVERTISER_TEXT
-                  , ADVERTISER_FONT_SIZE
-                  , TextAnchor.MiddleLeft
-                  , SecondaryTextColor);
-                CreateText(
-                    identityTextParent
-                  , STAR_RATING_TEXT
-                  , RATING_FONT_SIZE
-                  , TextAnchor.MiddleLeft
-                  , AttributionColor);
-                CreateText(
-                    detailsObject.transform
-                  , BODY_TEXT
-                  , BODY_FONT_SIZE
-                  , TextAnchor.MiddleLeft
-                  , SecondaryTextColor);
-            }
+            CreateText(
+                identityTextParent
+              , ADVERTISER_TEXT
+              , ADVERTISER_FONT_SIZE
+              , TextAnchor.MiddleLeft
+              , SecondaryTextColor);
+            CreateText(
+                identityTextParent
+              , STAR_RATING_TEXT
+              , RATING_FONT_SIZE
+              , TextAnchor.MiddleLeft
+              , AttributionColor);
+            CreateText(
+                detailsObject.transform
+              , BODY_TEXT
+              , BODY_FONT_SIZE
+              , TextAnchor.MiddleLeft
+              , SecondaryTextColor);
 
             callToActionLayoutElement = CreateCallToAction(
                 detailsObject.transform
               , config.AdUnitId
+              , CALL_TO_ACTION_HEIGHT_DP
+              , CALL_TO_ACTION_FONT_SIZE
               , out callToActionText);
             return content;
         }
@@ -473,7 +492,9 @@ namespace RiseOn.NativeAdMob.Editor {
             identityRowLayoutElement.minHeight = ICON_SIZE_DP;
             identityRowLayoutElement.flexibleWidth = 1f;
 
-            CreateIcon(identityRowObject.transform);
+            iconLayoutElement = CreateIcon(
+                identityRowObject.transform
+              , ICON_SIZE_DP);
 
             var identityTextObject = new GameObject(
                 IDENTITY_TEXT_OBJECT_NAME
@@ -500,7 +521,9 @@ namespace RiseOn.NativeAdMob.Editor {
             return identityTextObject.transform;
         }
 
-        private void CreateIcon(Transform parent) {
+        private LayoutElement CreateIcon(
+            Transform parent
+          , int sizeDp) {
             var iconObject = new GameObject(
                 ICON_OBJECT_NAME
               , typeof(RectTransform)
@@ -519,12 +542,11 @@ namespace RiseOn.NativeAdMob.Editor {
                     TEST_AD_CLICK_URL
                   , CLICK_LOG_TEXT));
 
-            iconLayoutElement =
-                    iconObject.GetComponent<LayoutElement>();
-            iconLayoutElement.minWidth = ICON_SIZE_DP;
-            iconLayoutElement.minHeight = ICON_SIZE_DP;
-            iconLayoutElement.preferredWidth = ICON_SIZE_DP;
-            iconLayoutElement.preferredHeight = ICON_SIZE_DP;
+            var layout = iconObject.GetComponent<LayoutElement>();
+            layout.minWidth = sizeDp;
+            layout.minHeight = sizeDp;
+            layout.preferredWidth = sizeDp;
+            layout.preferredHeight = sizeDp;
 
             var label = CreateOverlayText(
                 iconObject.transform
@@ -533,6 +555,7 @@ namespace RiseOn.NativeAdMob.Editor {
               , TextAnchor.MiddleCenter
               , Color.white);
             Stretch(label.rectTransform);
+            return layout;
         }
 
         private LayoutElement CreateMedia(
@@ -577,6 +600,8 @@ namespace RiseOn.NativeAdMob.Editor {
         private LayoutElement CreateCallToAction(
             Transform parent
           , string adUnitId
+          , int heightDp
+          , int fontSize
           , out Text label) {
             var buttonObject = new GameObject(
                 CALL_TO_ACTION_TEXT
@@ -597,18 +622,254 @@ namespace RiseOn.NativeAdMob.Editor {
                   , $"{CLICK_LOG_TEXT}. Ad unit ID: {adUnitId}"));
 
             var layout = buttonObject.GetComponent<LayoutElement>();
-            layout.minHeight = CALL_TO_ACTION_HEIGHT_DP;
-            layout.preferredHeight = CALL_TO_ACTION_HEIGHT_DP;
+            layout.minHeight = heightDp;
+            layout.preferredHeight = heightDp;
 
             label = CreateOverlayText(
                 buttonObject.transform
               , CALL_TO_ACTION_TEXT
-              , CALL_TO_ACTION_FONT_SIZE
+              , fontSize
               , TextAnchor.MiddleCenter
               , Color.white);
             Stretch(label.rectTransform);
             return layout;
         }
+
+        // ------------------------------------------------------------------
+        // In-feed content - the two representative device templates. A
+        // compact cell renders the scrim template: the media as the cell's
+        // background under one full veil, the texts and button over it. A
+        // larger cell renders the media-top column.
+        // ------------------------------------------------------------------
+
+        private RectTransform CreateInFeedContent(
+            RectTransform panel
+          , EditorAdConfig config) {
+            var uiScale = ResolveUiScale();
+            var cellWidth = Mathf.Max(1f, config.SizePx.x / uiScale);
+            var cellHeight = Mathf.Max(1f, config.SizePx.y / uiScale);
+            var shortSide = Mathf.Min(cellWidth, cellHeight);
+            var tier = ResolveInFeedTier(shortSide);
+            var gap = ResolveInFeedGap(tier);
+            var scrimTemplate = tier == InFeedTier.Compact;
+
+            // The media: the whole cell on the scrim template, the top band
+            // of the column otherwise.
+            var mediaObject = new GameObject(
+                MEDIA_OBJECT_NAME
+              , typeof(RectTransform)
+              , typeof(CanvasRenderer)
+              , typeof(EditorMediaGraphic)
+              , typeof(Button));
+            mediaObject.transform.SetParent(panel, false);
+            var mediaRect = mediaObject.GetComponent<RectTransform>();
+            var mediaGraphic =
+                    mediaObject.GetComponent<EditorMediaGraphic>();
+            mediaGraphic.raycastTarget = true;
+            var mediaButton = mediaObject.GetComponent<Button>();
+            mediaButton.targetGraphic = mediaGraphic;
+            mediaButton.onClick.AddListener(
+                () => TryOpenUrl(
+                    TEST_AD_CLICK_URL
+                  , CLICK_LOG_TEXT));
+            mediaLabel = CreateOverlayText(
+                mediaObject.transform
+              , config.AllowsVideo
+                        ? FLEXIBLE_MEDIA_TEXT
+                        : IMAGE_MEDIA_TEXT
+              , MEDIA_LABEL_FONT_SIZE
+              , TextAnchor.MiddleCenter
+              , Color.white);
+            mediaLabel.resizeTextForBestFit = true;
+            mediaLabel.resizeTextMinSize = IN_FEED_ATTRIBUTION_MIN_FONT_SIZE;
+            mediaLabel.resizeTextMaxSize = MEDIA_LABEL_FONT_SIZE;
+            Stretch(mediaLabel.rectTransform);
+
+            if (scrimTemplate) {
+                Stretch(mediaRect);
+
+                // One veil over the whole cell, exactly like the device: no
+                // uncovered strip above the text block.
+                var scrimObject = new GameObject(
+                    SCRIM_OBJECT_NAME
+                  , typeof(RectTransform)
+                  , typeof(Image));
+                scrimObject.transform.SetParent(panel, false);
+                Stretch(scrimObject.GetComponent<RectTransform>());
+                var scrimImage = scrimObject.GetComponent<Image>();
+                scrimImage.color = new(0f, 0f, 0f, SCRIM_ALPHA);
+                scrimImage.raycastTarget = false;
+            } else {
+                mediaRect.anchorMin = new(0f, 1f);
+                mediaRect.anchorMax = new(1f, 1f);
+                mediaRect.pivot = new(0.5f, 1f);
+                mediaRect.anchoredPosition = Vector2.zero;
+                mediaRect.sizeDelta = new(
+                    0f
+                  , Mathf.Max(
+                        ResolveInFeedMediaHeight(tier)
+                      , cellHeight * 0.5f));
+            }
+
+            // The bottom stack: icon by the device's shared-line floor, the
+            // headline, the body on roomier tiers, then the button.
+            var contentObject = new GameObject(
+                CONTENT_OBJECT_NAME
+              , typeof(RectTransform)
+              , typeof(VerticalLayoutGroup)
+              , typeof(ContentSizeFitter));
+            contentObject.transform.SetParent(panel, false);
+            var content = contentObject.GetComponent<RectTransform>();
+            content.anchorMin = new(0f, 0f);
+            content.anchorMax = new(1f, 0f);
+            content.pivot = new(0.5f, 0f);
+            content.anchoredPosition = Vector2.zero;
+            content.sizeDelta = new(0f, 0f);
+
+            var stack = contentObject.GetComponent<VerticalLayoutGroup>();
+            var pad = Mathf.Max(gap, 4);
+            stack.padding = new(pad, pad, pad, pad);
+            stack.spacing = gap;
+            stack.childAlignment = TextAnchor.LowerLeft;
+            stack.childControlWidth = true;
+            stack.childControlHeight = true;
+            stack.childForceExpandWidth = true;
+            stack.childForceExpandHeight = false;
+
+            var fitter = contentObject.GetComponent<ContentSizeFitter>();
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            var iconSize = ResolveInFeedIconSize(tier);
+            var lineTextWidth =
+                    cellWidth - 2 * pad - iconSize - gap;
+            var iconStandsAlone =
+                    lineTextWidth < MIN_ICON_ROW_TEXT_WIDTH_DP;
+            var headlineFontSize = tier switch {
+                InFeedTier.Roomy => FULLSCREEN_HEADLINE_FONT_SIZE
+              , InFeedTier.Regular => COMPACT_HEADLINE_FONT_SIZE
+              , _ => IN_FEED_COMPACT_FONT_SIZE
+            };
+
+            if (iconStandsAlone) {
+                var iconHolder = new GameObject(
+                    IDENTITY_ROW_OBJECT_NAME
+                  , typeof(RectTransform)
+                  , typeof(HorizontalLayoutGroup));
+                iconHolder.transform.SetParent(
+                    contentObject.transform
+                  , false);
+                var iconHolderLayout =
+                        iconHolder.GetComponent<HorizontalLayoutGroup>();
+                iconHolderLayout.childAlignment = TextAnchor.MiddleCenter;
+                iconHolderLayout.childControlWidth = false;
+                iconHolderLayout.childControlHeight = false;
+                iconHolderLayout.childForceExpandWidth = false;
+                iconHolderLayout.childForceExpandHeight = false;
+                var iconElement = CreateIcon(
+                    iconHolder.transform
+                  , iconSize);
+                iconElement.GetComponent<RectTransform>().sizeDelta =
+                        new(iconSize, iconSize);
+
+                headlineText = CreateText(
+                    contentObject.transform
+                  , HEADLINE_TEXT
+                  , headlineFontSize
+                  , TextAnchor.MiddleLeft
+                  , Color.white);
+            } else {
+                var identityRowObject = new GameObject(
+                    IDENTITY_ROW_OBJECT_NAME
+                  , typeof(RectTransform)
+                  , typeof(HorizontalLayoutGroup));
+                identityRowObject.transform.SetParent(
+                    contentObject.transform
+                  , false);
+                var identityRowLayout =
+                        identityRowObject
+                                .GetComponent<HorizontalLayoutGroup>();
+                identityRowLayout.spacing = gap;
+                identityRowLayout.childAlignment = TextAnchor.MiddleLeft;
+                identityRowLayout.childControlWidth = true;
+                identityRowLayout.childControlHeight = true;
+                identityRowLayout.childForceExpandWidth = false;
+                identityRowLayout.childForceExpandHeight = false;
+                CreateIcon(identityRowObject.transform, iconSize);
+                headlineText = CreateText(
+                    identityRowObject.transform
+                  , HEADLINE_TEXT
+                  , headlineFontSize
+                  , TextAnchor.MiddleLeft
+                  , Color.white);
+                headlineText.GetComponent<LayoutElement>().flexibleWidth =
+                        1f;
+            }
+            headlineLayoutElement =
+                    headlineText.GetComponent<LayoutElement>();
+
+            if (tier != InFeedTier.Compact) {
+                CreateText(
+                    contentObject.transform
+                  , BODY_TEXT
+                  , BODY_FONT_SIZE
+                  , TextAnchor.MiddleLeft
+                  , SecondaryTextColor);
+            }
+
+            var callToActionHeight = Mathf.RoundToInt(
+                Mathf.Clamp(
+                    shortSide * IN_FEED_CTA_SHORT_SIDE_RATIO
+                  , IN_FEED_CTA_MIN_HEIGHT_DP
+                  , IN_FEED_CTA_MAX_HEIGHT_DP));
+            var callToActionFontSize = Mathf.Clamp(
+                Mathf.RoundToInt(
+                    callToActionHeight * IN_FEED_CTA_FONT_HEIGHT_RATIO)
+              , IN_FEED_CTA_MIN_FONT_SIZE
+              , CALL_TO_ACTION_FONT_SIZE);
+            callToActionLayoutElement = CreateCallToAction(
+                contentObject.transform
+              , config.AdUnitId
+              , callToActionHeight
+              , callToActionFontSize
+              , out callToActionText);
+            callToActionLayoutElement.minHeight = callToActionHeight;
+            callToActionLayoutElement.preferredHeight = callToActionHeight;
+            return content;
+        }
+
+        private static InFeedTier ResolveInFeedTier(float shortSide) {
+            if (shortSide >= IN_FEED_ROOMY_SHORT_SIDE_DP) {
+                return InFeedTier.Roomy;
+            }
+            if (shortSide >= IN_FEED_REGULAR_SHORT_SIDE_DP) {
+                return InFeedTier.Regular;
+            }
+            return InFeedTier.Compact;
+        }
+
+        private static int ResolveInFeedGap(InFeedTier tier) {
+            return tier switch {
+                InFeedTier.Roomy => IN_FEED_ROOMY_GAP_DP
+              , InFeedTier.Regular => IN_FEED_REGULAR_GAP_DP
+              , _ => IN_FEED_COMPACT_GAP_DP
+            };
+        }
+
+        private static int ResolveInFeedIconSize(InFeedTier tier) {
+            return tier switch {
+                InFeedTier.Roomy => IN_FEED_ROOMY_ICON_DP
+              , InFeedTier.Regular => IN_FEED_REGULAR_ICON_DP
+              , _ => IN_FEED_COMPACT_ICON_DP
+            };
+        }
+
+        private static int ResolveInFeedMediaHeight(InFeedTier tier) {
+            return tier == InFeedTier.Roomy ? 120 : 88;
+        }
+
+        // ------------------------------------------------------------------
+        // Badges and controls
+        // ------------------------------------------------------------------
 
         private RectTransform CreateBadges(RectTransform panel) {
             var attributionObject = new GameObject(
@@ -846,16 +1107,12 @@ namespace RiseOn.NativeAdMob.Editor {
             rect.sizeDelta = size;
         }
 
+        // ------------------------------------------------------------------
+        // Responsive refresh
+        // ------------------------------------------------------------------
+
         private void LateUpdate() {
-            var forceInFeedRetry =
-                    config != null
-                 && config.Mode == EditorAdMode.InFeed
-                 && inFeedLayoutUnavailable
-                 && inFeedLayoutRetryFramesRemaining > 0;
-            if (forceInFeedRetry) {
-                --inFeedLayoutRetryFramesRemaining;
-            }
-            RefreshResponsiveLayout(forceInFeedRetry);
+            RefreshResponsiveLayout(false);
         }
 
         private void RefreshResponsiveLayout(bool force) {
@@ -881,12 +1138,11 @@ namespace RiseOn.NativeAdMob.Editor {
             Canvas.ForceUpdateCanvases();
             var safeTopInset = ResolveSafeTopInset(uiScale);
             ApplySafeTopInset(safeTopInset);
-            ConfigureAdaptiveContentLayout();
             LayoutRebuilder.ForceRebuildLayoutImmediate(content);
-            if (MatchIconSizeToIdentityText()) {
-                LayoutRebuilder.ForceRebuildLayoutImmediate(content);
-            }
             if (config.Mode != EditorAdMode.InFeed) {
+                if (MatchIconSizeToIdentityText()) {
+                    LayoutRebuilder.ForceRebuildLayoutImmediate(content);
+                }
                 var minimumPanelHeight =
                         CONTROL_SIZE_DP + LayoutUtility.GetMinHeight(content);
                 ApplyPanelRect(
@@ -895,15 +1151,11 @@ namespace RiseOn.NativeAdMob.Editor {
                   , uiScale
                   , minimumPanelHeight);
                 Canvas.ForceUpdateCanvases();
-                ConfigureAdaptiveContentLayout();
             }
             ApplyBadgeRects(
                 safeTopInset
               , uiScale);
             LayoutRebuilder.ForceRebuildLayoutImmediate(content);
-            if (MatchIconSizeToIdentityText()) {
-                LayoutRebuilder.ForceRebuildLayoutImmediate(content);
-            }
 
             lastScreenWidth = Screen.width;
             lastScreenHeight = Screen.height;
@@ -957,15 +1209,18 @@ namespace RiseOn.NativeAdMob.Editor {
         }
 
         private void ApplySafeTopInset(float safeTopInset) {
-            if (config.Mode == EditorAdMode.InFeed) {
-                content.offsetMin = default;
-                content.offsetMax = default;
-                return;
-            }
+            if (config.Mode == EditorAdMode.InFeed) return;
 
-            content.offsetMax = new(
-                -CONTENT_HORIZONTAL_PADDING_DP
-              , -(CONTROL_SIZE_DP + safeTopInset));
+            // Full screen: only the cutout insets the content - the media
+            // may run under the corner controls, exactly as on device.
+            // Collapsible: the content stays below the control strip.
+            if (config.Mode == EditorAdMode.FullScreen) {
+                content.offsetMax = new(0f, -safeTopInset);
+            } else {
+                content.offsetMax = new(
+                    -CONTENT_HORIZONTAL_PADDING_DP
+                  , -CONTROL_SIZE_DP);
+            }
             if (attributionRect != null) {
                 SetTopLeftRect(
                     attributionRect
@@ -986,386 +1241,6 @@ namespace RiseOn.NativeAdMob.Editor {
                   , countdownControlOnLeft
                   , safeTopInset);
             }
-        }
-
-        private void ConfigureAdaptiveContentLayout() {
-            if (contentLayout == null
-                    || mediaLayoutElement == null
-                    || detailsLayoutElement == null
-                    || detailsLayout == null
-                    || headlineText == null
-                    || headlineLayoutElement == null
-                    || callToActionText == null
-                    || callToActionLayoutElement == null) {
-                return;
-            }
-
-            if (config.Mode != EditorAdMode.InFeed) {
-                mediaLayoutElement.gameObject.SetActive(true);
-                contentLayout.IsVertical = true;
-                contentLayout.spacing = CONTENT_SPACING_DP;
-                contentLayout.childForceExpandWidth = true;
-                contentLayout.childForceExpandHeight = false;
-                detailsLayout.spacing = CONTENT_SPACING_DP;
-                ResetStandardLayoutSizes();
-                LayoutRebuilder.MarkLayoutForRebuild(content);
-                return;
-            }
-
-            ConfigureInFeedContentLayout();
-            LayoutRebuilder.MarkLayoutForRebuild(content);
-        }
-
-        private void ConfigureInFeedContentLayout() {
-            var tier = ResolveInFeedTier();
-            var spacing = ResolveInFeedSpacing(tier);
-            var headlineFontSize = ResolveInFeedHeadlineFontSize(tier);
-            var textPadding = ResolveInFeedPadding(tier);
-            var callToActionHeight = ResolveInFeedCallToActionHeight();
-            var callToActionFontSize =
-                    ResolveInFeedCallToActionFontSize(callToActionHeight);
-
-            ApplyTextSize(
-                headlineText
-              , headlineLayoutElement
-              , headlineFontSize);
-            ApplyTextSize(
-                callToActionText
-              , null
-              , callToActionFontSize);
-            callToActionLayoutElement.minWidth = 0f;
-            callToActionLayoutElement.minHeight = callToActionHeight;
-            callToActionLayoutElement.preferredHeight =
-                    callToActionHeight;
-            detailsLayout.spacing = spacing;
-
-            var baseRequiredDetailsHeight =
-                    headlineLayoutElement.minHeight
-                  + spacing
-                  + callToActionHeight
-                  + textPadding;
-            var requiredDetailsWidth = textPadding * 2f;
-            var badgeAvoidanceHeight =
-                    ResolveInFeedBadgeSize(ResolveUiScale()) + spacing;
-            var minimumVideoMediaSize =
-                    ResolveInFeedVideoMinimumMediaSize(ResolveUiScale());
-            var availableWidth = Mathf.Max(0f, content.rect.width);
-            var availableHeight = Mathf.Max(0f, content.rect.height);
-            var nativeSizeIsValid =
-                    panel.rect.width >= IN_FEED_NATIVE_MIN_SIZE_DP
-                 && panel.rect.height >= IN_FEED_NATIVE_MIN_SIZE_DP;
-            if (!nativeSizeIsValid) {
-                ConfigureEditorOnlyInFeedImageFallback();
-                SetInFeedLayoutAvailable(false);
-                return;
-            }
-
-            var prefersRow = panel.rect.height > Mathf.Epsilon
-                    && panel.rect.width / panel.rect.height
-                            >= IN_FEED_ROW_ASPECT_THRESHOLD;
-            var rowRequiredDetailsHeight =
-                    baseRequiredDetailsHeight + badgeAvoidanceHeight;
-            var videoFitsRow =
-                    availableHeight >= Mathf.Max(
-                        minimumVideoMediaSize
-                      , rowRequiredDetailsHeight)
-                 && availableWidth
-                            >= minimumVideoMediaSize
-                             + spacing
-                             + requiredDetailsWidth;
-            var videoFitsColumn =
-                    availableWidth >= minimumVideoMediaSize
-                 && availableHeight
-                            >= minimumVideoMediaSize
-                             + spacing
-                             + baseRequiredDetailsHeight;
-            var imageFitsRow =
-                    availableHeight >= Mathf.Max(
-                        IN_FEED_IMAGE_MIN_SIZE_DP
-                      , rowRequiredDetailsHeight)
-                 && availableWidth
-                            >= IN_FEED_IMAGE_MIN_SIZE_DP
-                             + spacing
-                             + requiredDetailsWidth;
-            var imageFitsColumn =
-                    availableWidth >= IN_FEED_IMAGE_MIN_SIZE_DP
-                 && availableHeight
-                            >= IN_FEED_IMAGE_MIN_SIZE_DP
-                             + spacing
-                             + baseRequiredDetailsHeight;
-
-            var mediaMode = InFeedMediaMode.None;
-            var useRow = false;
-            if (config.AllowsVideo && (videoFitsRow || videoFitsColumn)) {
-                mediaMode = InFeedMediaMode.Video;
-                useRow = ResolveRowPreference(
-                    prefersRow
-                  , videoFitsRow
-                  , videoFitsColumn);
-            } else if (imageFitsRow || imageFitsColumn) {
-                mediaMode = InFeedMediaMode.Image;
-                useRow = ResolveRowPreference(
-                    prefersRow
-                  , imageFitsRow
-                  , imageFitsColumn);
-            }
-
-            var detailsAvoidBadges =
-                    mediaMode == InFeedMediaMode.None || useRow;
-            var requiredDetailsHeight =
-                    baseRequiredDetailsHeight
-                  + (detailsAvoidBadges ? badgeAvoidanceHeight : 0f);
-            var requiredAssetsFit =
-                    availableWidth > requiredDetailsWidth
-                  && availableHeight >= requiredDetailsHeight;
-            SetInFeedLayoutAvailable(requiredAssetsFit);
-            if (!requiredAssetsFit) {
-                ConfigureEditorOnlyInFeedImageFallback();
-                return;
-            }
-
-            var roundedTextPadding = Mathf.RoundToInt(textPadding);
-            detailsLayout.padding = new(
-                roundedTextPadding
-              , roundedTextPadding
-              , detailsAvoidBadges
-                        ? Mathf.CeilToInt(badgeAvoidanceHeight)
-                        : 0
-              , roundedTextPadding);
-            ConfigureInFeedMedia(
-                mediaMode
-              , useRow
-              , spacing
-              , availableWidth
-              , availableHeight
-              , requiredDetailsHeight
-              , requiredDetailsWidth
-              , minimumVideoMediaSize);
-        }
-
-        private void ConfigureInFeedMedia(
-            InFeedMediaMode mediaMode
-          , bool useRow
-          , float spacing
-          , float availableWidth
-          , float availableHeight
-          , float requiredDetailsHeight
-          , float requiredDetailsWidth
-          , float minimumVideoMediaSize) {
-            var showMedia = mediaMode != InFeedMediaMode.None;
-            mediaLayoutElement.gameObject.SetActive(showMedia);
-            contentLayout.IsVertical = !useRow;
-            contentLayout.spacing = showMedia ? spacing : 0f;
-            contentLayout.childForceExpandWidth = !useRow;
-            contentLayout.childForceExpandHeight = useRow;
-
-            detailsLayoutElement.minWidth =
-                    requiredDetailsWidth;
-            detailsLayoutElement.minHeight = requiredDetailsHeight;
-            detailsLayoutElement.preferredWidth = -1f;
-            detailsLayoutElement.preferredHeight = -1f;
-            detailsLayoutElement.flexibleWidth = 1f;
-            detailsLayoutElement.flexibleHeight = 0f;
-            if (!showMedia) {
-                ResetMediaLayoutSizes();
-                return;
-            }
-
-            var minimumMediaSize =
-                    mediaMode == InFeedMediaMode.Video
-                            ? minimumVideoMediaSize
-                            : IN_FEED_IMAGE_MIN_SIZE_DP;
-            mediaLabel.text =
-                    mediaMode == InFeedMediaMode.Video
-                            ? VIDEO_MEDIA_TEXT
-                            : IMAGE_MEDIA_TEXT;
-            if (useRow) {
-                var maximumMediaWidth = Mathf.Max(
-                    minimumMediaSize
-                  , availableWidth
-                            - spacing
-                            - requiredDetailsWidth);
-                mediaLayoutElement.minWidth = minimumMediaSize;
-                mediaLayoutElement.preferredWidth = Mathf.Clamp(
-                    availableWidth * IN_FEED_ROW_MEDIA_WIDTH_RATIO
-                  , minimumMediaSize
-                  , maximumMediaWidth);
-                mediaLayoutElement.flexibleWidth = 0f;
-                mediaLayoutElement.minHeight = minimumMediaSize;
-                mediaLayoutElement.preferredHeight = -1f;
-                mediaLayoutElement.flexibleHeight = 1f;
-                return;
-            }
-
-            var maximumMediaHeight = Mathf.Max(
-                minimumMediaSize
-              , availableHeight - spacing - requiredDetailsHeight);
-            mediaLayoutElement.minWidth = minimumMediaSize;
-            mediaLayoutElement.preferredWidth = -1f;
-            mediaLayoutElement.flexibleWidth = 1f;
-            mediaLayoutElement.minHeight = minimumMediaSize;
-            mediaLayoutElement.preferredHeight = maximumMediaHeight;
-            mediaLayoutElement.flexibleHeight = 1f;
-        }
-
-        private void ConfigureEditorOnlyInFeedImageFallback() {
-            mediaLayoutElement.gameObject.SetActive(true);
-            mediaLabel.text = IMAGE_MEDIA_TEXT;
-
-            contentLayout.IsVertical = true;
-            contentLayout.spacing = 0f;
-            contentLayout.childForceExpandWidth = true;
-            contentLayout.childForceExpandHeight = true;
-
-            detailsLayout.padding = new(0, 0, 0, 0);
-            detailsLayout.spacing = 0f;
-            detailsLayoutElement.minWidth = 0f;
-            detailsLayoutElement.minHeight = 0f;
-            detailsLayoutElement.preferredWidth = -1f;
-            detailsLayoutElement.preferredHeight = -1f;
-            detailsLayoutElement.flexibleWidth = 1f;
-            detailsLayoutElement.flexibleHeight = 0f;
-
-            mediaLayoutElement.minWidth = 0f;
-            mediaLayoutElement.minHeight = 0f;
-            mediaLayoutElement.preferredWidth = -1f;
-            mediaLayoutElement.preferredHeight = -1f;
-            mediaLayoutElement.flexibleWidth = 1f;
-            mediaLayoutElement.flexibleHeight = 1f;
-        }
-
-        private void SetInFeedLayoutAvailable(bool available) {
-            // Editor preview must never disappear merely because its local
-            // approximation cannot prove that a policy-safe layout fits.
-            panelGraphic.enabled = true;
-            content.gameObject.SetActive(true);
-            if (attributionRect != null) {
-                attributionRect.gameObject.SetActive(true);
-            }
-            if (adChoicesRect != null) {
-                adChoicesRect.gameObject.SetActive(true);
-            }
-
-            if (available) {
-                inFeedLayoutUnavailable = false;
-                inFeedLayoutWarningIssued = false;
-                inFeedLayoutRetryFramesRemaining = 0;
-                return;
-            }
-
-            if (!inFeedLayoutUnavailable) {
-                inFeedLayoutUnavailable = true;
-                inFeedLayoutRetryFramesRemaining =
-                        IN_FEED_LAYOUT_RETRY_FRAMES;
-            }
-            if (inFeedLayoutRetryFramesRemaining > 0
-                    || inFeedLayoutWarningIssued) {
-                return;
-            }
-
-            inFeedLayoutWarningIssued = true;
-            Debug.LogWarning(
-                $"{nameof(EditorAd)} cannot prove a "
-              + "policy-safe native in-feed layout inside "
-              + $"{config.SizePx.x}x{config.SizePx.y}px. "
-              + "Showing an editor-only image fallback; Android runtime "
-              + "will perform the authoritative layout validation.");
-        }
-
-        private void ResetStandardLayoutSizes() {
-            mediaLayoutElement.minWidth = 0f;
-            mediaLayoutElement.minHeight = MEDIA_MIN_SIZE_DP;
-            mediaLayoutElement.preferredWidth = -1f;
-            mediaLayoutElement.preferredHeight = -1f;
-            mediaLayoutElement.flexibleWidth = 1f;
-            mediaLayoutElement.flexibleHeight = 1f;
-            detailsLayoutElement.minWidth = 0f;
-            detailsLayoutElement.minHeight = 0f;
-            detailsLayoutElement.preferredWidth = -1f;
-            detailsLayoutElement.preferredHeight = -1f;
-            detailsLayoutElement.flexibleWidth = 1f;
-            detailsLayoutElement.flexibleHeight = 0f;
-        }
-
-        private void ResetMediaLayoutSizes() {
-            mediaLayoutElement.minWidth = 0f;
-            mediaLayoutElement.minHeight = 0f;
-            mediaLayoutElement.preferredWidth = -1f;
-            mediaLayoutElement.preferredHeight = -1f;
-            mediaLayoutElement.flexibleWidth = 1f;
-            mediaLayoutElement.flexibleHeight = 1f;
-        }
-
-        private static bool ResolveRowPreference(
-            bool prefersRow
-          , bool rowFits
-          , bool columnFits) {
-            if (prefersRow && rowFits) return true;
-            if (!prefersRow && columnFits) return false;
-            return rowFits;
-        }
-
-        private InFeedTier ResolveInFeedTier() {
-            var shortSide = Mathf.Min(panel.rect.width, panel.rect.height);
-            if (shortSide >= IN_FEED_ROOMY_SHORT_SIDE_DP) {
-                return InFeedTier.Roomy;
-            }
-            if (shortSide >= IN_FEED_REGULAR_SHORT_SIDE_DP) {
-                return InFeedTier.Regular;
-            }
-            return InFeedTier.Compact;
-        }
-
-        private static float ResolveInFeedPadding(InFeedTier tier) {
-            return tier switch {
-                InFeedTier.Roomy => IN_FEED_ROOMY_PADDING_DP
-              , InFeedTier.Regular => IN_FEED_REGULAR_PADDING_DP
-              , _ => IN_FEED_COMPACT_PADDING_DP
-            };
-        }
-
-        private static float ResolveInFeedSpacing(InFeedTier tier) {
-            return tier switch {
-                InFeedTier.Roomy => IN_FEED_ROOMY_SPACING_DP
-              , InFeedTier.Regular => IN_FEED_REGULAR_SPACING_DP
-              , _ => IN_FEED_COMPACT_SPACING_DP
-            };
-        }
-
-        private static int ResolveInFeedHeadlineFontSize(InFeedTier tier) {
-            return tier switch {
-                InFeedTier.Roomy => FULLSCREEN_HEADLINE_FONT_SIZE
-              , InFeedTier.Regular => COMPACT_HEADLINE_FONT_SIZE
-              , _ => IN_FEED_COMPACT_FONT_SIZE
-            };
-        }
-
-        private float ResolveInFeedCallToActionHeight() {
-            var shortSide = Mathf.Min(panel.rect.width, panel.rect.height);
-            return Mathf.Clamp(
-                shortSide * IN_FEED_CTA_SHORT_SIDE_RATIO
-              , IN_FEED_CTA_MIN_HEIGHT_DP
-              , IN_FEED_CTA_MAX_HEIGHT_DP);
-        }
-
-        private static int ResolveInFeedCallToActionFontSize(
-            float callToActionHeight) {
-            return Mathf.Clamp(
-                Mathf.RoundToInt(
-                    callToActionHeight * IN_FEED_CTA_FONT_HEIGHT_RATIO)
-              , IN_FEED_CTA_MIN_FONT_SIZE
-              , CALL_TO_ACTION_FONT_SIZE);
-        }
-
-        private static void ApplyTextSize(
-            Text text
-          , LayoutElement layout
-          , int fontSize) {
-            text.fontSize = fontSize;
-            if (layout == null) return;
-
-            layout.minHeight = fontSize * TEXT_HEIGHT_MULTIPLIER;
-            layout.preferredHeight = layout.minHeight;
         }
 
         private void ApplyBadgeRects(
@@ -1426,14 +1301,6 @@ namespace RiseOn.NativeAdMob.Editor {
                 shortSide * IN_FEED_BADGE_SHORT_SIDE_RATIO
               , minimumBadgeSize
               , AD_CHOICES_SIZE_DP);
-        }
-
-        private static float ResolveInFeedVideoMinimumMediaSize(
-            float uiScale) {
-            return Mathf.Max(
-                IN_FEED_VIDEO_MIN_SIZE_DP
-              , IN_FEED_VIDEO_MIN_LONG_SIDE_PX
-                        / Mathf.Max(Mathf.Epsilon, uiScale));
         }
 
         private static float ResolveUiScale() {
