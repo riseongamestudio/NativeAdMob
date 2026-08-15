@@ -61,8 +61,30 @@ public final class OverlayAd extends NativeAd {
     private Activity preparedActivity;
     private com.google.android.gms.ads.nativead.NativeAd preparedNativeAd;
     private OverlayAdStyle preparedStyle;
+    private OverlayAdContentView preparedContentView;
+    private Activity preparedContentActivity;
+    private com.google.android.gms.ads.nativead.NativeAd preparedContentAd;
+    private boolean preparedContentCloseOnLeft;
+    private OverlayAdActivity.CloseRelay preparedContentCloseRelay;
     private NativeAdCompletedListener activeShowCompleted;
     private String activeActivitySessionId;
+
+    // The prepared full-screen face: the content view built at load time,
+    // waiting for the Activity that will host it.
+    static final class PreparedFullScreenContent {
+        final OverlayAdContentView view;
+        final boolean closeOnLeft;
+        final OverlayAdActivity.CloseRelay closeRelay;
+
+        PreparedFullScreenContent(
+                OverlayAdContentView view
+              , boolean closeOnLeft
+              , OverlayAdActivity.CloseRelay closeRelay) {
+            this.view = view;
+            this.closeOnLeft = closeOnLeft;
+            this.closeRelay = closeRelay;
+        }
+    }
 
     public OverlayAd(String adUnitId) {
         if (adUnitId == null || adUnitId.trim().isEmpty()) {
@@ -238,6 +260,7 @@ public final class OverlayAd extends NativeAd {
             }
             if (nativeAd != null) {
                 ReleasePreparedPresentation();
+                ReleasePreparedFullScreenContent();
                 nativeAd.destroy();
                 nativeAd = null;
             }
@@ -275,12 +298,20 @@ public final class OverlayAd extends NativeAd {
                                 configuredStyle;
                         if (presentationStyle != null
                                 && !presentationStyle.fullscreen) {
+                            ReleasePreparedFullScreenContent();
                             PreparePresentation(
+                                    activity
+                                  , ad
+                                  , presentationStyle);
+                        } else if (presentationStyle != null) {
+                            ReleasePreparedPresentation();
+                            PrepareFullScreenContent(
                                     activity
                                   , ad
                                   , presentationStyle);
                         } else {
                             ReleasePreparedPresentation();
+                            ReleasePreparedFullScreenContent();
                         }
                     })
                     .withNativeAdOptions(nativeAdOptions)
@@ -374,12 +405,15 @@ public final class OverlayAd extends NativeAd {
 
             if (requestedShowStyle.fullscreen) {
                 ReleasePreparedPresentation();
+                PreparedFullScreenContent preparedContent =
+                        TakePreparedFullScreenContent(activity, shownAd);
                 String sessionId =
                         OverlayAdActivity.RegisterSession(
                                 activity
                               , this
                               , shownAd
-                              , requestedShowStyle);
+                              , requestedShowStyle
+                              , preparedContent);
                 activeActivitySessionId = sessionId;
                 if (sessionId == null
                         || !OverlayAdActivity.StartSession(
@@ -474,6 +508,7 @@ public final class OverlayAd extends NativeAd {
             isAdLoading = false;
 
             ReleasePreparedPresentation();
+            ReleasePreparedFullScreenContent();
 
             String activitySessionId = activeActivitySessionId;
             activeActivitySessionId = null;
@@ -629,6 +664,99 @@ public final class OverlayAd extends NativeAd {
             prepared.Release();
         } catch (RuntimeException exception) {
             Log.e(TAG, "Failed to release prepared native ad presentation"
+                  , exception);
+        }
+    }
+
+    // The Activity remains the full-screen stage, but its content is built
+    // here, at load time: binding a creative - a video above all - is the
+    // slow half of the first frame, and prepaying it leaves the show with
+    // only the Activity switch itself to spend.
+    private void PrepareFullScreenContent(
+            Activity activity
+          , com.google.android.gms.ads.nativead.NativeAd ad
+          , OverlayAdStyle style) {
+        ReleasePreparedFullScreenContent();
+        if (released
+                || ad == null
+                || style == null
+                || nativeAd != ad
+                || !IsActivityUsable(activity)) {
+            return;
+        }
+
+        try {
+            boolean hasVideoContent = ad.getMediaContent() != null
+                    && ad.getMediaContent().hasVideoContent();
+            int requestedPanelHeight =
+                    OverlayAdContentView.ResolveInitialPanelHeight(
+                            activity
+                          , true
+                          , style.heightRatio
+                          , hasVideoContent);
+            boolean closeOnLeft =
+                    style.xRandomSide && Math.random() < 0.5d;
+            OverlayAdActivity.CloseRelay closeRelay =
+                    new OverlayAdActivity.CloseRelay();
+            OverlayAdContentView createdContentView =
+                    new OverlayAdContentView(
+                            activity
+                          , ad
+                          , style.countdownSec * 1000L
+                          , closeOnLeft
+                          , style.numberOppositeSide
+                          , true
+                          , style.backgroundAlpha
+                          , requestedPanelHeight
+                          , closeRelay);
+            preparedContentView = createdContentView;
+            preparedContentActivity = activity;
+            preparedContentAd = ad;
+            preparedContentCloseOnLeft = closeOnLeft;
+            preparedContentCloseRelay = closeRelay;
+        } catch (RuntimeException exception) {
+            Log.e(TAG, "Failed to prepare full-screen ad content"
+                  , exception);
+            ReleasePreparedFullScreenContent();
+        }
+    }
+
+    private PreparedFullScreenContent TakePreparedFullScreenContent(
+            Activity activity
+          , com.google.android.gms.ads.nativead.NativeAd ad) {
+        // Ad identity is the key. After Configure the style can only change
+        // its countdown, and the presented view refreshes that on resume.
+        if (preparedContentView == null
+                || preparedContentActivity != activity
+                || preparedContentAd != ad
+                || preparedContentCloseRelay == null) {
+            ReleasePreparedFullScreenContent();
+            return null;
+        }
+
+        PreparedFullScreenContent result = new PreparedFullScreenContent(
+                preparedContentView
+              , preparedContentCloseOnLeft
+              , preparedContentCloseRelay);
+        preparedContentView = null;
+        preparedContentActivity = null;
+        preparedContentAd = null;
+        preparedContentCloseRelay = null;
+        return result;
+    }
+
+    private void ReleasePreparedFullScreenContent() {
+        OverlayAdContentView prepared = preparedContentView;
+        preparedContentView = null;
+        preparedContentActivity = null;
+        preparedContentAd = null;
+        preparedContentCloseRelay = null;
+        if (prepared == null) return;
+
+        try {
+            prepared.Release();
+        } catch (RuntimeException exception) {
+            Log.e(TAG, "Failed to release prepared full-screen ad content"
                   , exception);
         }
     }

@@ -184,8 +184,11 @@ static const int32_t kROLoadSuccessCode = 0;
                             || strongSelf->_activeNativeAd == strongAd);
         }];
 
+        // Both formats prepay their face at load time - the Android side
+        // prebuilds the Activity's content view, this side the whole
+        // presentation - so the show itself has nothing slow left to do.
         HBOverlayStyle *presentationStyle = self->_configuredStyle;
-        if (presentationStyle != nil && !presentationStyle.fullscreen) {
+        if (presentationStyle != nil) {
             [self ro_preparePresentationForAd:nativeAd
                                         style:presentationStyle];
         } else {
@@ -391,7 +394,6 @@ static const int32_t kROLoadSuccessCode = 0;
     // here so a prepared face never keeps stale config.
     if (self.released
             || requestedStyle == nil
-            || requestedStyle.fullscreen
             || _configuredStyle != requestedStyle
             || _nativeAd == nil
             || _activeNativeAd != nil) {

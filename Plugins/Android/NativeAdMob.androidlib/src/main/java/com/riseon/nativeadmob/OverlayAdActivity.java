@@ -57,13 +57,34 @@ public final class OverlayAdActivity extends Activity {
     private boolean presented;
     private boolean completionStarted;
 
+    // A close handler that exists before its target: the content view is
+    // built at load time, while the Activity that owns its dismissal only
+    // exists once the show starts.
+    static final class CloseRelay implements Runnable {
+        private volatile Runnable target;
+
+        void SetTarget(Runnable target) {
+            this.target = target;
+        }
+
+        @Override
+        public void run() {
+            Runnable current = target;
+            if (current != null) current.run();
+        }
+    }
+
     static String RegisterSession(
             Activity hostActivity
           , OverlayAd owner
           , com.google.android.gms.ads.nativead.NativeAd nativeAd
-          , OverlayAd.OverlayAdStyle style) {
+          , OverlayAd.OverlayAdStyle style
+          , OverlayAd.PreparedFullScreenContent preparedContent) {
         if (hostActivity == null || owner == null
                 || nativeAd == null || style == null) {
+            if (preparedContent != null && preparedContent.view != null) {
+                preparedContent.view.Release();
+            }
             return null;
         }
 
@@ -76,7 +97,8 @@ public final class OverlayAdActivity extends Activity {
               , hostActivity
               , owner
               , nativeAd
-              , style);
+              , style
+              , preparedContent);
         synchronized (SESSION_LOCK) {
             SESSIONS.put(createdSessionId, createdSession);
         }
@@ -161,26 +183,48 @@ public final class OverlayAdActivity extends Activity {
             Window window = getWindow();
             ConfigureWindow(window);
 
-            boolean hasVideoContent =
-                    session.nativeAd.getMediaContent() != null
-                            && session.nativeAd.getMediaContent()
-                                    .hasVideoContent();
-            int requestedPanelHeight =
-                    OverlayAdContentView.ResolveInitialPanelHeight(
-                            this
-                          , true
-                          , session.style.heightRatio
-                          , hasVideoContent);
-            contentView = new OverlayAdContentView(
-                    this
-                  , session.nativeAd
-                  , session.GetRemainingCountdownMs()
-                  , session.closeOnLeft
-                  , session.style.numberOppositeSide
-                  , true
-                  , session.style.backgroundAlpha
-                  , requestedPanelHeight
-                  , () -> CompletePresentation(""));
+            // The load-time face attaches as it is; only a session without
+            // one - the restore path, or a discarded preparation - builds
+            // its content here, inside the visible gap.
+            OverlayAdContentView preparedContentView =
+                    session.TakePreparedContentView();
+            CloseRelay preparedCloseRelay =
+                    session.TakePreparedCloseRelay();
+            boolean prebuilt =
+                    preparedContentView != null && preparedCloseRelay != null;
+            if (prebuilt) {
+                preparedCloseRelay.SetTarget(
+                        () -> CompletePresentation(""));
+                contentView = preparedContentView;
+            } else {
+                if (preparedContentView != null) {
+                    preparedContentView.Release();
+                }
+                boolean hasVideoContent =
+                        session.nativeAd.getMediaContent() != null
+                                && session.nativeAd.getMediaContent()
+                                        .hasVideoContent();
+                int requestedPanelHeight =
+                        OverlayAdContentView.ResolveInitialPanelHeight(
+                                this
+                              , true
+                              , session.style.heightRatio
+                              , hasVideoContent);
+                contentView = new OverlayAdContentView(
+                        this
+                      , session.nativeAd
+                      , session.GetRemainingCountdownMs()
+                      , session.closeOnLeft
+                      , session.style.numberOppositeSide
+                      , true
+                      , session.style.backgroundAlpha
+                      , requestedPanelHeight
+                      , () -> CompletePresentation(""));
+            }
+            Log.i(TAG, "Show timeline: content attached +"
+                    + (SystemClock.uptimeMillis()
+                            - session.showRequestedAtMs)
+                    + "ms (prebuilt: " + (prebuilt ? "yes" : "no") + ")");
             setContentView(
                     contentView
                   , new ViewGroup.LayoutParams(
@@ -202,6 +246,10 @@ public final class OverlayAdActivity extends Activity {
         contentView.OnPresented(session.GetRemainingCountdownMs());
         if (!presented) {
             presented = true;
+            Log.i(TAG, "Show timeline: presented +"
+                    + (SystemClock.uptimeMillis()
+                            - session.showRequestedAtMs)
+                    + "ms");
             NotifyDisplayed(sessionId, session);
         }
     }
@@ -427,6 +475,8 @@ public final class OverlayAdActivity extends Activity {
             String targetSessionId
           , OverlayAdActivity expectedActivity) {
         if (targetSessionId == null) return null;
+        Session removedSession;
+        OverlayAdContentView orphanContentView;
         synchronized (SESSION_LOCK) {
             Session targetSession = SESSIONS.get(targetSessionId);
             if (targetSession == null
@@ -439,9 +489,21 @@ public final class OverlayAdActivity extends Activity {
             targetSession.restorePending = false;
             targetSession.restoreScheduled = false;
             targetSession.restoreStartInFlight = false;
+            orphanContentView = targetSession.preparedContentView;
+            targetSession.preparedContentView = null;
+            targetSession.preparedCloseRelay = null;
             SESSIONS.remove(targetSessionId);
-            return targetSession;
+            removedSession = targetSession;
         }
+        if (orphanContentView != null) {
+            try {
+                orphanContentView.Release();
+            } catch (RuntimeException exception) {
+                Log.e(TAG, "Failed to release unconsumed prepared content"
+                      , exception);
+            }
+        }
+        return removedSession;
     }
 
     private static void CompletePendingSession(
@@ -788,6 +850,9 @@ public final class OverlayAdActivity extends Activity {
         final String hostActivityClassName;
         final int hostTaskId;
         final boolean closeOnLeft;
+        final long showRequestedAtMs;
+        OverlayAdContentView preparedContentView;
+        CloseRelay preparedCloseRelay;
         long countdownRemainingMs;
         long countdownStartedElapsedRealtime;
         boolean countdownRunning;
@@ -807,7 +872,8 @@ public final class OverlayAdActivity extends Activity {
               , Activity hostActivity
               , OverlayAd owner
               , com.google.android.gms.ads.nativead.NativeAd nativeAd
-              , OverlayAd.OverlayAdStyle style) {
+              , OverlayAd.OverlayAdStyle style
+              , OverlayAd.PreparedFullScreenContent preparedContent) {
             this.sessionId = sessionId;
             this.owner = owner;
             this.nativeAd = nativeAd;
@@ -815,13 +881,38 @@ public final class OverlayAdActivity extends Activity {
             this.hostActivityClassName =
                     hostActivity.getClass().getName();
             this.hostTaskId = hostActivity.getTaskId();
-            this.closeOnLeft =
-                    style.xRandomSide && Math.random() < 0.5d;
+            // A prepared face already rolled its close side; the session
+            // adopts it so both agree.
+            if (preparedContent != null && preparedContent.view != null) {
+                this.closeOnLeft = preparedContent.closeOnLeft;
+                this.preparedContentView = preparedContent.view;
+                this.preparedCloseRelay = preparedContent.closeRelay;
+            } else {
+                this.closeOnLeft =
+                        style.xRandomSide && Math.random() < 0.5d;
+            }
+            this.showRequestedAtMs = SystemClock.uptimeMillis();
             this.resumedHostActivity =
                     new WeakReference<>(hostActivity);
             this.hostResumed = true;
             this.countdownRemainingMs =
                     Math.max(0, style.countdownSec) * 1000L;
+        }
+
+        OverlayAdContentView TakePreparedContentView() {
+            synchronized (SESSION_LOCK) {
+                OverlayAdContentView view = preparedContentView;
+                preparedContentView = null;
+                return view;
+            }
+        }
+
+        CloseRelay TakePreparedCloseRelay() {
+            synchronized (SESSION_LOCK) {
+                CloseRelay relay = preparedCloseRelay;
+                preparedCloseRelay = null;
+                return relay;
+            }
         }
 
         boolean MatchesHost(Activity candidate) {
