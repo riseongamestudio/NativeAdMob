@@ -346,7 +346,7 @@ public final class OverlayAd extends NativeAd {
 
         RunOnMainThread(() -> {
             if (released) {
-                NotifyCompleted(onCompleted, "NativeAd released", false);
+                NotifyCompleted(onCompleted, "Ad released", false);
                 return;
             }
             if (!configured || IsShowingInternal()
@@ -354,14 +354,14 @@ public final class OverlayAd extends NativeAd {
                 NotifyCompleted(
                         onCompleted
                       , !configured
-                                ? "NativeAd not configured"
-                                : "NativeAd already showing"
+                                ? "Ad not configured"
+                                : "Ad already showing"
                       , false);
                 return;
             }
             if (nativeAd == null || requestedShowStyle == null
                     || !IsActivityUsable(activity)) {
-                NotifyCompleted(onCompleted, "NativeAd not ready", false);
+                NotifyCompleted(onCompleted, "Ad not ready", false);
                 return;
             }
 
