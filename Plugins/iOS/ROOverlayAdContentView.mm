@@ -23,14 +23,13 @@ static const CGFloat kROControlGap = 2;
 static const CGFloat kRORightControlInset = 18;
 // A portrait creative fills the panel's height on the left and everything
 // else moves into a rail beside it, provided the media still meets its policy
-// minimum and the rail keeps enough width to read. The bar sits just past
-// square: a square creative still profits from the rail, and a video that
-// never reported its ratio (which reads as 1.0) is not locked out of the
-// layout that suits portrait video best.
-static const CGFloat kROSideMediaMaxAspect = 1.05f;
-// Half the width, no more: past it the rail is a sliver that can hold
-// neither whole text nor a readable button.
-static const CGFloat kROSideMediaMaxWidthShare = 0.5f;
+// minimum and the rail keeps enough width to read. Strictly portrait only:
+// a square creative belongs stacked on top - MEDIA_TOP wins there - and only
+// media clearly taller than wide earns the rail beside it.
+static const CGFloat kROSideMediaMaxAspect = 0.85f;
+// Just over half: enough width for a portrait creative to stay imposing,
+// while the rail keeps room for whole text and a real button.
+static const CGFloat kROSideMediaMaxWidthShare = 0.56f;
 static const CGFloat kROSideMediaMinRail = 120;
 // The rail's side padding follows the rail's width; a narrow column cannot
 // afford the full 8pt on each side.
