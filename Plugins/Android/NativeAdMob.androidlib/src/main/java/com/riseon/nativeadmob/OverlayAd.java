@@ -331,10 +331,16 @@ public final class OverlayAd extends NativeAd {
                         }
                         if (nativeAd != null) nativeAd.destroy();
                         nativeAd = ad;
+                        // Bound to the ad's own identity, never to the
+                        // load generation: the replacement now loads while
+                        // this ad is still on screen, and a generation
+                        // guard would silence the revenue event of the ad
+                        // the player is actually watching.
                         BindPaidEvent(
                                 ad
                               , requestAdUnitId
-                              , () -> IsCurrentLoadGeneration(generation));
+                              , () -> nativeAd == ad
+                                      || activeNativeAd == ad);
                         OverlayAdStyle presentationStyle =
                                 configuredStyle;
                         if (presentationStyle != null
