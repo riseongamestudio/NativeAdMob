@@ -148,6 +148,8 @@ final class OverlayAdContentView extends FrameLayout {
     private static final int RAIL_FULL_TEXT_STEPS = 3;
     private static final float RAIL_FULL_TEXT_SCALE_STEP = 0.34f;
     private static final int RAIL_HEADLINE_MAX_LINE_COUNT = 4;
+    // The seam between the media and the identity row below it.
+    private static final int MEDIA_LOWER_SEAM_DP = 6;
     // A panel meaningfully taller than wide reads as a page: media belongs
     // stacked on top of it, not beside it. Side media only suits panels near
     // screen proportions, where a portrait creative would otherwise sit in a
@@ -1832,59 +1834,81 @@ final class OverlayAdContentView extends FrameLayout {
         // bottom edge. Only a creative that never reported its proportions
         // is handed the whole band - no number exists to size or validate
         // it - and renders inside as it pleases on the black ground.
+        // A box must touch a VISIBLE wall: the panel's top, the badge
+        // line, the control columns or the sync padding edges. The line
+        // under the control row is not a wall anyone can see, so a box
+        // whose only contact is that line loses to a narrower one that
+        // visibly touches - only when nothing touches at all does raw area
+        // decide.
+        int mediaSeam = Math.round(MEDIA_LOWER_SEAM_DP * density);
         long bestScore = -1L;
         int bestBoxWidth = Math.max(panelWidth, avoidanceMinimumMediaSize);
         int bestBoxHeight = Math.max(
                 avoidanceMinimumMediaSize
-              , availableHeight);
+              , availableHeight - mediaSeam);
         int bestTop = 0;
         int bestIntervalLeft = 0;
         int bestIntervalWidth = panelWidth;
         boolean bestEdges = false;
-        for (int[] candidate : candidates) {
-            int top = candidate[0];
-            int intervalLeft = Math.max(0, candidate[1]);
-            int intervalRight = Math.min(panelWidth, candidate[2]);
-            int intervalWidth = intervalRight - intervalLeft;
-            if (intervalWidth < avoidanceMinimumMediaSize) continue;
+        for (int pass = 0; pass < 2 && bestScore < 0L; ++pass) {
+            boolean requireVisibleTouch = pass == 0;
+            for (int[] candidate : candidates) {
+                int top = candidate[0];
+                int intervalLeft = Math.max(0, candidate[1]);
+                int intervalRight = Math.min(panelWidth, candidate[2]);
+                int intervalWidth = intervalRight - intervalLeft;
+                if (intervalWidth < avoidanceMinimumMediaSize) continue;
 
-            int bandHeight = availableHeight - top;
-            if (bandHeight < avoidanceMinimumMediaSize) continue;
+                int bandHeight = availableHeight - top - mediaSeam;
+                if (bandHeight < avoidanceMinimumMediaSize) continue;
 
-            int boxWidth;
-            int boxHeight;
-            if (mediaAspectReported) {
-                boxHeight = Math.min(
-                        bandHeight
-                      , Math.round(intervalWidth / avoidanceMediaAspect));
-                boxWidth = Math.min(
-                        intervalWidth
-                      , Math.round(boxHeight * avoidanceMediaAspect));
-                if (boxWidth < avoidanceMinimumMediaSize
-                        || boxHeight < avoidanceMinimumMediaSize) {
-                    continue;
+                int boxWidth;
+                int boxHeight;
+                if (mediaAspectReported) {
+                    boxHeight = Math.min(
+                            bandHeight
+                          , Math.round(
+                                intervalWidth / avoidanceMediaAspect));
+                    boxWidth = Math.min(
+                            intervalWidth
+                          , Math.round(
+                                boxHeight * avoidanceMediaAspect));
+                    if (boxWidth < avoidanceMinimumMediaSize
+                            || boxHeight < avoidanceMinimumMediaSize) {
+                        continue;
+                    }
+                    boolean widthBound =
+                            boxWidth >= intervalWidth - 2;
+                    if (requireVisibleTouch
+                            && !widthBound
+                            && top > badgeHeight) {
+                        continue;
+                    }
+                } else {
+                    boxWidth = intervalWidth;
+                    boxHeight = bandHeight;
                 }
-            } else {
-                boxWidth = intervalWidth;
-                boxHeight = bandHeight;
-            }
 
-            long score = (long) boxWidth * boxHeight;
-            if (score > bestScore) {
-                bestScore = score;
-                bestBoxWidth = boxWidth;
-                bestBoxHeight = boxHeight;
-                bestTop = top;
-                bestIntervalLeft = intervalLeft;
-                bestIntervalWidth = intervalWidth;
-                bestEdges = candidate[3] == 1;
+                long score = (long) boxWidth * boxHeight;
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestBoxWidth = boxWidth;
+                    bestBoxHeight = boxHeight;
+                    bestTop = top;
+                    bestIntervalLeft = intervalLeft;
+                    bestIntervalWidth = intervalWidth;
+                    bestEdges = candidate[3] == 1;
+                }
             }
         }
 
         int slack = mediaAspectReported
                 ? Math.max(
                         0
-                      , availableHeight - bestTop - bestBoxHeight)
+                      , availableHeight
+                                - bestTop
+                                - mediaSeam
+                                - bestBoxHeight)
                 : 0;
         // Slack feeds the text before it pads the void: the body takes more
         // whole lines while slack remains, so a clipped line never sits
@@ -1934,6 +1958,7 @@ final class OverlayAdContentView extends FrameLayout {
               , slack / 2);
         mediaLayoutParams.width = bestBoxWidth;
         mediaLayoutParams.height = bestBoxHeight;
+        mediaLayoutParams.bottomMargin = mediaSeam;
         // Centred within the free interval. The margin is measured from
         // the panel edge, so the column's own left padding is subtracted -
         // negative means the media bleeds through it, as it may.

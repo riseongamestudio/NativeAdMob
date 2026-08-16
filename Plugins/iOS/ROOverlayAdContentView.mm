@@ -48,6 +48,8 @@ static const CGFloat kRORailScaleCapRange = 240;
 static const NSInteger kRORailFullTextSteps = 3;
 static const CGFloat kRORailFullTextScaleStep = 0.34f;
 static const NSInteger kRORailHeadlineMaxLineCount = 4;
+// The seam between the media and the identity row below it.
+static const CGFloat kROMediaLowerSeam = 6;
 // A panel meaningfully taller than wide reads as a page: media belongs
 // stacked on top of it, not beside it. Side media only suits panels near
 // screen proportions.
@@ -1461,55 +1463,76 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     // Only a creative that never reported its proportions is handed the
     // whole band - no number exists to size or validate it - and renders
     // inside as it pleases on the black ground.
+    // A box must touch a VISIBLE wall: the panel's top, the badge line,
+    // the control columns or the sync padding edges. The line under the
+    // control row is not a wall anyone can see, so a box whose only
+    // contact is that line loses to a narrower one that visibly touches -
+    // only when nothing touches at all does raw area decide.
     CGFloat bestScore = -1;
     CGFloat bestBoxWidth = MAX(panelWidth, _minimumMediaSize);
-    CGFloat bestBoxHeight = MAX(_minimumMediaSize, availableHeight);
+    CGFloat bestBoxHeight = MAX(
+            _minimumMediaSize
+          , availableHeight - kROMediaLowerSeam);
     CGFloat bestTop = 0;
     CGFloat bestIntervalLeft = 0;
     CGFloat bestIntervalWidth = panelWidth;
     BOOL bestAtEdges = NO;
-    for (NSInteger index = 0; index < 4; ++index) {
-        CGFloat top = candidateTops[index];
-        CGFloat intervalLeft = MAX(0, candidateLefts[index]);
-        CGFloat intervalRight = MIN(panelWidth, candidateRights[index]);
-        CGFloat intervalWidth = intervalRight - intervalLeft;
-        if (intervalWidth < _minimumMediaSize) continue;
+    for (NSInteger pass = 0; pass < 2 && bestScore < 0; ++pass) {
+        BOOL requireVisibleTouch = pass == 0;
+        for (NSInteger index = 0; index < 4; ++index) {
+            CGFloat top = candidateTops[index];
+            CGFloat intervalLeft = MAX(0, candidateLefts[index]);
+            CGFloat intervalRight =
+                    MIN(panelWidth, candidateRights[index]);
+            CGFloat intervalWidth = intervalRight - intervalLeft;
+            if (intervalWidth < _minimumMediaSize) continue;
 
-        CGFloat bandHeight = availableHeight - top;
-        if (bandHeight < _minimumMediaSize) continue;
+            CGFloat bandHeight =
+                    availableHeight - top - kROMediaLowerSeam;
+            if (bandHeight < _minimumMediaSize) continue;
 
-        CGFloat boxWidth;
-        CGFloat boxHeight;
-        if (_mediaAspectReported) {
-            boxHeight = MIN(
-                    bandHeight
-                  , round(intervalWidth / _mediaAspectRatio));
-            boxWidth = MIN(
-                    intervalWidth
-                  , round(boxHeight * _mediaAspectRatio));
-            if (boxWidth < _minimumMediaSize
-                    || boxHeight < _minimumMediaSize) {
-                continue;
+            CGFloat boxWidth;
+            CGFloat boxHeight;
+            if (_mediaAspectReported) {
+                boxHeight = MIN(
+                        bandHeight
+                      , round(intervalWidth / _mediaAspectRatio));
+                boxWidth = MIN(
+                        intervalWidth
+                      , round(boxHeight * _mediaAspectRatio));
+                if (boxWidth < _minimumMediaSize
+                        || boxHeight < _minimumMediaSize) {
+                    continue;
+                }
+                BOOL widthBound = boxWidth >= intervalWidth - 2;
+                if (requireVisibleTouch
+                        && !widthBound
+                        && top > badgeHeight) {
+                    continue;
+                }
+            } else {
+                boxWidth = intervalWidth;
+                boxHeight = bandHeight;
             }
-        } else {
-            boxWidth = intervalWidth;
-            boxHeight = bandHeight;
-        }
 
-        CGFloat score = boxWidth * boxHeight;
-        if (score > bestScore) {
-            bestScore = score;
-            bestBoxWidth = boxWidth;
-            bestBoxHeight = boxHeight;
-            bestTop = top;
-            bestIntervalLeft = intervalLeft;
-            bestIntervalWidth = intervalWidth;
-            bestAtEdges = candidateEdges[index];
+            CGFloat score = boxWidth * boxHeight;
+            if (score > bestScore) {
+                bestScore = score;
+                bestBoxWidth = boxWidth;
+                bestBoxHeight = boxHeight;
+                bestTop = top;
+                bestIntervalLeft = intervalLeft;
+                bestIntervalWidth = intervalWidth;
+                bestAtEdges = candidateEdges[index];
+            }
         }
     }
 
     CGFloat slack = _mediaAspectReported
-            ? MAX(0, availableHeight - bestTop - bestBoxHeight)
+            ? MAX(0, availableHeight
+                    - bestTop
+                    - kROMediaLowerSeam
+                    - bestBoxHeight)
             : 0;
     // Slack feeds the text before it pads the void: the body takes more
     // whole lines while slack remains, so a clipped line never sits beside
@@ -1555,6 +1578,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     mediaMargins.left = bestIntervalLeft
             + (bestIntervalWidth - bestBoxWidth) / 2
             - _contentColumn.ro_padding.left;
+    mediaMargins.bottom = kROMediaLowerSeam;
     _mediaView.ro_layoutMargins = mediaMargins;
 }
 

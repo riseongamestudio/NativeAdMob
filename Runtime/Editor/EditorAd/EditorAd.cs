@@ -1203,12 +1203,16 @@ namespace RiseOn.NativeAdMob.Editor {
             CreateStrokeEdge(
                 target, color, new(0f, 0f), new(1f, 0f)
               , new(0.5f, 0f), new(0f, INNER_STROKE_WIDTH_DP));
+            // The side bars stop short of the corners the horizontal bars
+            // already own, so a translucent stroke never doubles up there.
             CreateStrokeEdge(
                 target, color, new(0f, 0f), new(0f, 1f)
-              , new(0f, 0.5f), new(INNER_STROKE_WIDTH_DP, 0f));
+              , new(0f, 0.5f)
+              , new(INNER_STROKE_WIDTH_DP, -2f * INNER_STROKE_WIDTH_DP));
             CreateStrokeEdge(
                 target, color, new(1f, 0f), new(1f, 1f)
-              , new(1f, 0.5f), new(INNER_STROKE_WIDTH_DP, 0f));
+              , new(1f, 0.5f)
+              , new(INNER_STROKE_WIDTH_DP, -2f * INNER_STROKE_WIDTH_DP));
         }
 
         private static void CreateStrokeEdge(
