@@ -291,20 +291,13 @@ public final class OverlayAd extends NativeAd {
                 return;
             }
 
-            // The replacement is fetched while the current ad is still on
-            // screen. Waiting for the dismissal costs the player a whole
-            // opening: by the time the next placement asks, the load has
-            // only just started and there is nothing to show.
-            boolean showing =
-                    activeNativeAd != null || IsShowingInternal();
-            if (showing && nativeAd != null) return;
+            // A cached ad is the whole point of loading, so one is never
+            // thrown away to fetch another - that is what made the
+            // replacement fetched during the show die at dismissal and
+            // the player wait for a fresh load anyway. An empty cache is
+            // the only reason to load, whoever is on screen.
+            if (nativeAd != null) return;
 
-            if (nativeAd != null) {
-                ReleasePreparedPresentation();
-                ReleasePreparedFullScreenContent();
-                nativeAd.destroy();
-                nativeAd = null;
-            }
             DoLoadAd(activity, requestAdUnitId, loadStyle);
         });
     }
