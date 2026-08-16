@@ -152,6 +152,8 @@ final class OverlayAdContentView extends FrameLayout {
     private static final int RAIL_FULL_TEXT_STEPS = 3;
     private static final float RAIL_FULL_TEXT_SCALE_STEP = 0.34f;
     private static final int RAIL_HEADLINE_MAX_LINE_COUNT = 4;
+    private static final int SIDE_BELOW_BODY_MAX_LINE_COUNT = 2;
+    private static final float BODY_LINE_HEIGHT_RATIO = 1.5f;
     // The seam between the media and the identity row below it - a hair,
     // not a margin.
     private static final int MEDIA_LOWER_SEAM_DP = 2;
@@ -192,6 +194,7 @@ final class OverlayAdContentView extends FrameLayout {
     private boolean mediaAvoidsControlStrip;
     private boolean mediaAspectReported;
     private boolean mediaAboveIdentity;
+    private int sideRailHeightPx;
     private boolean controlAvoidanceActive;
     private boolean controlsAtEdgesBelowBadges;
     private LinearLayout avoidanceColumn;
@@ -621,24 +624,74 @@ final class OverlayAdContentView extends FrameLayout {
                         Math.round(RAIL_ICON_GAP_DP * density);
                 rail.addView(icon, railIconParams);
             }
+            // Height the media leaves unused belongs to the content, not
+            // to the column beside the picture: what fits under the row
+            // moves there and spans the whole panel instead of being
+            // squeezed into a narrow rail. The button goes first, the body
+            // follows only when the leftover comfortably holds both.
+            int seam = Math.round(MEDIA_LOWER_SEAM_DP * density);
+            int belowCallToActionHeight =
+                    Math.round(AVOID_CALL_TO_ACTION_HEIGHT_DP * density);
+            int bodyLineHeight = Math.round(
+                    MIN_BODY_TEXT_SIZE_SP
+                            * BODY_LINE_HEIGHT_RATIO
+                            * density);
+            int sideLeftover = sidePanelHeight - sideMediaHeight;
+            boolean callToActionBelow =
+                    sideLeftover >= belowCallToActionHeight + seam;
+            boolean bodyBelow = callToActionBelow
+                    && sideLeftover >= belowCallToActionHeight
+                            + 2 * bodyLineHeight
+                            + 2 * seam;
+
             rail.addView(identityRow);
-            rail.addView(body);
-            rail.addView(
-                    callToAction
-                  , new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                      , ViewGroup.LayoutParams.WRAP_CONTENT));
+            if (!bodyBelow) rail.addView(body);
+            if (!callToActionBelow) {
+                rail.addView(
+                        callToAction
+                      , new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                          , ViewGroup.LayoutParams.WRAP_CONTENT));
+            }
             sideRow.addView(
                     rail
                   , new LinearLayout.LayoutParams(
                         0
                       , ViewGroup.LayoutParams.MATCH_PARENT
                       , 1f));
+            // With content spilling below, the row hugs the media instead
+            // of claiming the whole panel.
+            sideRailHeightPx = callToActionBelow
+                    ? sideMediaHeight
+                    : sidePanelHeight;
             contentColumn.addView(
                     sideRow
                   , new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT
-                      , sidePanelHeight));
+                      , sideRailHeightPx));
+            if (bodyBelow) {
+                body.setMaxLines(SIDE_BELOW_BODY_MAX_LINE_COUNT);
+                LinearLayout.LayoutParams belowBodyParams =
+                        new LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                              , ViewGroup.LayoutParams.WRAP_CONTENT);
+                belowBodyParams.topMargin = seam;
+                belowBodyParams.leftMargin = horizontalPadding;
+                belowBodyParams.rightMargin = horizontalPadding;
+                contentColumn.addView(body, belowBodyParams);
+            }
+            if (callToActionBelow) {
+                LinearLayout.LayoutParams belowCallToActionParams =
+                        new LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                              , ViewGroup.LayoutParams.WRAP_CONTENT);
+                belowCallToActionParams.topMargin = seam;
+                belowCallToActionParams.leftMargin = horizontalPadding;
+                belowCallToActionParams.rightMargin = horizontalPadding;
+                contentColumn.addView(
+                        callToAction
+                      , belowCallToActionParams);
+            }
             sideRail = rail;
         } else if (tickerLayout) {
             contentColumn.setPadding(0, 0, 0, 0);
@@ -762,7 +815,9 @@ final class OverlayAdContentView extends FrameLayout {
                 ConfigureResponsiveSideRail(
                         sideRail
                       , displayMetrics.widthPixels - sideMediaWidthPx
-                      , requestedPanelHeight
+                      , sideRailHeightPx > 0
+                                ? sideRailHeightPx
+                                : requestedPanelHeight
                       , density
                       , identityRow
                       , headline

@@ -48,6 +48,8 @@ static const CGFloat kRORailScaleCapRange = 240;
 static const NSInteger kRORailFullTextSteps = 3;
 static const CGFloat kRORailFullTextScaleStep = 0.34f;
 static const NSInteger kRORailHeadlineMaxLineCount = 4;
+static const NSInteger kROSideBelowBodyMaxLineCount = 2;
+static const CGFloat kROBodyLineHeightRatio = 1.5f;
 // The seam between the media and the identity row below it - a hair,
 // not a margin.
 static const CGFloat kROMediaLowerSeam = 2;
@@ -170,6 +172,7 @@ static UIColor *HBArgb(uint32_t argb) {
     BOOL _mediaAvoidsControlStrip;
     BOOL _mediaAspectReported;
     BOOL _mediaAboveIdentity;
+    CGFloat _sideRailHeight;
     BOOL _chromeTrimmedForMedia;
     BOOL _controlAvoidanceActive;
     BOOL _controlsAtEdgesBelowBadges;
@@ -509,16 +512,51 @@ static UIColor *HBArgb(uint32_t argb) {
                     UIEdgeInsetsMake(0, 0, kRORailIconGap, 0);
             [rail addSubview:_icon];
         }
+        // Height the media leaves unused belongs to the content, not to
+        // the column beside the picture: what fits under the row moves
+        // there and spans the whole panel instead of being squeezed into a
+        // narrow rail. The button goes first, the body follows only when
+        // the leftover comfortably holds both.
+        CGFloat seam = kROMediaLowerSeam;
+        CGFloat belowCallToActionHeight = kROAvoidCallToActionHeight;
+        CGFloat bodyLineHeight =
+                kROMinBodyTextSize * kROBodyLineHeightRatio;
+        CGFloat sideLeftover = sidePanelHeight - sideMediaHeight;
+        BOOL callToActionBelow =
+                sideLeftover >= belowCallToActionHeight + seam;
+        BOOL bodyBelow = callToActionBelow
+                && sideLeftover >= belowCallToActionHeight
+                        + 2 * bodyLineHeight
+                        + 2 * seam;
+
         [rail addSubview:_identityRow];
-        [rail addSubview:_body];
-        [rail addSubview:_callToAction];
+        if (!bodyBelow) [rail addSubview:_body];
+        if (!callToActionBelow) [rail addSubview:_callToAction];
         rail.ro_layoutWidth = 0;
         rail.ro_layoutHeight = ROLayoutMatchParent;
         rail.ro_layoutWeight = 1;
         [sideRow addSubview:rail];
         sideRow.ro_layoutWidth = ROLayoutMatchParent;
-        sideRow.ro_layoutHeight = sidePanelHeight;
+        // With content spilling below, the row hugs the media instead of
+        // claiming the whole panel.
+        _sideRailHeight = callToActionBelow
+                ? sideMediaHeight
+                : sidePanelHeight;
+        sideRow.ro_layoutHeight = _sideRailHeight;
         [_contentColumn addSubview:sideRow];
+        if (bodyBelow) {
+            _body.maxLines = kROSideBelowBodyMaxLineCount;
+            _body.ro_layoutWidth = ROLayoutMatchParent;
+            _body.ro_layoutMargins = UIEdgeInsetsMake(
+                    seam, kROHorizontalPadding, 0, kROHorizontalPadding);
+            [_contentColumn addSubview:_body];
+        }
+        if (callToActionBelow) {
+            _callToAction.ro_layoutWidth = ROLayoutMatchParent;
+            _callToAction.ro_layoutMargins = UIEdgeInsetsMake(
+                    seam, kROHorizontalPadding, 0, kROHorizontalPadding);
+            [_contentColumn addSubview:_callToAction];
+        }
         _sideRail = rail;
     } else if (_tickerLayout) {
         _contentColumn.ro_padding = UIEdgeInsetsZero;
@@ -577,7 +615,9 @@ static UIColor *HBArgb(uint32_t argb) {
     if (!_fullscreen && !_tickerLayout) {
         if (_sideMediaLayout) {
             [self ro_configureResponsiveSideRailWithPanelHeight:
-                    requestedPanelHeight];
+                    _sideRailHeight > 0
+                            ? _sideRailHeight
+                            : requestedPanelHeight];
         } else {
             [self ro_configureResponsiveCollapsibleContentWithPanelHeight:
                     requestedPanelHeight];
