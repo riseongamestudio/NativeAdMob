@@ -170,6 +170,7 @@ static UIColor *HBArgb(uint32_t argb) {
     BOOL _mediaAvoidsControlStrip;
     BOOL _mediaAspectReported;
     BOOL _mediaAboveIdentity;
+    BOOL _chromeTrimmedForMedia;
     BOOL _controlAvoidanceActive;
     BOOL _controlsAtEdgesBelowBadges;
     CGFloat _avoidancePanelHeight;
@@ -595,11 +596,11 @@ static UIColor *HBArgb(uint32_t argb) {
                     [NSString stringWithFormat:@"%lld"
                           , (long long)((_countDownRemainingMs + 999) / 1000)]
                                             textSize:18
-                                     backgroundAlpha:0.6
+                                     backgroundAlpha:0.4
                                      backgroundWhite:0];
     _close = [self ro_createControlLabelWithText:@"✕"
                                         textSize:20
-                                 backgroundAlpha:0.8
+                                 backgroundAlpha:0.66
                                  backgroundWhite:0];
     _close.hidden = YES;
     _close.userInteractionEnabled = YES;
@@ -670,12 +671,6 @@ static UIColor *HBArgb(uint32_t argb) {
     control.textAlignment = NSTextAlignmentCenter;
     control.backgroundColor = [UIColor colorWithWhite:backgroundWhite
                                                 alpha:backgroundAlpha];
-    // The control carries its own visible chip: a translucent square on a
-    // dark creative is invisible, and then the empty half of its touch box
-    // reads as a gap between the media and the mark inside it.
-    control.layer.borderWidth = 1;
-    control.layer.borderColor =
-            [UIColor colorWithWhite:1 alpha:0.35].CGColor;
     return control;
 }
 
@@ -1381,6 +1376,26 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     [self ro_keepTextWholeOrScrolling:_advertiser];
 }
 
+// A media that ran out of height before it reached the sides is starving,
+// and the chrome below it is what it is starving for: the button drops to
+// its floor, the icon to its own, and the rows give up the paddings they
+// only had to look comfortable. Once, and only for a media that would grow
+// by it - a picture already touching the sides needs nothing.
+- (BOOL)ro_trimChromeForStarvedMediaWithBoxWidth:(CGFloat)boxWidth
+                                   intervalWidth:(CGFloat)intervalWidth {
+    if (_chromeTrimmedForMedia
+            || !_mediaAspectReported
+            || boxWidth >= intervalWidth - 2) {
+        return NO;
+    }
+
+    _chromeTrimmedForMedia = YES;
+    [self ro_applyStripAvoidingFloors];
+    _identityRow.ro_padding = UIEdgeInsetsZero;
+    _body.ro_padding = UIEdgeInsetsZero;
+    return YES;
+}
+
 // A probe: the column measured with the media collapsed, giving the
 // height of everything below it. The media's layout values are restored
 // before returning, and the caller owns re-measuring for real.
@@ -1542,6 +1557,13 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
             bestIntervalWidth = intervalWidth;
             bestAtEdges = candidateEdges[index];
         }
+    }
+
+    if ([self ro_trimChromeForStarvedMediaWithBoxWidth:bestBoxWidth
+                                        intervalWidth:bestIntervalWidth]) {
+        [self ro_recomputeMediaControlAvoidanceWithWidth:panelWidth
+                                                 height:panelHeight];
+        return;
     }
 
     CGFloat slack = _mediaAspectReported

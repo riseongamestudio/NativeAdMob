@@ -59,13 +59,8 @@ final class OverlayAdContentView extends FrameLayout {
     private static final String ATTRIBUTION_TEXT = "Ad";
     private static final String SECONDARY_TEXT_COLOR = "#CCFFFFFF";
     private static final String ATTRIBUTION_BACKGROUND_COLOR = "#FFFFC107";
-    // The controls carry their own visible chip: a translucent square on
-    // a dark creative is invisible, and then the empty half of its touch
-    // box reads as a gap between the media and the mark inside it.
-    private static final String TIMER_BACKGROUND_COLOR = "#99000000";
-    private static final String CLOSE_BACKGROUND_COLOR = "#CC000000";
-    private static final String CONTROL_BORDER_COLOR = "#59FFFFFF";
-    private static final int CONTROL_BORDER_WIDTH_DP = 1;
+    private static final String TIMER_BACKGROUND_COLOR = "#66000000";
+    private static final String CLOSE_BACKGROUND_COLOR = "#AA000000";
     // Sized to fill the chip: a mark lost in the middle of its box leaves
     // the box reading as empty space.
     private static final float CLOSE_TEXT_SIZE_SP = 20f;
@@ -202,6 +197,10 @@ final class OverlayAdContentView extends FrameLayout {
     private LinearLayout avoidanceColumn;
     private MediaView avoidanceMediaView;
     private TextView avoidanceBodyView;
+    private ImageView avoidanceIconView;
+    private Button avoidanceCallToAction;
+    private LinearLayout avoidanceIdentityRow;
+    private boolean chromeTrimmedForMedia;
     private float avoidanceMediaAspect;
     private int avoidanceMinimumMediaSize;
     private int avoidanceHorizontalPadding;
@@ -808,6 +807,9 @@ final class OverlayAdContentView extends FrameLayout {
                   , contentColumn
                   , mediaView
                   , body
+                  , identityRow
+                  , iconHero ? null : icon
+                  , callToAction
                   , displayMetrics.heightPixels);
         }
         nativeAdView.setNativeAd(nativeAd);
@@ -976,6 +978,9 @@ final class OverlayAdContentView extends FrameLayout {
                       , contentColumn
                       , mediaView
                       , body
+                      , identityRow
+                      , icon
+                      , callToAction
                       , requestedPanelHeight);
                 return;
             }
@@ -1715,11 +1720,17 @@ final class OverlayAdContentView extends FrameLayout {
           , LinearLayout contentColumn
           , MediaView mediaView
           , TextView body
+          , LinearLayout identityRow
+          , ImageView icon
+          , Button callToAction
           , int panelHeight) {
         controlAvoidanceActive = true;
         avoidanceColumn = contentColumn;
         avoidanceMediaView = mediaView;
         avoidanceBodyView = body;
+        avoidanceIdentityRow = identityRow;
+        avoidanceIconView = icon;
+        avoidanceCallToAction = callToAction;
         avoidanceMediaAspect = mediaAspectRatio;
         avoidanceMinimumMediaSize = minimumMediaSize;
         avoidanceHorizontalPadding = horizontalPadding;
@@ -1906,6 +1917,14 @@ final class OverlayAdContentView extends FrameLayout {
             }
         }
 
+        if (TrimChromeForStarvedMedia(
+                bestBoxWidth
+              , bestIntervalWidth
+              , density)) {
+            RecomputeMediaControlAvoidance(panelWidth, panelHeight);
+            return;
+        }
+
         int slack = mediaAspectReported
                 ? Math.max(
                         0
@@ -1974,6 +1993,36 @@ final class OverlayAdContentView extends FrameLayout {
         mediaLayoutParams.rightMargin = 0;
         avoidanceMediaView.setLayoutParams(mediaLayoutParams);
         requestLayout();
+    }
+
+    // A media that ran out of height before it reached the sides is
+    // starving, and the chrome below it is what it is starving for: the
+    // button drops to its floor, the icon to its own, and the rows give up
+    // the paddings they only had to look comfortable. Once, and only for a
+    // media that would grow by it - a picture already touching the sides
+    // needs nothing.
+    private boolean TrimChromeForStarvedMedia(
+            int boxWidth
+          , int intervalWidth
+          , float density) {
+        if (chromeTrimmedForMedia
+                || !mediaAspectReported
+                || boxWidth >= intervalWidth - 2) {
+            return false;
+        }
+
+        chromeTrimmedForMedia = true;
+        ApplyStripAvoidingFloors(
+                density
+              , avoidanceIconView
+              , avoidanceCallToAction);
+        if (avoidanceIdentityRow != null) {
+            avoidanceIdentityRow.setPadding(0, 0, 0, 0);
+        }
+        if (avoidanceBodyView != null) {
+            avoidanceBodyView.setPadding(0, 0, 0, 0);
+        }
+        return true;
     }
 
     // A probe: the column measured with the media collapsed, giving the
@@ -2101,16 +2150,7 @@ final class OverlayAdContentView extends FrameLayout {
         control.setTextColor(Color.WHITE);
         control.setTextSize(textSize);
         control.setGravity(Gravity.CENTER);
-        GradientDrawable chip = new GradientDrawable();
-        chip.setShape(GradientDrawable.RECTANGLE);
-        chip.setColor(Color.parseColor(backgroundColor));
-        chip.setStroke(
-                (int) Math.ceil(
-                        CONTROL_BORDER_WIDTH_DP
-                                * getResources()
-                                        .getDisplayMetrics().density)
-              , Color.parseColor(CONTROL_BORDER_COLOR));
-        control.setBackground(chip);
+        control.setBackgroundColor(Color.parseColor(backgroundColor));
         return control;
     }
 
