@@ -140,6 +140,15 @@ static UIColor *HBArgb(uint32_t argb) {
 
 @end
 
+static void ROCentreUnderIcon(UIView *view) {
+    if (view == nil) return;
+
+    if ([view isKindOfClass:UILabel.class]) {
+        ((UILabel *)view).textAlignment = NSTextAlignmentCenter;
+    }
+    view.ro_layoutGravity = HBGravityCenterHorizontal;
+}
+
 @implementation ROOverlayAdContentView {
     GADNativeAd *_nativeAd;
     int64_t _countDownRemainingMs;
@@ -173,6 +182,7 @@ static UIColor *HBArgb(uint32_t argb) {
     BOOL _mediaAspectReported;
     BOOL _mediaAboveIdentity;
     CGFloat _sideRailHeight;
+    BOOL _sideBodySpilled;
     BOOL _chromeTrimmedForMedia;
     BOOL _controlAvoidanceActive;
     BOOL _controlsAtEdgesBelowBadges;
@@ -544,6 +554,7 @@ static UIColor *HBArgb(uint32_t argb) {
                 : sidePanelHeight;
         sideRow.ro_layoutHeight = _sideRailHeight;
         [_contentColumn addSubview:sideRow];
+        _sideBodySpilled = bodyBelow;
         if (bodyBelow) {
             _body.maxLines = kROSideBelowBodyMaxLineCount;
             _body.ro_layoutWidth = ROLayoutMatchParent;
@@ -612,6 +623,17 @@ static UIColor *HBArgb(uint32_t argb) {
     _nativeAdView.bodyView = _body;
     _nativeAdView.callToActionView = _callToAction;
     [self ro_bindAssets];
+    // One anchor per block: where the icon stands alone above the text -
+    // the rail beside a side media, or the icon standing in for a missing
+    // picture - the text centres under it. A centred icon over left-aligned
+    // lines reads as two blocks that never agreed. Text that spilled below
+    // the row belongs to the full-width block and keeps its left edge.
+    if (_sideMediaLayout || _iconHero) {
+        ROCentreUnderIcon(_headline);
+        ROCentreUnderIcon(_advertiser);
+        ROCentreUnderIcon(_starRating);
+        if (!_sideBodySpilled) ROCentreUnderIcon(_body);
+    }
     if (!_fullscreen && !_tickerLayout) {
         if (_sideMediaLayout) {
             [self ro_configureResponsiveSideRailWithPanelHeight:

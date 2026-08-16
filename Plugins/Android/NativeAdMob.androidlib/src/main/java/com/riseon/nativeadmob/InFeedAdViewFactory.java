@@ -629,6 +629,7 @@ final class InFeedAdViewFactory {
             }
             AddBodyAndOptional(scrim, views, plan);
             AddCallToAction(scrim, views, plan, gap, true);
+            if (iconStandsAlone) CentreBlockUnderIcon(views);
 
             // Not the inset content: ConfigureInsetContent would
             // reset the scrim's own padding to the slot edge.
@@ -914,6 +915,30 @@ final class InFeedAdViewFactory {
                                 + " children:" + children);
                     }
                 });
+    }
+
+    // One anchor per block: where the icon stands alone above the text,
+    // the text centres under it. A centred icon over left-aligned lines
+    // reads as two blocks that never agreed with each other.
+    private void CentreBlockUnderIcon(AssetViews views) {
+        CentreUnderIcon(views.headline);
+        CentreUnderIcon(views.body);
+        CentreUnderIcon(views.advertiser);
+        CentreUnderIcon(views.rating);
+    }
+
+    private static void CentreUnderIcon(View view) {
+        if (view == null) return;
+
+        if (view instanceof TextView) {
+            ((TextView) view).setGravity(Gravity.CENTER_HORIZONTAL);
+        }
+        ViewGroup.LayoutParams params = view.getLayoutParams();
+        if (params instanceof LinearLayout.LayoutParams) {
+            ((LinearLayout.LayoutParams) params).gravity =
+                    Gravity.CENTER_HORIZONTAL;
+            view.setLayoutParams(params);
+        }
     }
 
     private void AddBadgeOverlays(
@@ -1270,6 +1295,7 @@ final class InFeedAdViewFactory {
         if (includeCallToAction) {
             AddCallToAction(content, views, plan, gap, true);
         }
+        if (iconStandsAlone) CentreBlockUnderIcon(views);
         return content;
     }
 
@@ -1394,6 +1420,9 @@ final class InFeedAdViewFactory {
                       , ViewGroup.LayoutParams.WRAP_CONTENT);
         actionRowParams.topMargin = gap;
         content.addView(actionRow, actionRowParams);
+        // The filler icon occupies the picture's band above the text, so
+        // the text centres under it exactly as it does beside a side media.
+        if (fillerCarriesIcon) CentreBlockUnderIcon(views);
         return content;
     }
 

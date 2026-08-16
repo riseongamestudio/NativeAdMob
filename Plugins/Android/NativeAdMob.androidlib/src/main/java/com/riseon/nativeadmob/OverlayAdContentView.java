@@ -195,6 +195,7 @@ final class OverlayAdContentView extends FrameLayout {
     private boolean mediaAspectReported;
     private boolean mediaAboveIdentity;
     private int sideRailHeightPx;
+    private boolean sideBodySpilled;
     private boolean controlAvoidanceActive;
     private boolean controlsAtEdgesBelowBadges;
     private LinearLayout avoidanceColumn;
@@ -669,6 +670,7 @@ final class OverlayAdContentView extends FrameLayout {
                   , new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT
                       , sideRailHeightPx));
+            sideBodySpilled = bodyBelow;
             if (bodyBelow) {
                 body.setMaxLines(SIDE_BELOW_BODY_MAX_LINE_COUNT);
                 LinearLayout.LayoutParams belowBodyParams =
@@ -810,6 +812,18 @@ final class OverlayAdContentView extends FrameLayout {
         KeepTextWholeOrScrolling(headline);
         KeepTextWholeOrScrolling(body);
         KeepTextWholeOrScrolling(advertiser);
+        // One anchor per block: where the icon stands alone above the text
+        // - the rail beside a side media, or the icon standing in for a
+        // missing picture - the text centres under it. A centred icon over
+        // left-aligned lines reads as two blocks that never agreed. Text
+        // that spilled below the row belongs to the full-width block and
+        // keeps its left edge.
+        if (sideMediaLayout || iconHero) {
+            CentreUnderIcon(headline);
+            CentreUnderIcon(advertiser);
+            CentreUnderIcon(starRating);
+            if (!sideBodySpilled) CentreUnderIcon(body);
+        }
         if (!fullscreen && !tickerLayout) {
             if (sideMediaLayout) {
                 ConfigureResponsiveSideRail(
@@ -2103,6 +2117,20 @@ final class OverlayAdContentView extends FrameLayout {
         mediaLayoutParams.height = previousHeight;
         avoidanceMediaView.setLayoutParams(mediaLayoutParams);
         return lowerContentHeight;
+    }
+
+    private static void CentreUnderIcon(View view) {
+        if (view == null) return;
+
+        if (view instanceof TextView) {
+            ((TextView) view).setGravity(Gravity.CENTER_HORIZONTAL);
+        }
+        ViewGroup.LayoutParams params = view.getLayoutParams();
+        if (params instanceof LinearLayout.LayoutParams) {
+            ((LinearLayout.LayoutParams) params).gravity =
+                    Gravity.CENTER_HORIZONTAL;
+            view.setLayoutParams(params);
+        }
     }
 
     private void ConfigureBackground() {

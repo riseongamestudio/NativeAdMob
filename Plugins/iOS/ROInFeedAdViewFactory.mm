@@ -153,6 +153,25 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
 
 @end
 
+// One anchor per block: where the icon stands alone above the text, the
+// text centres under it. A centred icon over left-aligned lines reads as
+// two blocks that never agreed with each other.
+static void ROInFeedCentreUnderIcon(UIView *view) {
+    if (view == nil) return;
+
+    if ([view isKindOfClass:UILabel.class]) {
+        ((UILabel *)view).textAlignment = NSTextAlignmentCenter;
+    }
+    view.ro_layoutGravity = HBGravityCenterHorizontal;
+}
+
+static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
+    ROInFeedCentreUnderIcon(views.headline);
+    ROInFeedCentreUnderIcon(views.body);
+    ROInFeedCentreUnderIcon(views.advertiser);
+    ROInFeedCentreUnderIcon(views.rating);
+}
+
 @implementation ROInFeedAdViewFactory {
     GADNativeAd *_nativeAd;
     CGFloat _slotShortSide;
@@ -646,6 +665,7 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
                               plan:plan
                                gap:gap
                          fullWidth:YES];
+        if (iconStandsAlone) ROInFeedCentreBlock(views);
 
         // Not the inset content: the inset pass would reset the scrim's own
         // padding to the slot edge.
@@ -1003,6 +1023,7 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
                                gap:gap
                          fullWidth:YES];
     }
+    if (iconStandsAlone) ROInFeedCentreBlock(views);
     return content;
 }
 
