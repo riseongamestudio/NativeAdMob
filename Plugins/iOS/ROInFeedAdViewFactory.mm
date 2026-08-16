@@ -690,8 +690,14 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
         mediaView.ro_layoutMargins = UIEdgeInsetsMake(0, 0, 0, gap);
         [row addSubview:mediaView];
 
-        HBLinearLayoutView *content = [self ro_buildIdentityAndText:views
-                                                               plan:plan];
+        CGFloat leftover =
+                [self ro_sideLayoutLeftoverHeightForPlan:plan];
+        BOOL callToActionBelow =
+                leftover >= [self callToActionHeightForPlan:plan] + gap;
+        HBLinearLayoutView *content =
+                [self ro_buildIdentityAndText:views
+                                         plan:plan
+                          includeCallToAction:!callToActionBelow];
         views.insetContent = content;
         views.insetContentAvoidsBadges = YES;
         content.ro_layoutWidth = 0;
@@ -700,6 +706,13 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
         [row addSubview:content];
         row.ro_layoutWidth = ROLayoutMatchParent;
         [outer addSubview:row];
+        if (callToActionBelow) {
+            [self ro_addCallToActionTo:outer
+                                 views:views
+                                  plan:plan
+                                   gap:gap
+                             fullWidth:YES];
+        }
         return [self ro_finishContentRoot:root outer:outer views:views plan:plan];
     }
 
@@ -884,6 +897,21 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
 
 - (HBLinearLayoutView *)ro_buildIdentityAndText:(ROInFeedAssetViews *)views
                                            plan:(ROInFeedLayoutPlan *)plan {
+    return [self ro_buildIdentityAndText:views
+                                    plan:plan
+                    includeCallToAction:YES];
+}
+
+// The band the media leaves unused below a side layout. Anything that fits
+// there is better off spanning the panel than squeezed into the column
+// beside the picture.
+- (CGFloat)ro_sideLayoutLeftoverHeightForPlan:(ROInFeedLayoutPlan *)plan {
+    return MAX(0, plan.height - plan.mediaHeight);
+}
+
+- (HBLinearLayoutView *)ro_buildIdentityAndText:(ROInFeedAssetViews *)views
+                                           plan:(ROInFeedLayoutPlan *)plan
+                            includeCallToAction:(BOOL)includeCallToAction {
     CGFloat gap = [self gapForTier:plan.tier];
     HBLinearLayoutView *content = [[HBLinearLayoutView alloc] init];
     content.ro_vertical = YES;
@@ -937,11 +965,13 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
     spacer.ro_layoutWeight = 1;
     [content addSubview:spacer];
 
-    [self ro_addCallToActionTo:content
-                         views:views
-                          plan:plan
-                           gap:gap
-                     fullWidth:YES];
+    if (includeCallToAction) {
+        [self ro_addCallToActionTo:content
+                             views:views
+                              plan:plan
+                               gap:gap
+                         fullWidth:YES];
+    }
     return content;
 }
 

@@ -150,7 +150,7 @@ final class OverlayAdContentView extends FrameLayout {
     private static final int RAIL_HEADLINE_MAX_LINE_COUNT = 4;
     // The seam between the media and the identity row below it - a hair,
     // not a margin.
-    private static final int MEDIA_LOWER_SEAM_DP = 3;
+    private static final int MEDIA_LOWER_SEAM_DP = 2;
     // A panel meaningfully taller than wide reads as a page: media belongs
     // stacked on top of it, not beside it. Side media only suits panels near
     // screen proportions, where a portrait creative would otherwise sit in a
@@ -187,6 +187,7 @@ final class OverlayAdContentView extends FrameLayout {
     private int sideMediaWidthPx;
     private boolean mediaAvoidsControlStrip;
     private boolean mediaAspectReported;
+    private boolean mediaAboveIdentity;
     private boolean controlAvoidanceActive;
     private boolean controlsAtEdgesBelowBadges;
     private LinearLayout avoidanceColumn;
@@ -390,6 +391,9 @@ final class OverlayAdContentView extends FrameLayout {
         hasDisplayableMedia = hasDisplayableMedia
                 && panelHostsMedia
                 && !tickerLayout;
+        // A picture directly above the identity row is its own separator;
+        // the row's top padding would only widen a seam already there.
+        mediaAboveIdentity = hasDisplayableMedia;
         int sidePanelHeight = fullscreen
                 ? displayMetrics.heightPixels
                 : requestedPanelHeight;
@@ -1463,7 +1467,7 @@ final class OverlayAdContentView extends FrameLayout {
         mediaView.setLayoutParams(mediaLayoutParams);
     }
 
-    private static void ApplyResponsiveContentScale(
+    private void ApplyResponsiveContentScale(
             float scale
           , float density
           , LinearLayout identityRow
@@ -1502,7 +1506,7 @@ final class OverlayAdContentView extends FrameLayout {
                         * density);
         identityRow.setPadding(
                 0
-              , identityVerticalPadding
+              , mediaAboveIdentity ? 0 : identityVerticalPadding
               , 0
               , identityVerticalPadding);
         body.setPadding(

@@ -50,7 +50,7 @@ static const CGFloat kRORailFullTextScaleStep = 0.34f;
 static const NSInteger kRORailHeadlineMaxLineCount = 4;
 // The seam between the media and the identity row below it - a hair,
 // not a margin.
-static const CGFloat kROMediaLowerSeam = 3;
+static const CGFloat kROMediaLowerSeam = 2;
 // A panel meaningfully taller than wide reads as a page: media belongs
 // stacked on top of it, not beside it. Side media only suits panels near
 // screen proportions.
@@ -169,6 +169,7 @@ static UIColor *HBArgb(uint32_t argb) {
     CGFloat _sideMediaWidthPx;
     BOOL _mediaAvoidsControlStrip;
     BOOL _mediaAspectReported;
+    BOOL _mediaAboveIdentity;
     BOOL _controlAvoidanceActive;
     BOOL _controlsAtEdgesBelowBadges;
     CGFloat _avoidancePanelHeight;
@@ -329,6 +330,9 @@ static UIColor *HBArgb(uint32_t argb) {
     _hasDisplayableMedia = _hasDisplayableMedia
             && panelHostsMedia
             && !_tickerLayout;
+    // A picture directly above the identity row is its own separator; the
+    // row's top padding would only widen a seam already there.
+    _mediaAboveIdentity = _hasDisplayableMedia;
     _sideMediaLayout = _hasDisplayableMedia
             && [self ro_shouldUseSideMediaForPanelHeight:sidePanelHeight];
 
@@ -1115,7 +1119,10 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
                   , kROMaxIdentityVerticalPadding
                   , resolvedScale));
     _identityRow.ro_padding = UIEdgeInsetsMake(
-            identityVerticalPadding, 0, identityVerticalPadding, 0);
+            _mediaAboveIdentity ? 0 : identityVerticalPadding
+          , 0
+          , identityVerticalPadding
+          , 0);
     _body.ro_padding = UIEdgeInsetsMake(
             0
           , 0

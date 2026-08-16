@@ -10,6 +10,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.text.Layout;
 import android.text.TextUtils;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.ContextThemeWrapper;
 import android.view.Gravity;
@@ -28,6 +29,7 @@ import com.google.android.gms.ads.nativead.NativeAdView;
 import java.util.List;
 
 final class InFeedAdViewFactory {
+    private static final String TAG = "InFeedAd";
     private static final String ATTRIBUTION_TEXT = "Ad";
     private static final String ATTRIBUTION_BACKGROUND_COLOR = "#FFFFC107";
     private static final String SECONDARY_TEXT_COLOR = "#CCFFFFFF";
@@ -603,6 +605,7 @@ final class InFeedAdViewFactory {
             // Not the inset content: ConfigureInsetContent would
             // reset the scrim's own padding to the slot edge.
             views.scrim = scrim;
+            if (!probe) LogScrimGeometry(scrim, plan);
             outer.setGravity(
                     Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
             outer.addView(
@@ -689,10 +692,14 @@ final class InFeedAdViewFactory {
             mediaLayoutParams.setMarginEnd(gap);
             row.addView(mediaView, mediaLayoutParams);
 
+            int leftover = SideLayoutLeftoverHeight(plan);
+            boolean callToActionBelow =
+                    leftover >= CallToActionHeightPx(plan) + gap;
             LinearLayout content = BuildIdentityAndText(
                     views
                   , plan
-                  , probe);
+                  , probe
+                  , !callToActionBelow);
             views.insetContent = content;
             views.insetContentAvoidsBadges = true;
             row.addView(
@@ -706,6 +713,9 @@ final class InFeedAdViewFactory {
                   , new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT
                       , ViewGroup.LayoutParams.WRAP_CONTENT));
+            if (callToActionBelow) {
+                AddCallToAction(outer, views, plan, gap, true);
+            }
             return FinishContentRoot(root, outer, views, plan);
         }
 
@@ -715,10 +725,14 @@ final class InFeedAdViewFactory {
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
 
+            int leftover = SideLayoutLeftoverHeight(plan);
+            boolean callToActionBelow =
+                    leftover >= CallToActionHeightPx(plan) + gap;
             LinearLayout content = BuildIdentityAndText(
                     views
                   , plan
-                  , probe);
+                  , probe
+                  , !callToActionBelow);
             views.insetContent = content;
             views.insetContentAvoidsBadges = true;
             row.addView(
@@ -739,6 +753,9 @@ final class InFeedAdViewFactory {
                   , new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT
                       , ViewGroup.LayoutParams.WRAP_CONTENT));
+            if (callToActionBelow) {
+                AddCallToAction(outer, views, plan, gap, true);
+            }
             return FinishContentRoot(root, outer, views, plan);
         }
 
@@ -815,6 +832,60 @@ final class InFeedAdViewFactory {
         ConfigureInsetContent(views, plan);
         ConfigureBadgeOverlays(views, plan);
         return root;
+    }
+
+    // The block's real edges against the cell's, printed once per build.
+    // Guesswork about in-feed padding ends here: the numbers say whether
+    // the block meets the cell or something still holds it off.
+    private void LogScrimGeometry(
+            LinearLayout scrim
+          , InFeedAdLayoutEngine.LayoutPlan plan) {
+        scrim.addOnLayoutChangeListener(
+                new View.OnLayoutChangeListener() {
+                    private boolean logged;
+
+                    @Override
+                    public void onLayoutChange(
+                            View view
+                          , int left
+                          , int top
+                          , int right
+                          , int bottom
+                          , int oldLeft
+                          , int oldTop
+                          , int oldRight
+                          , int oldBottom) {
+                        if (logged || right - left <= 0) return;
+                        logged = true;
+
+                        StringBuilder children = new StringBuilder();
+                        for (int index = 0;
+                                index < scrim.getChildCount();
+                                ++index) {
+                            View child = scrim.getChildAt(index);
+                            if (child.getVisibility() == View.GONE) {
+                                continue;
+                            }
+                            children.append(' ')
+                                    .append(child.getClass()
+                                            .getSimpleName())
+                                    .append('[')
+                                    .append(child.getLeft())
+                                    .append(',')
+                                    .append(child.getRight())
+                                    .append(']');
+                        }
+                        Log.i(TAG, "Scrim geometry: cell="
+                                + plan.width + "x" + plan.height
+                                + " block=[" + left + "," + top + "]["
+                                + right + "," + bottom + "]"
+                                + " pad=" + scrim.getPaddingLeft() + "/"
+                                + scrim.getPaddingTop() + "/"
+                                + scrim.getPaddingRight() + "/"
+                                + scrim.getPaddingBottom()
+                                + " children:" + children);
+                    }
+                });
     }
 
     private void AddBadgeOverlays(
@@ -1086,6 +1157,14 @@ final class InFeedAdViewFactory {
             AssetViews views
           , InFeedAdLayoutEngine.LayoutPlan plan
           , boolean probe) {
+        return BuildIdentityAndText(views, plan, probe, true);
+    }
+
+    private LinearLayout BuildIdentityAndText(
+            AssetViews views
+          , InFeedAdLayoutEngine.LayoutPlan plan
+          , boolean probe
+          , boolean includeCallToAction) {
         int gap = GapForTier(plan.tier);
         LinearLayout content = new LinearLayout(activity);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -1160,8 +1239,18 @@ final class InFeedAdViewFactory {
                   , 0
                   , 1f));
 
-        AddCallToAction(content, views, plan, gap, true);
+        if (includeCallToAction) {
+            AddCallToAction(content, views, plan, gap, true);
+        }
         return content;
+    }
+
+    // The band the media leaves unused below a side layout. Anything that
+    // fits there is better off spanning the panel than squeezed into the
+    // column beside the picture.
+    private int SideLayoutLeftoverHeight(
+            InFeedAdLayoutEngine.LayoutPlan plan) {
+        return Math.max(0, plan.height - plan.mediaHeight);
     }
 
     private LinearLayout BuildHeadlineAndActionStack(
