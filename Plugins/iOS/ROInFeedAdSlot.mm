@@ -735,7 +735,13 @@ static NSTimeInterval RONow(void) {
         return;
     }
 
-    if (_configured && [owner hasCachedAd]) [self presentCachedAd];
+    // Coming back to the foreground is a resume, not a rotation. Present only
+    // what could not be presented while the window was dark - an empty slot -
+    // and leave whatever survived the background on screen. presentCachedAd
+    // is also the swap, so calling it here for a slot that already has an ad
+    // turns every unfocus and focus into a rotation, with none of the dwell
+    // the two rotation triggers apply.
+    if ([self wantsCachedAd] && [owner hasCachedAd]) [self presentCachedAd];
     [self ro_showActiveEntry];
     [self ro_scheduleWatchdog];
     [self ro_scheduleRefresh];

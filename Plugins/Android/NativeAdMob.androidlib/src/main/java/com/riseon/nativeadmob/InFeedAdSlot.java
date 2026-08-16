@@ -668,7 +668,13 @@ final class InFeedAdSlot {
             return;
         }
 
-        if (configured && owner.HasCachedAd()) PresentCachedAd();
+        // Coming back to the foreground is a resume, not a rotation. Present
+        // only what could not be presented while the window was dark - an
+        // empty slot - and leave whatever survived the background on screen.
+        // PresentCachedAd is also the swap, so calling it here for a slot that
+        // already has an ad turns every unfocus and focus into a rotation,
+        // with none of the dwell the two rotation triggers apply.
+        if (WantsCachedAd() && owner.HasCachedAd()) PresentCachedAd();
         ShowActiveEntry();
         ScheduleWatchdog();
         ScheduleRefresh();
