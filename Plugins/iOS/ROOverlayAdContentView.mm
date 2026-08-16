@@ -21,7 +21,7 @@ static const uint32_t kROOverlayBackgroundRgb = 0x000000;
 static const uint32_t kROCollapsibleBackgroundRgb = 0x1B2029;
 // 20pt a side spent 40pt of every screen on nothing the ad needed.
 static const CGFloat kROHorizontalPadding = 8;
-static const CGFloat kROControlStripHeight = 34;
+static const CGFloat kROControlStripHeight = 30;
 static const CGFloat kROControlGap = 2;
 static const CGFloat kRORightControlInset = 18;
 // A portrait creative fills the panel's height on the left and everything

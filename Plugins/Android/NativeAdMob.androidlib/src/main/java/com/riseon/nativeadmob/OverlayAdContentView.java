@@ -88,7 +88,7 @@ final class OverlayAdContentView extends FrameLayout {
     private static final int COLLAPSIBLE_BACKGROUND_RGB = 0x1B2029;
     // 20dp a side spent 40dp of every screen on nothing the ad needed.
     private static final int HORIZONTAL_PADDING_DP = 8;
-    private static final int CONTROL_STRIP_HEIGHT_DP = 34;
+    private static final int CONTROL_STRIP_HEIGHT_DP = 30;
     private static final int CONTROL_GAP_DP = 2;
     private static final int RIGHT_CONTROL_INSET_DP = 18;
     private static final int MIN_BADGE_SIZE_PX = 15;
@@ -2150,6 +2150,9 @@ final class OverlayAdContentView extends FrameLayout {
         control.setTextColor(Color.WHITE);
         control.setTextSize(textSize);
         control.setGravity(Gravity.CENTER);
+        // Font padding is not symmetric around a glyph, so a centred mark
+        // still sits off centre while it is included.
+        control.setIncludeFontPadding(false);
         control.setBackgroundColor(Color.parseColor(backgroundColor));
         return control;
     }
