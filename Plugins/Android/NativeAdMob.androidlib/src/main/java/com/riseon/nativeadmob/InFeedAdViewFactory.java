@@ -107,6 +107,12 @@ final class InFeedAdViewFactory {
     private static final int CTA_MAX_HEIGHT_DP = 36;
     private static final float CTA_TEXT_HEIGHT_RATIO = 0.45f;
     private static final double MAX_STAR_RATING = 5d;
+    // The tier is a ladder of text sizes, not a claim about the cell: a
+    // 96dp cell can win on the roomy rung, and when it does its borders
+    // must still be a small cell's borders. Every spacing the tier hands
+    // out is therefore capped by the cell's own short side.
+    private static final float CELL_SPACING_RATIO = 0.02f;
+    private static final float CELL_CTA_PADDING_RATIO = 0.035f;
 
     // The height handed to the button is a minimum; the row it sits in
     // stretches it well past that, and a label sized from the minimum then sits
@@ -420,9 +426,24 @@ final class InFeedAdViewFactory {
     }
 
     int GapForTier(int tier) {
-        if (tier == InFeedAdLayoutEngine.TIER_COMPACT) return Dp(1);
-        if (tier == InFeedAdLayoutEngine.TIER_REGULAR) return Dp(3);
-        return Dp(5);
+        int tierGap;
+        if (tier == InFeedAdLayoutEngine.TIER_COMPACT) {
+            tierGap = Dp(1);
+        } else if (tier == InFeedAdLayoutEngine.TIER_REGULAR) {
+            tierGap = Dp(3);
+        } else {
+            tierGap = Dp(5);
+        }
+        return Math.min(tierGap, CellSpacingCapPx());
+    }
+
+    // What this cell can afford to spend between its rows, whatever rung
+    // the scorer climbed to.
+    private int CellSpacingCapPx() {
+        return Clamp(
+                Math.round(slotShortSidePx * CELL_SPACING_RATIO)
+              , Dp(1)
+              , Dp(5));
     }
 
     int PreferredTier(int width, int height) {
@@ -535,13 +556,11 @@ final class InFeedAdViewFactory {
             // Slim borders: the veil already separates the text from the
             // picture, so the block spends only the tier's own gap on every
             // side - a tiny cell cannot afford more.
-            // A compact cell is too small to spend anything on borders:
-            // the veil already separates the text from the picture, so the
-            // block meets the cell's edges and only the tier's gap
+            // No borders at all: the veil already separates the text
+            // from the picture, so the block meets the cell's edges the
+            // way every other template's content does, and only the gap
             // separates its rows.
-            int scrimPad = plan.tier == InFeedAdLayoutEngine.TIER_COMPACT
-                    ? 0
-                    : gap;
+            int scrimPad = 0;
             scrim.setPadding(scrimPad, scrimPad, scrimPad, scrimPad);
 
             views.headline = CreateText(
@@ -1899,9 +1918,17 @@ final class InFeedAdViewFactory {
     }
 
     private int CtaHorizontalPadding(int tier) {
-        if (tier == InFeedAdLayoutEngine.TIER_COMPACT) return Dp(3);
-        if (tier == InFeedAdLayoutEngine.TIER_REGULAR) return Dp(8);
-        return Dp(10);
+        int tierPadding;
+        if (tier == InFeedAdLayoutEngine.TIER_COMPACT) {
+            tierPadding = Dp(3);
+        } else if (tier == InFeedAdLayoutEngine.TIER_REGULAR) {
+            tierPadding = Dp(8);
+        } else {
+            tierPadding = Dp(10);
+        }
+        return Math.min(
+                tierPadding
+              , Math.round(slotShortSidePx * CELL_CTA_PADDING_RATIO));
     }
 
     private static int Clamp(int value, int min, int max) {

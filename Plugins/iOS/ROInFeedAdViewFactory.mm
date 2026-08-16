@@ -56,6 +56,12 @@ static const CGFloat kROCtaShortSideRatio = 0.18f;
 static const CGFloat kROCtaMaxHeight = 36;
 static const CGFloat kROCtaTextHeightRatio = 0.45f;
 static const double kROMaxStarRating = 5;
+// The tier is a ladder of text sizes, not a claim about the cell: a 96pt
+// cell can win on the roomy rung, and when it does its borders must still
+// be a small cell's borders. Every spacing the tier hands out is therefore
+// capped by the cell's own short side.
+static const CGFloat kROCellSpacingRatio = 0.02f;
+static const CGFloat kROCellCtaPaddingRatio = 0.035f;
 
 static UIColor *ROInFeedArgb(uint32_t argb) {
     return [UIColor colorWithRed:((argb >> 16) & 0xFF) / 255.0
@@ -243,9 +249,21 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
 }
 
 - (CGFloat)gapForTier:(ROInFeedTier)tier {
-    if (tier == ROInFeedTierCompact) return 1;
-    if (tier == ROInFeedTierRegular) return 3;
-    return 5;
+    CGFloat tierGap;
+    if (tier == ROInFeedTierCompact) {
+        tierGap = 1;
+    } else if (tier == ROInFeedTierRegular) {
+        tierGap = 3;
+    } else {
+        tierGap = 5;
+    }
+    return MIN(tierGap, [self ro_cellSpacingCap]);
+}
+
+// What this cell can afford to spend between its rows, whatever rung the
+// scorer climbed to.
+- (CGFloat)ro_cellSpacingCap {
+    return MAX(1, MIN(5, round(_slotShortSide * kROCellSpacingRatio)));
 }
 
 - (ROInFeedTier)preferredTierForWidth:(CGFloat)width height:(CGFloat)height {
@@ -304,9 +322,15 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
 }
 
 - (CGFloat)ro_ctaHorizontalPaddingForTier:(ROInFeedTier)tier {
-    if (tier == ROInFeedTierCompact) return 3;
-    if (tier == ROInFeedTierRegular) return 8;
-    return 10;
+    CGFloat tierPadding;
+    if (tier == ROInFeedTierCompact) {
+        tierPadding = 3;
+    } else if (tier == ROInFeedTierRegular) {
+        tierPadding = 8;
+    } else {
+        tierPadding = 10;
+    }
+    return MIN(tierPadding, round(_slotShortSide * kROCellCtaPaddingRatio));
 }
 
 // Every text size passes through the plan's scale, so a candidate that has
@@ -555,10 +579,10 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
         // Slim borders: the veil already separates the text from the
         // picture, so the block spends only the tier's own gap on every
         // side - a tiny cell cannot afford more.
-        // A compact cell is too small to spend anything on borders: the
-        // veil already separates the text from the picture, so the block
-        // meets the cell's edges and only the tier's gap separates rows.
-        CGFloat scrimPad = plan.tier == ROInFeedTierCompact ? 0 : gap;
+        // No borders at all: the veil already separates the text from the
+        // picture, so the block meets the cell's edges the way every other
+        // template's content does, and only the gap separates its rows.
+        CGFloat scrimPad = 0;
         scrim.ro_padding = UIEdgeInsetsMake(
                 scrimPad, scrimPad, scrimPad, scrimPad);
 
