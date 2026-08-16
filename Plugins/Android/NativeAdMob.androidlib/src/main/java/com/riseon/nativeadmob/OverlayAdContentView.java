@@ -1743,13 +1743,13 @@ final class OverlayAdContentView extends FrameLayout {
                 int currentHeight = getHeight();
                 if (currentWidth <= 0 || currentHeight <= 0) return;
 
+                // The panel's real height, never the requested one: the
+                // window is sized to what the content resolved to, which
+                // can exceed the request, and measuring against the smaller
+                // number leaves that difference as a gap above the media.
                 RecomputeMediaControlAvoidance(
                         currentWidth
-                      , fullscreen
-                                ? currentHeight - getPaddingTop()
-                                : Math.min(
-                                        currentHeight
-                                      , avoidancePanelHeight));
+                      , currentHeight - getPaddingTop());
             });
         }
     }
