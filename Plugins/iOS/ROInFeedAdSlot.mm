@@ -11,7 +11,11 @@ static const NSTimeInterval kROUnprovenLayoutRetryDelay = 300;
 // shown and hidden earns a fresh ad every time it comes back, and the dwell
 // interval only covers a slot that never goes away.
 static const NSTimeInterval kRODwellRefreshInterval = 30;
-static const NSTimeInterval kROMinDwell = 1;
+// How long an ad has to have been on screen before a hide is allowed to
+// rotate it away. A second is a glance; the ad is gone before it has been
+// read, and the one that replaces it burns an impression on a slot the player
+// is leaving.
+static const NSTimeInterval kROMinDwell = 4;
 static const NSTimeInterval kROMinSwapInterval = 3;
 static const NSTimeInterval kROWatchdogInterval = 1;
 static const NSTimeInterval kROForegroundRecheckDelay = 1;

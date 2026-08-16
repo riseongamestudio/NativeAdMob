@@ -18,7 +18,11 @@ final class InFeedAdSlot {
     // shown and hidden earns a fresh ad every time it comes back, and the dwell
     // interval only covers a slot that never goes away.
     private static final long DWELL_REFRESH_INTERVAL_MS = 30_000L;
-    private static final long MIN_DWELL_MS = 1_000L;
+    // How long an ad has to have been on screen before a hide is allowed to
+    // rotate it away. A second is a glance; the ad is gone before it has been
+    // read, and the one that replaces it burns an impression on a slot the
+    // player is leaving.
+    private static final long MIN_DWELL_MS = 4_000L;
     private static final long MIN_SWAP_INTERVAL_MS = 3_000L;
     private static final long NO_VISIBLE_TIMER = -1L;
     private static final long WATCHDOG_INTERVAL_MS = 1_000L;
