@@ -594,12 +594,12 @@ static UIColor *HBArgb(uint32_t argb) {
     _countdown = [self ro_createControlLabelWithText:
                     [NSString stringWithFormat:@"%lld"
                           , (long long)((_countDownRemainingMs + 999) / 1000)]
-                                            textSize:15
-                                     backgroundAlpha:0.4
+                                            textSize:18
+                                     backgroundAlpha:0.6
                                      backgroundWhite:0];
     _close = [self ro_createControlLabelWithText:@"✕"
-                                        textSize:16
-                                 backgroundAlpha:0.66
+                                        textSize:20
+                                 backgroundAlpha:0.8
                                  backgroundWhite:0];
     _close.hidden = YES;
     _close.userInteractionEnabled = YES;
@@ -670,6 +670,12 @@ static UIColor *HBArgb(uint32_t argb) {
     control.textAlignment = NSTextAlignmentCenter;
     control.backgroundColor = [UIColor colorWithWhite:backgroundWhite
                                                 alpha:backgroundAlpha];
+    // The control carries its own visible chip: a translucent square on a
+    // dark creative is invisible, and then the empty half of its touch box
+    // reads as a gap between the media and the mark inside it.
+    control.layer.borderWidth = 1;
+    control.layer.borderColor =
+            [UIColor colorWithWhite:1 alpha:0.35].CGColor;
     return control;
 }
 

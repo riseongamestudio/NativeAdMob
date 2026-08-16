@@ -59,8 +59,17 @@ final class OverlayAdContentView extends FrameLayout {
     private static final String ATTRIBUTION_TEXT = "Ad";
     private static final String SECONDARY_TEXT_COLOR = "#CCFFFFFF";
     private static final String ATTRIBUTION_BACKGROUND_COLOR = "#FFFFC107";
-    private static final String TIMER_BACKGROUND_COLOR = "#66000000";
-    private static final String CLOSE_BACKGROUND_COLOR = "#AA000000";
+    // The controls carry their own visible chip: a translucent square on
+    // a dark creative is invisible, and then the empty half of its touch
+    // box reads as a gap between the media and the mark inside it.
+    private static final String TIMER_BACKGROUND_COLOR = "#99000000";
+    private static final String CLOSE_BACKGROUND_COLOR = "#CC000000";
+    private static final String CONTROL_BORDER_COLOR = "#59FFFFFF";
+    private static final int CONTROL_BORDER_WIDTH_DP = 1;
+    // Sized to fill the chip: a mark lost in the middle of its box leaves
+    // the box reading as empty space.
+    private static final float CLOSE_TEXT_SIZE_SP = 20f;
+    private static final float COUNTDOWN_TEXT_SIZE_SP = 18f;
     private static final String CTA_BACKGROUND_COLOR = "#FF2196F3";
     private static final String CTA_BORDER_COLOR = "#FF1565C0";
     private static final String CTA_TEXT_COLOR = "#FFFFFFFF";
@@ -834,7 +843,7 @@ final class OverlayAdContentView extends FrameLayout {
                         (int) Math.ceil(
                                 countDownRemainingMs
                                         / (double) MILLIS_PER_SECOND))
-              , 15f
+              , COUNTDOWN_TEXT_SIZE_SP
               , TIMER_BACKGROUND_COLOR);
         FrameLayout.LayoutParams countdownLayoutParams =
                 new FrameLayout.LayoutParams(
@@ -851,7 +860,7 @@ final class OverlayAdContentView extends FrameLayout {
         close = CreateControlView(
                 context
               , "\u2715"
-              , 16f
+              , CLOSE_TEXT_SIZE_SP
               , CLOSE_BACKGROUND_COLOR);
         close.setVisibility(View.GONE);
         close.setContentDescription(CLOSE_CONTENT_DESCRIPTION);
@@ -2092,7 +2101,16 @@ final class OverlayAdContentView extends FrameLayout {
         control.setTextColor(Color.WHITE);
         control.setTextSize(textSize);
         control.setGravity(Gravity.CENTER);
-        control.setBackgroundColor(Color.parseColor(backgroundColor));
+        GradientDrawable chip = new GradientDrawable();
+        chip.setShape(GradientDrawable.RECTANGLE);
+        chip.setColor(Color.parseColor(backgroundColor));
+        chip.setStroke(
+                (int) Math.ceil(
+                        CONTROL_BORDER_WIDTH_DP
+                                * getResources()
+                                        .getDisplayMetrics().density)
+              , Color.parseColor(CONTROL_BORDER_COLOR));
+        control.setBackground(chip);
         return control;
     }
 
