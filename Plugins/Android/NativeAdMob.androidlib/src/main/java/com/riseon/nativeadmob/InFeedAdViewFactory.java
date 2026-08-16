@@ -113,6 +113,7 @@ final class InFeedAdViewFactory {
     // out is therefore capped by the cell's own short side.
     private static final float CELL_SPACING_RATIO = 0.02f;
     private static final float CELL_CTA_PADDING_RATIO = 0.035f;
+    private static final float CELL_EDGE_PADDING_RATIO = 0.015f;
 
     // The height handed to the button is a minimum; the row it sits in
     // stretches it well past that, and a label sized from the minimum then sits
@@ -437,6 +438,15 @@ final class InFeedAdViewFactory {
         return Math.min(tierGap, CellSpacingCapPx());
     }
 
+    // The scrim block's own inset from the cell's edges - a hair on a
+    // small cell, a few points on a large one, never a tier's whim.
+    private int CellEdgePaddingPx() {
+        return Clamp(
+                Math.round(slotShortSidePx * CELL_EDGE_PADDING_RATIO)
+              , Dp(1)
+              , Dp(4));
+    }
+
     // What this cell can afford to spend between its rows, whatever rung
     // the scorer climbed to.
     private int CellSpacingCapPx() {
@@ -556,11 +566,10 @@ final class InFeedAdViewFactory {
             // Slim borders: the veil already separates the text from the
             // picture, so the block spends only the tier's own gap on every
             // side - a tiny cell cannot afford more.
-            // No borders at all: the veil already separates the text
-            // from the picture, so the block meets the cell's edges the
-            // way every other template's content does, and only the gap
-            // separates its rows.
-            int scrimPad = 0;
+            // A hair of breathing room, sized by the cell instead of
+            // by the tier: enough that the text is not printed onto the
+            // very edge, never enough to read as a border.
+            int scrimPad = CellEdgePaddingPx();
             scrim.setPadding(scrimPad, scrimPad, scrimPad, scrimPad);
 
             views.headline = CreateText(

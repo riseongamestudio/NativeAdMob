@@ -62,6 +62,7 @@ static const double kROMaxStarRating = 5;
 // capped by the cell's own short side.
 static const CGFloat kROCellSpacingRatio = 0.02f;
 static const CGFloat kROCellCtaPaddingRatio = 0.035f;
+static const CGFloat kROCellEdgePaddingRatio = 0.015f;
 
 static UIColor *ROInFeedArgb(uint32_t argb) {
     return [UIColor colorWithRed:((argb >> 16) & 0xFF) / 255.0
@@ -258,6 +259,12 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
         tierGap = 5;
     }
     return MIN(tierGap, [self ro_cellSpacingCap]);
+}
+
+// The scrim block's own inset from the cell's edges - a hair on a small
+// cell, a few points on a large one, never a tier's whim.
+- (CGFloat)ro_cellEdgePadding {
+    return MAX(1, MIN(4, round(_slotShortSide * kROCellEdgePaddingRatio)));
 }
 
 // What this cell can afford to spend between its rows, whatever rung the
@@ -579,10 +586,10 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
         // Slim borders: the veil already separates the text from the
         // picture, so the block spends only the tier's own gap on every
         // side - a tiny cell cannot afford more.
-        // No borders at all: the veil already separates the text from the
-        // picture, so the block meets the cell's edges the way every other
-        // template's content does, and only the gap separates its rows.
-        CGFloat scrimPad = 0;
+        // A hair of breathing room, sized by the cell instead of by the
+        // tier: enough that the text is not printed onto the very edge,
+        // never enough to read as a border.
+        CGFloat scrimPad = [self ro_cellEdgePadding];
         scrim.ro_padding = UIEdgeInsetsMake(
                 scrimPad, scrimPad, scrimPad, scrimPad);
 
