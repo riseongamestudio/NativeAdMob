@@ -655,12 +655,16 @@ public final class OverlayAd extends NativeAd {
         // snapshot and pass through here, so a prepared UI never keeps
         // stale config.
         RunOnMainThread(() -> {
+            // A show in progress is no reason to skip: the rebuild only
+            // ever touches the prepared face of the CACHED ad, never the
+            // one on screen, and skipping it left the replacement fetched
+            // during the show holding a stale countdown, which then had to
+            // be rebuilt at show time.
             if (released
                     || requestedStyle == null
                     || requestedStyle.fullscreen
                     || configuredStyle != requestedStyle
-                    || nativeAd == null
-                    || activeNativeAd != null) {
+                    || nativeAd == null) {
                 return;
             }
 

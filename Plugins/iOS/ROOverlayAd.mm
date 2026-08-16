@@ -413,11 +413,12 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 - (void)ro_rebuildPreparedPresentationForStyle:(HBOverlayStyle *)requestedStyle {
     // Every runtime style setter publishes a new snapshot and passes through
     // here so a prepared face never keeps stale config.
+    // A show in progress is no reason to skip: the rebuild only ever
+    // touches the prepared face of the CACHED ad, never the one on screen.
     if (self.released
             || requestedStyle == nil
             || _configuredStyle != requestedStyle
-            || _nativeAd == nil
-            || _activeNativeAd != nil) {
+            || _nativeAd == nil) {
         return;
     }
 

@@ -204,10 +204,7 @@ namespace RiseOn.NativeAdMob {
           , string errorMessage
           , bool adConsumed) {
             GoogleMobileAds.Common.MobileAdsEventExecutor.ExecuteInUpdate(() => {
-                if (!TryTakeShowCompletion(
-                        showId
-                      , adConsumed
-                      , out var completed))
+                if (!TryTakeShowCompletion(showId, out var completed))
                     return;
 
                 // The game callback must fully return before the consumed ad
@@ -220,9 +217,14 @@ namespace RiseOn.NativeAdMob {
             });
         }
 
+        // Readiness is never guessed here. The native side publishes it -
+        // empty cache the moment a show takes the ad, full again the moment
+        // a replacement lands - and that notification is applied straight
+        // away while this completion waits a frame in Unity's queue. Wiping
+        // the flag here would therefore overwrite the truth with a stale
+        // assumption and strand a perfectly good cached ad.
         private bool TryTakeShowCompletion(
             int generation
-          , bool adConsumed
           , out ShowCompletedHandler completed) {
             lock (nativeAdStateLock) {
                 if (!showPendingOrActive || generation != showGeneration) {
@@ -230,10 +232,6 @@ namespace RiseOn.NativeAdMob {
                     return false;
                 }
 
-                if (adConsumed) {
-                    cachedAdReady   = false;
-                    cachedAdLoading = false;
-                }
                 showPendingOrActive  = false;
                 completed            = currentShowCompleted;
                 currentShowCompleted = null;
