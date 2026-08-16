@@ -148,8 +148,9 @@ final class OverlayAdContentView extends FrameLayout {
     private static final int RAIL_FULL_TEXT_STEPS = 3;
     private static final float RAIL_FULL_TEXT_SCALE_STEP = 0.34f;
     private static final int RAIL_HEADLINE_MAX_LINE_COUNT = 4;
-    // The seam between the media and the identity row below it.
-    private static final int MEDIA_LOWER_SEAM_DP = 6;
+    // The seam between the media and the identity row below it - a hair,
+    // not a margin.
+    private static final int MEDIA_LOWER_SEAM_DP = 3;
     // A panel meaningfully taller than wide reads as a page: media belongs
     // stacked on top of it, not beside it. Side media only suits panels near
     // screen proportions, where a portrait creative would otherwise sit in a
@@ -1819,7 +1820,10 @@ final class OverlayAdContentView extends FrameLayout {
         int[][] candidates = {
                 { 0, topRowIntervalLeft, topRowIntervalRight, 0 }
               , { controlSize, syncLeft, syncRight, 0 }
-              , { badgeHeight
+                // Controls at the edges leave the whole top band free: the
+                // badges may sit over media, so the media starts at the
+                // panel's very top and only the control columns hold it in.
+              , { 0
                   , edgeIntervalLeft
                   , edgeIntervalRight
                   , 1 }
@@ -1834,12 +1838,9 @@ final class OverlayAdContentView extends FrameLayout {
         // bottom edge. Only a creative that never reported its proportions
         // is handed the whole band - no number exists to size or validate
         // it - and renders inside as it pleases on the black ground.
-        // A box must touch a VISIBLE wall: the panel's top, the badge
-        // line, the control columns or the sync padding edges. The line
-        // under the control row is not a wall anyone can see, so a box
-        // whose only contact is that line loses to a narrower one that
-        // visibly touches - only when nothing touches at all does raw area
-        // decide.
+        // The largest box wins; ties go to the placement that starts
+        // higher, because a picture reaching the panel's top edge reads as
+        // filling the panel.
         int mediaSeam = Math.round(MEDIA_LOWER_SEAM_DP * density);
         long bestScore = -1L;
         int bestBoxWidth = Math.max(panelWidth, avoidanceMinimumMediaSize);
@@ -1850,55 +1851,45 @@ final class OverlayAdContentView extends FrameLayout {
         int bestIntervalLeft = 0;
         int bestIntervalWidth = panelWidth;
         boolean bestEdges = false;
-        for (int pass = 0; pass < 2 && bestScore < 0L; ++pass) {
-            boolean requireVisibleTouch = pass == 0;
-            for (int[] candidate : candidates) {
-                int top = candidate[0];
-                int intervalLeft = Math.max(0, candidate[1]);
-                int intervalRight = Math.min(panelWidth, candidate[2]);
-                int intervalWidth = intervalRight - intervalLeft;
-                if (intervalWidth < avoidanceMinimumMediaSize) continue;
+        for (int[] candidate : candidates) {
+            int top = candidate[0];
+            int intervalLeft = Math.max(0, candidate[1]);
+            int intervalRight = Math.min(panelWidth, candidate[2]);
+            int intervalWidth = intervalRight - intervalLeft;
+            if (intervalWidth < avoidanceMinimumMediaSize) continue;
 
-                int bandHeight = availableHeight - top - mediaSeam;
-                if (bandHeight < avoidanceMinimumMediaSize) continue;
+            int bandHeight = availableHeight - top - mediaSeam;
+            if (bandHeight < avoidanceMinimumMediaSize) continue;
 
-                int boxWidth;
-                int boxHeight;
-                if (mediaAspectReported) {
-                    boxHeight = Math.min(
-                            bandHeight
-                          , Math.round(
-                                intervalWidth / avoidanceMediaAspect));
-                    boxWidth = Math.min(
-                            intervalWidth
-                          , Math.round(
-                                boxHeight * avoidanceMediaAspect));
-                    if (boxWidth < avoidanceMinimumMediaSize
-                            || boxHeight < avoidanceMinimumMediaSize) {
-                        continue;
-                    }
-                    boolean widthBound =
-                            boxWidth >= intervalWidth - 2;
-                    if (requireVisibleTouch
-                            && !widthBound
-                            && top > badgeHeight) {
-                        continue;
-                    }
-                } else {
-                    boxWidth = intervalWidth;
-                    boxHeight = bandHeight;
+            int boxWidth;
+            int boxHeight;
+            if (mediaAspectReported) {
+                boxHeight = Math.min(
+                        bandHeight
+                      , Math.round(
+                            intervalWidth / avoidanceMediaAspect));
+                boxWidth = Math.min(
+                        intervalWidth
+                      , Math.round(boxHeight * avoidanceMediaAspect));
+                if (boxWidth < avoidanceMinimumMediaSize
+                        || boxHeight < avoidanceMinimumMediaSize) {
+                    continue;
                 }
+            } else {
+                boxWidth = intervalWidth;
+                boxHeight = bandHeight;
+            }
 
-                long score = (long) boxWidth * boxHeight;
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestBoxWidth = boxWidth;
-                    bestBoxHeight = boxHeight;
-                    bestTop = top;
-                    bestIntervalLeft = intervalLeft;
-                    bestIntervalWidth = intervalWidth;
-                    bestEdges = candidate[3] == 1;
-                }
+            long score = (long) boxWidth * boxHeight;
+            if (score > bestScore
+                    || (score == bestScore && top < bestTop)) {
+                bestScore = score;
+                bestBoxWidth = boxWidth;
+                bestBoxHeight = boxHeight;
+                bestTop = top;
+                bestIntervalLeft = intervalLeft;
+                bestIntervalWidth = intervalWidth;
+                bestEdges = candidate[3] == 1;
             }
         }
 
