@@ -188,6 +188,7 @@ final class OverlayAdContentView extends FrameLayout {
     private boolean controlsAtEdgesBelowBadges;
     private LinearLayout avoidanceColumn;
     private MediaView avoidanceMediaView;
+    private TextView avoidanceBodyView;
     private float avoidanceMediaAspect;
     private int avoidanceMinimumMediaSize;
     private int avoidanceHorizontalPadding;
@@ -790,6 +791,7 @@ final class OverlayAdContentView extends FrameLayout {
                   , mediaAspectRatio
                   , contentColumn
                   , mediaView
+                  , body
                   , displayMetrics.heightPixels);
         }
         nativeAdView.setNativeAd(nativeAd);
@@ -957,6 +959,7 @@ final class OverlayAdContentView extends FrameLayout {
                       , mediaAspectRatio
                       , contentColumn
                       , mediaView
+                      , body
                       , requestedPanelHeight);
                 return;
             }
@@ -1695,10 +1698,12 @@ final class OverlayAdContentView extends FrameLayout {
           , float mediaAspectRatio
           , LinearLayout contentColumn
           , MediaView mediaView
+          , TextView body
           , int panelHeight) {
         controlAvoidanceActive = true;
         avoidanceColumn = contentColumn;
         avoidanceMediaView = mediaView;
+        avoidanceBodyView = body;
         avoidanceMediaAspect = mediaAspectRatio;
         avoidanceMinimumMediaSize = minimumMediaSize;
         avoidanceHorizontalPadding = horizontalPadding;
@@ -1719,11 +1724,26 @@ final class OverlayAdContentView extends FrameLayout {
           , int oldHeight) {
         super.onSizeChanged(width, height, oldWidth, oldHeight);
         if (controlAvoidanceActive && width > 0 && height > 0) {
-            RecomputeMediaControlAvoidance(
-                    width
-                  , fullscreen
-                            ? height - getPaddingTop()
-                            : Math.min(height, avoidancePanelHeight));
+            // Never recompute inside the layout pass. The probe measures
+            // poke the column directly, and a requestLayout issued
+            // mid-layout is dropped - the column then stays laid out at the
+            // probe's collapsed size, media at zero and the button clipped.
+            // Deferred one frame, both the probe and its repair land.
+            post(() -> {
+                if (!controlAvoidanceActive || released) return;
+
+                int currentWidth = getWidth();
+                int currentHeight = getHeight();
+                if (currentWidth <= 0 || currentHeight <= 0) return;
+
+                RecomputeMediaControlAvoidance(
+                        currentWidth
+                      , fullscreen
+                                ? currentHeight - getPaddingTop()
+                                : Math.min(
+                                        currentHeight
+                                      , avoidancePanelHeight));
+            });
         }
     }
 
@@ -1748,22 +1768,13 @@ final class OverlayAdContentView extends FrameLayout {
         LinearLayout.LayoutParams mediaLayoutParams =
                 (LinearLayout.LayoutParams)
                         avoidanceMediaView.getLayoutParams();
-        mediaLayoutParams.width = 0;
-        mediaLayoutParams.height = 0;
-        avoidanceMediaView.setLayoutParams(mediaLayoutParams);
         avoidanceColumn.setPadding(
                 avoidanceColumn.getPaddingLeft()
               , 0
               , avoidanceColumn.getPaddingRight()
               , 0);
-        avoidanceColumn.measure(
-                View.MeasureSpec.makeMeasureSpec(
-                        panelWidth
-                      , View.MeasureSpec.EXACTLY)
-              , View.MeasureSpec.makeMeasureSpec(
-                        0
-                      , View.MeasureSpec.UNSPECIFIED));
-        int lowerContentHeight = avoidanceColumn.getMeasuredHeight();
+        int lowerContentHeight =
+                MeasureLowerContent(panelWidth, mediaLayoutParams);
         int availableHeight = Math.max(
                 0
               , panelHeight - lowerContentHeight);
@@ -1875,6 +1886,38 @@ final class OverlayAdContentView extends FrameLayout {
                         0
                       , availableHeight - bestTop - bestBoxHeight)
                 : 0;
+        // Slack feeds the text before it pads the void: the body takes more
+        // whole lines while slack remains, so a clipped line never sits
+        // beside empty space. A line already scrolling is left alone.
+        if (avoidanceBodyView != null
+                && avoidanceBodyView.getVisibility() == View.VISIBLE
+                && avoidanceBodyView.getEllipsize()
+                        != TextUtils.TruncateAt.MARQUEE) {
+            while (slack > 0
+                    && avoidanceBodyView.getMaxLines()
+                            < RAIL_BODY_MAX_LINE_COUNT
+                    && RailTextTruncated(avoidanceBodyView)) {
+                avoidanceBodyView.setMaxLines(
+                        avoidanceBodyView.getMaxLines() + 1);
+                int grownLower = MeasureLowerContent(
+                        panelWidth
+                      , mediaLayoutParams);
+                int grownAvailable = Math.max(
+                        0
+                      , panelHeight - grownLower);
+                int grownSlack =
+                        grownAvailable - bestTop - bestBoxHeight;
+                if (grownSlack < 0) {
+                    avoidanceBodyView.setMaxLines(
+                            avoidanceBodyView.getMaxLines() - 1);
+                    MeasureLowerContent(panelWidth, mediaLayoutParams);
+                    break;
+                }
+                lowerContentHeight = grownLower;
+                availableHeight = grownAvailable;
+                slack = grownSlack;
+            }
+        }
         Log.i(TAG, "Avoidance: panel=" + panelWidth + "x" + panelHeight
                 + " lower=" + lowerContentHeight
                 + " avail=" + availableHeight
@@ -1902,6 +1945,31 @@ final class OverlayAdContentView extends FrameLayout {
         mediaLayoutParams.rightMargin = 0;
         avoidanceMediaView.setLayoutParams(mediaLayoutParams);
         requestLayout();
+    }
+
+    // A probe: the column measured with the media collapsed, giving the
+    // height of everything below it. The media's params are restored before
+    // returning, and the caller owns re-measuring for real.
+    private int MeasureLowerContent(
+            int panelWidth
+          , LinearLayout.LayoutParams mediaLayoutParams) {
+        int previousWidth = mediaLayoutParams.width;
+        int previousHeight = mediaLayoutParams.height;
+        mediaLayoutParams.width = 0;
+        mediaLayoutParams.height = 0;
+        avoidanceMediaView.setLayoutParams(mediaLayoutParams);
+        avoidanceColumn.measure(
+                View.MeasureSpec.makeMeasureSpec(
+                        panelWidth
+                      , View.MeasureSpec.EXACTLY)
+              , View.MeasureSpec.makeMeasureSpec(
+                        0
+                      , View.MeasureSpec.UNSPECIFIED));
+        int lowerContentHeight = avoidanceColumn.getMeasuredHeight();
+        mediaLayoutParams.width = previousWidth;
+        mediaLayoutParams.height = previousHeight;
+        avoidanceMediaView.setLayoutParams(mediaLayoutParams);
+        return lowerContentHeight;
     }
 
     private void ConfigureBackground() {

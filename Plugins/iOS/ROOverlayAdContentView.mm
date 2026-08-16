@@ -1354,6 +1354,27 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     [self ro_keepTextWholeOrScrolling:_advertiser];
 }
 
+// A probe: the column measured with the media collapsed, giving the
+// height of everything below it. The media's layout values are restored
+// before returning, and the caller owns re-measuring for real.
+- (CGFloat)ro_measureLowerContentWithPanelWidth:(CGFloat)panelWidth {
+    CGFloat previousWidth = _mediaView.ro_layoutWidth;
+    CGFloat previousHeight = _mediaView.ro_layoutHeight;
+    CGFloat previousWeight = _mediaView.ro_layoutWeight;
+    _mediaView.ro_layoutWidth = 0;
+    _mediaView.ro_layoutHeight = 0;
+    _mediaView.ro_layoutWeight = 0;
+    [_contentColumn ro_measureWithWidthSpec:
+                    HBMeasureSpecMake(HBMeasureSpecExactly, panelWidth)
+                                 heightSpec:
+                    HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
+    CGFloat lowerContentHeight = _contentColumn.ro_measuredSize.height;
+    _mediaView.ro_layoutWidth = previousWidth;
+    _mediaView.ro_layoutHeight = previousHeight;
+    _mediaView.ro_layoutWeight = previousWeight;
+    return lowerContentHeight;
+}
+
 - (void)ro_enableControlAvoidanceWithPanelHeight:(CGFloat)panelHeight {
     _controlAvoidanceActive = YES;
     _avoidancePanelHeight = panelHeight;
@@ -1379,18 +1400,12 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     CGFloat controlGap = kROControlGap;
 
     // The lower stack's height, measured with the media collapsed.
-    _mediaView.ro_layoutWidth = 0;
-    _mediaView.ro_layoutHeight = 0;
-    _mediaView.ro_layoutWeight = 0;
     UIEdgeInsets columnPadding = _contentColumn.ro_padding;
     columnPadding.top = 0;
     columnPadding.bottom = 0;
     _contentColumn.ro_padding = columnPadding;
-    [_contentColumn ro_measureWithWidthSpec:
-                    HBMeasureSpecMake(HBMeasureSpecExactly, panelWidth)
-                                 heightSpec:
-                    HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
-    CGFloat lowerContentHeight = _contentColumn.ro_measuredSize.height;
+    CGFloat lowerContentHeight =
+            [self ro_measureLowerContentWithPanelWidth:panelWidth];
     CGFloat availableHeight = MAX(0, panelHeight - lowerContentHeight);
 
     // Both corner controls share one spot until the countdown ends, so a
@@ -1496,6 +1511,30 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     CGFloat slack = _mediaAspectReported
             ? MAX(0, availableHeight - bestTop - bestBoxHeight)
             : 0;
+    // Slack feeds the text before it pads the void: the body takes more
+    // whole lines while slack remains, so a clipped line never sits beside
+    // empty space. A line already scrolling is left alone.
+    if (!_body.ro_gone && !_body.hidden && !_body.marquee) {
+        while (slack > 0
+                && _body.maxLines < kRORailBodyMaxLineCount
+                && ![_body ro_showsEntireTextForWidth:
+                        [self ro_contentWidth]]) {
+            _body.maxLines = _body.maxLines + 1;
+            CGFloat grownLower =
+                    [self ro_measureLowerContentWithPanelWidth:panelWidth];
+            CGFloat grownAvailable = MAX(0, panelHeight - grownLower);
+            CGFloat grownSlack =
+                    grownAvailable - bestTop - bestBoxHeight;
+            if (grownSlack < 0) {
+                _body.maxLines = _body.maxLines - 1;
+                [self ro_measureLowerContentWithPanelWidth:panelWidth];
+                break;
+            }
+            lowerContentHeight = grownLower;
+            availableHeight = grownAvailable;
+            slack = grownSlack;
+        }
+    }
     NSLog(@"%@: Avoidance: panel=%gx%g lower=%g avail=%g box=%gx%g top=%g "
             "intervalLeft=%g slack=%g edges=%d"
           , kROTag, panelWidth, panelHeight, lowerContentHeight

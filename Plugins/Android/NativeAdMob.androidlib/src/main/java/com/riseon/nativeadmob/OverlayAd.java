@@ -66,6 +66,39 @@ public final class OverlayAd extends NativeAd {
     private com.google.android.gms.ads.nativead.NativeAd preparedContentAd;
     private boolean preparedContentCloseOnLeft;
     private OverlayAdActivity.CloseRelay preparedContentCloseRelay;
+    private String preparedContentMediaSignature;
+    private String preparedPresentationMediaSignature;
+
+    // The face of the creative's assets at one moment. A presentation built
+    // at load time is only valid while this stays the same: assets that
+    // finish arriving later change the layout the ad needs, and a stale
+    // face must be rebuilt rather than shown.
+    private static String MediaSignature(
+            com.google.android.gms.ads.nativead.NativeAd nativeAd) {
+        com.google.android.gms.ads.MediaContent mediaContent =
+                nativeAd.getMediaContent();
+        boolean hasVideo = mediaContent != null
+                && mediaContent.hasVideoContent();
+        boolean hasMainImage = mediaContent != null
+                && mediaContent.getMainImage() != null;
+        float aspectRatio = mediaContent != null
+                ? mediaContent.getAspectRatio()
+                : 0f;
+        boolean hasAnyImage = false;
+        java.util.List<com.google.android.gms.ads.nativead.NativeAd.Image>
+                images = nativeAd.getImages();
+        if (images != null) {
+            for (com.google.android.gms.ads.nativead.NativeAd.Image image
+                    : images) {
+                if (image != null && image.getDrawable() != null) {
+                    hasAnyImage = true;
+                    break;
+                }
+            }
+        }
+        return hasVideo + "|" + hasMainImage + "|" + hasAnyImage
+                + "|" + aspectRatio;
+    }
     private NativeAdCompletedListener activeShowCompleted;
     private String activeActivitySessionId;
 
@@ -592,6 +625,7 @@ public final class OverlayAd extends NativeAd {
             preparedActivity = activity;
             preparedNativeAd = ad;
             preparedStyle = style;
+            preparedPresentationMediaSignature = MediaSignature(ad);
             return true;
         } catch (RuntimeException exception) {
             if (createdPresentation != null) {
@@ -639,7 +673,9 @@ public final class OverlayAd extends NativeAd {
         if (preparedPresentation == null
                 || preparedActivity != activity
                 || preparedNativeAd != ad
-                || preparedStyle != style) {
+                || preparedStyle != style
+                || !MediaSignature(ad).equals(
+                        preparedPresentationMediaSignature)) {
             ReleasePreparedPresentation();
             return null;
         }
@@ -714,6 +750,7 @@ public final class OverlayAd extends NativeAd {
             preparedContentAd = ad;
             preparedContentCloseOnLeft = closeOnLeft;
             preparedContentCloseRelay = closeRelay;
+            preparedContentMediaSignature = MediaSignature(ad);
         } catch (RuntimeException exception) {
             Log.e(TAG, "Failed to prepare full-screen ad content"
                   , exception);
@@ -724,12 +761,16 @@ public final class OverlayAd extends NativeAd {
     private PreparedFullScreenContent TakePreparedFullScreenContent(
             Activity activity
           , com.google.android.gms.ads.nativead.NativeAd ad) {
-        // Ad identity is the key. After Configure the style can only change
-        // its countdown, and the presented view refreshes that on resume.
+        // Ad identity and the assets' face are the keys. After Configure
+        // the style can only change its countdown, which the presented view
+        // refreshes on resume - but assets that finished arriving after the
+        // build changed the layout the ad needs, so a stale face rebuilds.
         if (preparedContentView == null
                 || preparedContentActivity != activity
                 || preparedContentAd != ad
-                || preparedContentCloseRelay == null) {
+                || preparedContentCloseRelay == null
+                || !MediaSignature(ad).equals(
+                        preparedContentMediaSignature)) {
             ReleasePreparedFullScreenContent();
             return null;
         }

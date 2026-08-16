@@ -54,6 +54,26 @@ static const int32_t kROLoadSuccessCode = 0;
 @interface ROOverlayAd () <GADNativeAdLoaderDelegate, GADNativeAdDelegate>
 @end
 
+// The face of the creative's assets at one moment. A presentation built
+// at load time is only valid while this stays the same: assets that finish
+// arriving later change the layout the ad needs, and a stale face must be
+// rebuilt rather than shown.
+static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
+    GADMediaContent *mediaContent = nativeAd.mediaContent;
+    BOOL hasVideo = mediaContent.hasVideoContent;
+    BOOL hasMainImage = mediaContent.mainImage != nil;
+    CGFloat aspectRatio = mediaContent != nil ? mediaContent.aspectRatio : 0;
+    BOOL hasAnyImage = NO;
+    for (GADNativeAdImage *image in nativeAd.images) {
+        if (image.image != nil) {
+            hasAnyImage = YES;
+            break;
+        }
+    }
+    return [NSString stringWithFormat:@"%d|%d|%d|%g"
+          , hasVideo, hasMainImage, hasAnyImage, aspectRatio];
+}
+
 @implementation ROOverlayAd {
     NSString *_adUnitId;
     HBOverlayStyle *_configuredStyle;
@@ -67,6 +87,7 @@ static const int32_t kROLoadSuccessCode = 0;
     ROOverlayAdPresentation *_preparedPresentation;
     GADNativeAd *_preparedNativeAd;
     HBOverlayStyle *_preparedStyle;
+    NSString *_preparedMediaSignature;
     RONativeAdShowCompletedCallback _activeShowCompleted;
     int32_t _activeShowId;
 }
@@ -387,6 +408,7 @@ static const int32_t kROLoadSuccessCode = 0;
     _preparedPresentation = createdPresentation;
     _preparedNativeAd = ad;
     _preparedStyle = style;
+    _preparedMediaSignature = ROMediaSignature(ad);
 }
 
 - (void)ro_rebuildPreparedPresentationForStyle:(HBOverlayStyle *)requestedStyle {
@@ -410,7 +432,9 @@ static const int32_t kROLoadSuccessCode = 0;
                                    style:(HBOverlayStyle *)style {
     if (_preparedPresentation == nil
             || _preparedNativeAd != ad
-            || _preparedStyle != style) {
+            || _preparedStyle != style
+            || ![ROMediaSignature(ad)
+                    isEqualToString:_preparedMediaSignature]) {
         [self ro_releasePreparedPresentation];
         return nil;
     }

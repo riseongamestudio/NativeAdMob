@@ -484,6 +484,30 @@ final class InFeedAdViewFactory {
                   , views
                   , probe
                   , mainImage);
+            // The ambient backdrop lives BESIDE the MediaView, never inside
+            // it - the SDK owns the MediaView's children and they do not
+            // survive binding. The media ground is transparent on this
+            // template so the backdrop shows through what the fitted
+            // picture leaves.
+            if (mainImage != null) {
+                Drawable ambientDrawable =
+                        mainImage.getConstantState() != null
+                                ? mainImage.getConstantState()
+                                        .newDrawable().mutate()
+                                : mainImage;
+                ImageView ambientBackdrop = new ImageView(activity);
+                ambientBackdrop.setScaleType(
+                        ImageView.ScaleType.CENTER_CROP);
+                ambientBackdrop.setImageDrawable(ambientDrawable);
+                ambientBackdrop.setColorFilter(
+                        AMBIENT_DIM_COLOR
+                      , android.graphics.PorterDuff.Mode.SRC_ATOP);
+                root.addView(
+                        ambientBackdrop
+                      , new FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                          , ViewGroup.LayoutParams.MATCH_PARENT));
+            }
             root.addView(
                     backgroundMedia
                   , new FrameLayout.LayoutParams(
@@ -507,10 +531,9 @@ final class InFeedAdViewFactory {
             LinearLayout scrim = new LinearLayout(activity);
             scrim.setOrientation(LinearLayout.VERTICAL);
             // Slim borders: the veil already separates the text from the
-            // picture, so the block spends no more than the tier's own gap
-            // vertically and a hair more horizontally.
-            int scrimPad = Math.max(gap, Dp(2));
-            scrim.setPadding(scrimPad, gap, scrimPad, gap);
+            // picture, so the block spends only the tier's own gap on every
+            // side - a tiny cell cannot afford more.
+            scrim.setPadding(gap, gap, gap, gap);
 
             views.headline = CreateText(
                     nativeAd.getHeadline()
@@ -525,7 +548,7 @@ final class InFeedAdViewFactory {
             // usable width for text - a marquee squeezed into a sliver reads
             // worse than no icon row at all. Below that floor the icon stands
             // alone and every text follows at full width.
-            int scrimContentWidth = Math.max(0, plan.width - 2 * scrimPad);
+            int scrimContentWidth = Math.max(0, plan.width - 2 * gap);
             boolean iconStandsAlone = plan.showIcon
                     && HasRenderableIcon()
                     && scrimContentWidth
@@ -1508,11 +1531,13 @@ final class InFeedAdViewFactory {
         MediaView mediaView = new MediaView(activity);
         boolean backgroundTemplate = plan.template
                 == InFeedAdLayoutEngine.TEMPLATE_MEDIA_BACKGROUND;
-        // The picture is always shown whole on a deliberately black ground:
-        // when a creative reports one ratio but renders less inside it, the
-        // black makes the shortfall visible instead of hiding it. The
-        // background template covers the ground with its ambient backdrop.
-        mediaView.setBackgroundColor(Color.BLACK);
+        // The picture is always shown whole. A band media sits on a
+        // deliberately black ground - when a creative reports one ratio but
+        // renders less inside it, the black exposes the shortfall. The
+        // background template is transparent instead: its ground is the
+        // ambient backdrop standing behind the MediaView.
+        mediaView.setBackgroundColor(
+                backgroundTemplate ? Color.TRANSPARENT : Color.BLACK);
         mediaView.setImageScaleType(ImageView.ScaleType.FIT_CENTER);
         views.media = mediaView;
         views.mediaSlot = mediaView;
@@ -1535,27 +1560,6 @@ final class InFeedAdViewFactory {
             throw new IllegalStateException(
                     "Main image is required for an image fallback layout");
         }
-        // Ambient fill for the background template only: the same picture,
-        // cropped to cover and dimmed, stands behind the fitted one so the
-        // cell's background is the creative's own colours expanded to the
-        // edges - never dead fill, never a cropped-away creative.
-        if (backgroundTemplate) {
-            Drawable ambientDrawable = mainImage.getConstantState() != null
-                    ? mainImage.getConstantState().newDrawable().mutate()
-                    : mainImage;
-            ImageView ambientBackdrop = new ImageView(activity);
-            ambientBackdrop.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            ambientBackdrop.setImageDrawable(ambientDrawable);
-            ambientBackdrop.setColorFilter(
-                    AMBIENT_DIM_COLOR
-                  , android.graphics.PorterDuff.Mode.SRC_ATOP);
-            mediaView.addView(
-                    ambientBackdrop
-                  , new FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                      , ViewGroup.LayoutParams.MATCH_PARENT));
-        }
-
         ImageView fallbackImageView = new ImageView(activity);
         fallbackImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
         fallbackImageView.setAdjustViewBounds(false);
