@@ -533,7 +533,14 @@ final class InFeedAdViewFactory {
             // Slim borders: the veil already separates the text from the
             // picture, so the block spends only the tier's own gap on every
             // side - a tiny cell cannot afford more.
-            scrim.setPadding(gap, gap, gap, gap);
+            // A compact cell is too small to spend anything on borders:
+            // the veil already separates the text from the picture, so the
+            // block meets the cell's edges and only the tier's gap
+            // separates its rows.
+            int scrimPad = plan.tier == InFeedAdLayoutEngine.TIER_COMPACT
+                    ? 0
+                    : gap;
+            scrim.setPadding(scrimPad, scrimPad, scrimPad, scrimPad);
 
             views.headline = CreateText(
                     nativeAd.getHeadline()
@@ -548,7 +555,8 @@ final class InFeedAdViewFactory {
             // usable width for text - a marquee squeezed into a sliver reads
             // worse than no icon row at all. Below that floor the icon stands
             // alone and every text follows at full width.
-            int scrimContentWidth = Math.max(0, plan.width - 2 * gap);
+            int scrimContentWidth =
+                    Math.max(0, plan.width - 2 * scrimPad);
             boolean iconStandsAlone = plan.showIcon
                     && HasRenderableIcon()
                     && scrimContentWidth
@@ -1695,6 +1703,11 @@ final class InFeedAdViewFactory {
         text.setHorizontallyScrolling(false);
         text.setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_FULL);
         if (bold) text.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        // An asset the creative never sent is not a blank line to
+        // reserve: it leaves no trace at all.
+        if (value == null || value.trim().isEmpty()) {
+            text.setVisibility(View.GONE);
+        }
         return text;
     }
 
@@ -1797,7 +1810,7 @@ final class InFeedAdViewFactory {
     }
 
     private int CtaHorizontalPadding(int tier) {
-        if (tier == InFeedAdLayoutEngine.TIER_COMPACT) return Dp(6);
+        if (tier == InFeedAdLayoutEngine.TIER_COMPACT) return Dp(3);
         if (tier == InFeedAdLayoutEngine.TIER_REGULAR) return Dp(8);
         return Dp(10);
     }

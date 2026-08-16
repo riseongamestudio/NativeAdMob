@@ -304,7 +304,7 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
 }
 
 - (CGFloat)ro_ctaHorizontalPaddingForTier:(ROInFeedTier)tier {
-    if (tier == ROInFeedTierCompact) return 6;
+    if (tier == ROInFeedTierCompact) return 3;
     if (tier == ROInFeedTierRegular) return 8;
     return 10;
 }
@@ -555,7 +555,12 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
         // Slim borders: the veil already separates the text from the
         // picture, so the block spends only the tier's own gap on every
         // side - a tiny cell cannot afford more.
-        scrim.ro_padding = UIEdgeInsetsMake(gap, gap, gap, gap);
+        // A compact cell is too small to spend anything on borders: the
+        // veil already separates the text from the picture, so the block
+        // meets the cell's edges and only the tier's gap separates rows.
+        CGFloat scrimPad = plan.tier == ROInFeedTierCompact ? 0 : gap;
+        scrim.ro_padding = UIEdgeInsetsMake(
+                scrimPad, scrimPad, scrimPad, scrimPad);
 
         views.headline = [self ro_createTextWithValue:_nativeAd.headline
                                                  size:[self ro_headlineSizeForPlan:plan]
@@ -567,7 +572,8 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
         // usable width for text - a marquee squeezed into a sliver reads
         // worse than no icon row at all. Below that floor the icon stands
         // alone and every text follows at full width.
-        CGFloat scrimContentWidth = MAX(0, plan.width - 2 * gap);
+        CGFloat scrimContentWidth =
+                MAX(0, plan.width - 2 * scrimPad);
         BOOL iconStandsAlone = plan.showIcon
                 && [self hasRenderableIcon]
                 && scrimContentWidth
@@ -1345,6 +1351,15 @@ static UIColor *ROInFeedArgb(uint32_t argb) {
     text.font = bold
             ? [UIFont boldSystemFontOfSize:size]
             : [UIFont systemFontOfSize:size];
+    // An asset the creative never sent is not a blank line to reserve: it
+    // leaves no trace at all.
+    NSString *trimmed = [text.text
+            stringByTrimmingCharactersInSet:
+                    NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (trimmed.length == 0) {
+        text.ro_gone = YES;
+        text.hidden = YES;
+    }
     return text;
 }
 

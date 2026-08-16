@@ -682,7 +682,18 @@ static UIColor *HBArgb(uint32_t argb) {
 }
 
 - (void)ro_bindAssets {
-    _headline.text = _nativeAd.headline;
+    // A headline the creative never sent is not a blank line to reserve:
+    // an absent asset leaves no trace, exactly as the advertiser, body and
+    // rating already do.
+    NSString *headlineValue = [_nativeAd.headline
+            stringByTrimmingCharactersInSet:
+                    NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (headlineValue.length == 0) {
+        _headline.ro_gone = YES;
+        _headline.hidden = YES;
+    } else {
+        _headline.text = _nativeAd.headline;
+    }
 
     UIImage *iconImage = _nativeAd.icon.image;
     if (iconImage == nil) {

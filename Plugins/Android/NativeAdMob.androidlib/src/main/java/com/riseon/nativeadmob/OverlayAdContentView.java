@@ -2210,7 +2210,15 @@ final class OverlayAdContentView extends FrameLayout {
           , TextView body
           , ImageView icon
           , Button callToAction) {
-        headline.setText(nativeAd.getHeadline());
+        // A headline the creative never sent is not a blank line to
+        // reserve: an absent asset leaves no trace, exactly as the
+        // advertiser, body and rating already do.
+        String headlineValue = nativeAd.getHeadline();
+        if (headlineValue == null || headlineValue.trim().isEmpty()) {
+            headline.setVisibility(View.GONE);
+        } else {
+            headline.setText(headlineValue);
+        }
 
         com.google.android.gms.ads.nativead.NativeAd.Image iconAsset =
                 nativeAd.getIcon();
