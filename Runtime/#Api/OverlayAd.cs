@@ -183,7 +183,13 @@ namespace RiseOn.NativeAdMob {
         void IOverlayAdCallbacks.OnShowNotReady() {}
 
         void IOverlayAdCallbacks.OnDisplayed() {
-            DispatchFromNative(() => InvokeSafely(OnDisplayed));
+            DispatchFromNative(() => {
+                InvokeSafely(OnDisplayed);
+                // The replacement starts the moment this ad reaches the
+                // screen, so the next placement finds one waiting instead
+                // of a load that only began when this ad closed.
+                LoadAd();
+            });
         }
 
         void IOverlayAdCallbacks.OnPresentationFailed(int errorCode, string errorMessage)

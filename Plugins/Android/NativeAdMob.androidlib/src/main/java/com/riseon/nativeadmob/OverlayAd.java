@@ -287,10 +287,18 @@ public final class OverlayAd extends NativeAd {
 
         RunOnMainThread(() -> {
             if (released || !configured || isAdLoading
-                    || activeNativeAd != null || IsShowingInternal()
                     || !IsActivityUsable(activity)) {
                 return;
             }
+
+            // The replacement is fetched while the current ad is still on
+            // screen. Waiting for the dismissal costs the player a whole
+            // opening: by the time the next placement asks, the load has
+            // only just started and there is nothing to show.
+            boolean showing =
+                    activeNativeAd != null || IsShowingInternal();
+            if (showing && nativeAd != null) return;
+
             if (nativeAd != null) {
                 ReleasePreparedPresentation();
                 ReleasePreparedFullScreenContent();
@@ -847,6 +855,10 @@ public final class OverlayAd extends NativeAd {
                 onCompleted
               , errorMessage == null ? "" : errorMessage
               , true);
+        // The wrapper assumes a consumed show leaves nothing cached, which
+        // is no longer true once a replacement has been fetched during the
+        // show: the truth follows the completion so readiness is right.
+        NotifyCurrentState();
     }
 
     private void CleanupFailedPresentation() {

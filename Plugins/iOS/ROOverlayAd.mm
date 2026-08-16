@@ -149,11 +149,15 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
                   , kROTag);
             return;
         }
-        if (self->_isAdLoading
-                || self->_activeNativeAd != nil
-                || [self ro_isShowing]) {
-            return;
-        }
+        if (self->_isAdLoading) return;
+
+        // The replacement is fetched while the current ad is still on
+        // screen. Waiting for the dismissal costs the player a whole
+        // opening: by the time the next placement asks, the load has only
+        // just started and there is nothing to show.
+        BOOL showing = self->_activeNativeAd != nil
+                || [self ro_isShowing];
+        if (showing && self->_nativeAd != nil) return;
         UIViewController *host = [RONativeAd unityViewController];
         if (![RONativeAd isViewControllerUsable:host]) {
             NSLog(@"%@: LoadAd ignored because the host controller is not "
@@ -469,6 +473,10 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
                       showId:completedShowId
                      message:errorMessage ?: @""
                   adConsumed:YES];
+    // The wrapper assumes a consumed show leaves nothing cached, which is
+    // no longer true once a replacement has been fetched during the show:
+    // the truth follows the completion so readiness is right.
+    [self ro_notifyCurrentState];
 }
 
 - (BOOL)ro_isShowing {
