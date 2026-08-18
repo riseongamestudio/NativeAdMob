@@ -78,10 +78,10 @@ static NSTimeInterval RONow(void) {
         [slots addObject:[[ROInFeedAdSlot alloc] initWithOwner:self index:i]];
     }
     _slots = slots;
-    [RONativeAd runOnMainThread:^{
+    [ROBaseAd runOnMainThread:^{
         if (self.released) return;
-        if (![RONativeAd isViewControllerUsable:
-                [RONativeAd unityViewController]]) {
+        if (![ROBaseAd isViewControllerUsable:
+                [ROBaseAd unityViewController]]) {
             NSLog(@"%@: created without a usable host; cache loading will "
                    "start when Configure or Show receives one", kROTag);
             return;
@@ -131,13 +131,13 @@ static float ROResolveBackgroundAlpha(float value) {
                     y:(CGFloat)yPt
                 width:(CGFloat)widthPt
                height:(CGFloat)heightPt {
-    [RONativeAd runOnMainThread:^{
+    [ROBaseAd runOnMainThread:^{
         if (self.released) {
             NSLog(@"%@: Configure ignored after Release", kROTag);
             return;
         }
-        if (![RONativeAd isViewControllerUsable:
-                [RONativeAd unityViewController]]) {
+        if (![ROBaseAd isViewControllerUsable:
+                [ROBaseAd unityViewController]]) {
             NSLog(@"%@: Configure requires a usable host", kROTag);
             return;
         }
@@ -151,10 +151,10 @@ static float ROResolveBackgroundAlpha(float value) {
 
 - (void)showSlot:(NSInteger)slotIndex {
     if (self.released) return;
-    [RONativeAd runOnMainThread:^{
+    [ROBaseAd runOnMainThread:^{
         if (self.released) return;
-        if (![RONativeAd isViewControllerUsable:
-                [RONativeAd unityViewController]]) {
+        if (![ROBaseAd isViewControllerUsable:
+                [ROBaseAd unityViewController]]) {
             NSLog(@"%@: Show ignored because the host is not usable", kROTag);
             return;
         }
@@ -165,7 +165,7 @@ static float ROResolveBackgroundAlpha(float value) {
 
 - (void)hideSlot:(NSInteger)slotIndex {
     if (self.released) return;
-    [RONativeAd runOnMainThread:^{
+    [ROBaseAd runOnMainThread:^{
         if (self.released) return;
         ROInFeedAdSlot *slot = [self ro_slotAt:slotIndex operation:@"Hide"];
         if (slot != nil) [slot hide];
@@ -174,7 +174,7 @@ static float ROResolveBackgroundAlpha(float value) {
 
 - (void)setSlot:(NSInteger)slotIndex positionX:(CGFloat)xPt y:(CGFloat)yPt {
     if (self.released) return;
-    [RONativeAd runOnMainThread:^{
+    [ROBaseAd runOnMainThread:^{
         if (self.released) return;
         ROInFeedAdSlot *slot = [self ro_slotAt:slotIndex
                                    operation:@"SetPosition"];
@@ -186,7 +186,7 @@ static float ROResolveBackgroundAlpha(float value) {
     if (self.released) return;
     [self markReleased];
     [self invalidateLoadGeneration];
-    [RONativeAd runOnMainThread:^{
+    [ROBaseAd runOnMainThread:^{
         self->_isAdLoading = NO;
         self->_retryScheduled = NO;
         [self->_retryTimer invalidate];
@@ -215,12 +215,12 @@ static float ROResolveBackgroundAlpha(float value) {
 }
 
 - (BOOL)ro_startLoad {
-    UIViewController *host = [RONativeAd unityViewController];
+    UIViewController *host = [ROBaseAd unityViewController];
     if (self.released
             || _isAdLoading
             || _retryScheduled
             || ![self ro_shouldStartLoad]
-            || ![RONativeAd isViewControllerUsable:host]) {
+            || ![ROBaseAd isViewControllerUsable:host]) {
         return NO;
     }
 
@@ -232,7 +232,7 @@ static float ROResolveBackgroundAlpha(float value) {
             initWithAdUnitID:_adUnitId
           rootViewController:host
                      adTypes:@[ GADAdLoaderAdTypeNative ]
-                     options:[RONativeAd adLoaderOptionsWithStartMuted:YES]];
+                     options:[ROBaseAd adLoaderOptionsWithStartMuted:YES]];
     _adLoader.delegate = self;
     [_adLoader loadRequest:[GADRequest request]];
     return YES;
@@ -251,7 +251,7 @@ static float ROResolveBackgroundAlpha(float value) {
 
 - (void)adLoader:(GADAdLoader *)adLoader
         didReceiveNativeAd:(GADNativeAd *)nativeAd {
-    [RONativeAd runOnMainThread:^{
+    [ROBaseAd runOnMainThread:^{
         if (self.released) return;
 
         self->_noFillStreak = 0;
@@ -287,7 +287,7 @@ static float ROResolveBackgroundAlpha(float value) {
 
 - (void)adLoader:(GADAdLoader *)adLoader
         didFailToReceiveAdWithError:(NSError *)error {
-    [RONativeAd runOnMainThread:^{
+    [ROBaseAd runOnMainThread:^{
         if (self.released) return;
 
         self->_isAdLoading = NO;
@@ -302,7 +302,7 @@ static float ROResolveBackgroundAlpha(float value) {
 // Not gated on the load generation: the ad that was clicked may well have
 // come from an earlier load.
 - (void)nativeAdDidRecordClick:(GADNativeAd *)nativeAd {
-    [RONativeAd runOnMainThread:^{
+    [ROBaseAd runOnMainThread:^{
         for (ROInFeedAdSlot *slot in self->_slots) [slot commitAdClick];
     }];
 }

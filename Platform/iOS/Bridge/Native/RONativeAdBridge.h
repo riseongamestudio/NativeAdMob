@@ -135,12 +135,12 @@ void ROOverlayAd_Configure(
       , float heightRatio
       , float backgroundAlpha);
 void ROOverlayAd_SetCountdownSec(void* handle, int32_t countdownSec);
-void ROOverlayAd_LoadAd(void* handle);
-void ROOverlayAd_ShowAd(
+void ROOverlayAd_Load(void* handle);
+void ROOverlayAd_Show(
         void* handle
       , int32_t showId
       , RONativeAdShowCompletedCallback onCompleted);
-void ROOverlayAd_HideAd(void* handle);
+void ROOverlayAd_Hide(void* handle);
 void ROOverlayAd_Release(void* handle);
 
 #ifdef __cplusplus

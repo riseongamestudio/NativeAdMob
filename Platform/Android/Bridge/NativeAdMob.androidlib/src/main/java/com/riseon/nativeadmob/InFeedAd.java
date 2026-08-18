@@ -15,13 +15,14 @@ import com.google.android.gms.ads.AdLoader;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.nativead.NativeAdOptions;
+import com.google.android.gms.ads.nativead.NativeAd;
 
 // One InFeedAd is one ad unit id for the life of the app. It owns the shared
 // supply - the cache of raw loaded ads, the load requests, the no-fill
 // backoff - and a fixed array of display slots that consume from it.
 // Everything rect-shaped (layout, dwell, rotation, watchdogs) lives in
 // InFeedAdSlot.
-public final class InFeedAd extends NativeAd {
+public final class InFeedAd extends BaseAd {
     static final String TAG = "InFeedAd";
     private static final int LOAD_SUCCESS_CODE = 0;
     private static final int MAX_RETRY_EXPONENT = 5;
@@ -32,11 +33,11 @@ public final class InFeedAd extends NativeAd {
     private static final int MAX_CACHE_SIZE = 5;
 
     static final class CachedAd {
-        final com.google.android.gms.ads.nativead.NativeAd ad;
+        final NativeAd ad;
         final long loadedAtMs;
 
         CachedAd(
-                com.google.android.gms.ads.nativead.NativeAd ad
+                NativeAd ad
               , long loadedAtMs) {
             this.ad = ad;
             this.loadedAtMs = loadedAtMs;
@@ -56,7 +57,7 @@ public final class InFeedAd extends NativeAd {
     // SDK chose, while every collection here is mutated on main. A membership
     // test against a concurrent set stays correct without walking a structure
     // that may be changing underneath it.
-    private final Set<com.google.android.gms.ads.nativead.NativeAd> ownedAds =
+    private final Set<NativeAd> ownedAds =
             Collections.newSetFromMap(new ConcurrentHashMap<>());
     private volatile InFeedAdListener listener;
     private boolean isAdLoading;
@@ -293,7 +294,7 @@ public final class InFeedAd extends NativeAd {
     private void HandleLoadedAd(
             int generation
           , String requestedAdUnitId
-          , com.google.android.gms.ads.nativead.NativeAd ad) {
+          , NativeAd ad) {
         if (!IsCurrentLoad(generation)) {
             DestroyAd(ad);
             return;
@@ -429,7 +430,7 @@ public final class InFeedAd extends NativeAd {
     }
 
     void DestroyAd(
-            com.google.android.gms.ads.nativead.NativeAd ad) {
+            NativeAd ad) {
         if (ad == null) return;
 
         ownedAds.remove(ad);
@@ -441,7 +442,7 @@ public final class InFeedAd extends NativeAd {
     }
 
     private boolean OwnsAd(
-            com.google.android.gms.ads.nativead.NativeAd ad) {
+            NativeAd ad) {
         return ownedAds.contains(ad);
     }
 

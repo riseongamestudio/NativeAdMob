@@ -8,8 +8,9 @@ import com.google.android.gms.ads.AdLoader;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.nativead.NativeAdOptions;
+import com.google.android.gms.ads.nativead.NativeAd;
 
-public final class OverlayAd extends NativeAd {
+public final class OverlayAd extends BaseAd {
 
     static final class OverlayAdStyle {
         final boolean fullscreen;
@@ -52,18 +53,18 @@ public final class OverlayAd extends NativeAd {
     private final String adUnitId;
     private volatile OverlayAdStyle configuredStyle;
 
-    private volatile com.google.android.gms.ads.nativead.NativeAd nativeAd;
-    private volatile com.google.android.gms.ads.nativead.NativeAd activeNativeAd;
+    private volatile NativeAd nativeAd;
+    private volatile NativeAd activeNativeAd;
     private volatile boolean configured;
     private volatile boolean isAdLoading;
     private OverlayAdPresentation presentation;
     private OverlayAdPresentation preparedPresentation;
     private Activity preparedActivity;
-    private com.google.android.gms.ads.nativead.NativeAd preparedNativeAd;
+    private NativeAd preparedNativeAd;
     private OverlayAdStyle preparedStyle;
     private OverlayAdContentView preparedContentView;
     private Activity preparedContentActivity;
-    private com.google.android.gms.ads.nativead.NativeAd preparedContentAd;
+    private NativeAd preparedContentAd;
     private boolean preparedContentCloseOnLeft;
     private OverlayAdActivity.CloseRelay preparedContentCloseRelay;
     private String preparedContentMediaSignature;
@@ -74,7 +75,7 @@ public final class OverlayAd extends NativeAd {
     // finish arriving later change the layout the ad needs, and a stale
     // face must be rebuilt rather than shown.
     private static String MediaSignature(
-            com.google.android.gms.ads.nativead.NativeAd nativeAd) {
+            NativeAd nativeAd) {
         com.google.android.gms.ads.MediaContent mediaContent =
                 nativeAd.getMediaContent();
         boolean hasVideo = mediaContent != null
@@ -85,10 +86,10 @@ public final class OverlayAd extends NativeAd {
                 ? mediaContent.getAspectRatio()
                 : 0f;
         boolean hasAnyImage = false;
-        java.util.List<com.google.android.gms.ads.nativead.NativeAd.Image>
+        java.util.List<NativeAd.Image>
                 images = nativeAd.getImages();
         if (images != null) {
-            for (com.google.android.gms.ads.nativead.NativeAd.Image image
+            for (NativeAd.Image image
                     : images) {
                 if (image != null && image.getDrawable() != null) {
                     hasAnyImage = true;
@@ -270,18 +271,18 @@ public final class OverlayAd extends NativeAd {
         RequestPreparedPresentationRebuild(updatedStyle);
     }
 
-    public void LoadAd(final Activity activity) {
+    public void Load(final Activity activity) {
         if (!configured || released) {
-            Log.e(TAG, "LoadAd ignored before Configure or after Release");
+            Log.e(TAG, "Load ignored before Configure or after Release");
             return;
         }
         if (!IsActivityUsable(activity)) {
-            Log.e(TAG, "LoadAd ignored because Activity is not usable");
+            Log.e(TAG, "Load ignored because Activity is not usable");
             return;
         }
 
-        // LoadAd chi snapshot phan style can cho request (hien tai la mute
-        // policy). Presentation style se duoc snapshot muon hon tai ShowAd.
+        // Load chi snapshot phan style can cho request (hien tai la mute
+        // policy). Presentation style se duoc snapshot muon hon tai Show.
         final String requestAdUnitId = adUnitId;
         final OverlayAdStyle loadStyle = configuredStyle;
 
@@ -408,11 +409,11 @@ public final class OverlayAd extends NativeAd {
         }
     }
 
-    public void ShowAd(
+    public void Show(
             final Activity activity
           , final NativeAdCompletedListener onCompleted) {
         // The config boundary of one show: updates completed before this
-        // ShowAd call apply to it, later updates belong to the next one.
+        // Show call apply to it, later updates belong to the next one.
         final OverlayAdStyle requestedShowStyle = configuredStyle;
 
         RunOnMainThread(() -> {
@@ -436,7 +437,7 @@ public final class OverlayAd extends NativeAd {
                 return;
             }
 
-            final com.google.android.gms.ads.nativead.NativeAd shownAd =
+            final NativeAd shownAd =
                     nativeAd;
             nativeAd = null;
             activeNativeAd = shownAd;
@@ -509,7 +510,7 @@ public final class OverlayAd extends NativeAd {
         });
     }
 
-    public void HideAd() {
+    public void Hide() {
         RunOnMainThread(() -> {
             String activitySessionId = activeActivitySessionId;
             if (activitySessionId != null) {
@@ -527,17 +528,17 @@ public final class OverlayAd extends NativeAd {
         });
     }
 
-    public boolean IsAdReady() {
+    public boolean IsReady() {
         return configured && !released && activeNativeAd == null
                 && nativeAd != null;
     }
 
-    public boolean IsAdLoading() {
+    public boolean IsLoading() {
         return configured && !released && isAdLoading;
     }
 
     private void NotifyCurrentState() {
-        NotifyStateChanged(IsAdReady(), IsAdLoading());
+        NotifyStateChanged(IsReady(), IsLoading());
     }
 
     public void Release() {
@@ -583,7 +584,7 @@ public final class OverlayAd extends NativeAd {
 
     private OverlayAdPresentation CreatePresentation(
             Activity activity
-          , com.google.android.gms.ads.nativead.NativeAd ad
+          , NativeAd ad
           , OverlayAdStyle style) {
         OverlayAdPresentation createdPresentation =
                 new OverlayAdPresentation(
@@ -605,7 +606,7 @@ public final class OverlayAd extends NativeAd {
 
     private boolean PreparePresentation(
             Activity activity
-          , com.google.android.gms.ads.nativead.NativeAd ad
+          , NativeAd ad
           , OverlayAdStyle style) {
         ReleasePreparedPresentation();
         if (released
@@ -669,7 +670,7 @@ public final class OverlayAd extends NativeAd {
             }
 
             Activity activity = preparedActivity;
-            com.google.android.gms.ads.nativead.NativeAd ad = nativeAd;
+            NativeAd ad = nativeAd;
             ReleasePreparedPresentation();
             if (IsActivityUsable(activity)) {
                 PreparePresentation(activity, ad, requestedStyle);
@@ -679,7 +680,7 @@ public final class OverlayAd extends NativeAd {
 
     private OverlayAdPresentation TakePreparedPresentation(
             Activity activity
-          , com.google.android.gms.ads.nativead.NativeAd ad
+          , NativeAd ad
           , OverlayAdStyle style) {
         if (preparedPresentation == null
                 || preparedActivity != activity
@@ -721,7 +722,7 @@ public final class OverlayAd extends NativeAd {
     // only the Activity switch itself to spend.
     private void PrepareFullScreenContent(
             Activity activity
-          , com.google.android.gms.ads.nativead.NativeAd ad
+          , NativeAd ad
           , OverlayAdStyle style) {
         ReleasePreparedFullScreenContent();
         if (released
@@ -771,7 +772,7 @@ public final class OverlayAd extends NativeAd {
 
     private PreparedFullScreenContent TakePreparedFullScreenContent(
             Activity activity
-          , com.google.android.gms.ads.nativead.NativeAd ad) {
+          , NativeAd ad) {
         // Ad identity and the assets' face are the keys. After Configure
         // the style can only change its countdown, which the presented view
         // refreshes on resume - but assets that finished arriving after the
@@ -815,7 +816,7 @@ public final class OverlayAd extends NativeAd {
 
     void OnActivityPresentationDisplayed(
             String sessionId
-          , com.google.android.gms.ads.nativead.NativeAd shownAd) {
+          , NativeAd shownAd) {
         if (released
                 || sessionId == null
                 || !sessionId.equals(activeActivitySessionId)
@@ -827,7 +828,7 @@ public final class OverlayAd extends NativeAd {
 
     void OnActivityPresentationCompleted(
             String sessionId
-          , com.google.android.gms.ads.nativead.NativeAd shownAd
+          , NativeAd shownAd
           , String errorMessage) {
         if (sessionId == null
                 || !sessionId.equals(activeActivitySessionId)
@@ -839,7 +840,7 @@ public final class OverlayAd extends NativeAd {
     }
 
     private void CompletePresentation(
-            com.google.android.gms.ads.nativead.NativeAd shownAd
+            NativeAd shownAd
           , String errorMessage) {
         // Identity guard dam bao completion va destroy chi chay mot lan.
         if (activeNativeAd != shownAd) return;
@@ -852,8 +853,8 @@ public final class OverlayAd extends NativeAd {
         presentation = null;
 
         // Unity runs the game callback on its main thread first, then the
-        // replacement LoadAd. adConsumed distinguishes a completion that
-        // spent the cached ad from a ShowAd rejected early.
+        // replacement Load. adConsumed distinguishes a completion that
+        // spent the cached ad from a Show rejected early.
         NotifyCompleted(
                 onCompleted
               , errorMessage == null ? "" : errorMessage

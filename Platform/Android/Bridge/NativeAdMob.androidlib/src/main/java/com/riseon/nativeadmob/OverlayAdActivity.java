@@ -19,6 +19,7 @@ import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.window.OnBackInvokedCallback;
 import android.window.OnBackInvokedDispatcher;
+import com.google.android.gms.ads.nativead.NativeAd;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -77,7 +78,7 @@ public final class OverlayAdActivity extends Activity {
     static String RegisterSession(
             Activity hostActivity
           , OverlayAd owner
-          , com.google.android.gms.ads.nativead.NativeAd nativeAd
+          , NativeAd nativeAd
           , OverlayAd.OverlayAdStyle style
           , OverlayAd.PreparedFullScreenContent preparedContent) {
         if (hostActivity == null || owner == null
@@ -845,7 +846,7 @@ public final class OverlayAdActivity extends Activity {
     private static final class Session {
         final String sessionId;
         final OverlayAd owner;
-        final com.google.android.gms.ads.nativead.NativeAd nativeAd;
+        final NativeAd nativeAd;
         final OverlayAd.OverlayAdStyle style;
         final String hostActivityClassName;
         final int hostTaskId;
@@ -871,7 +872,7 @@ public final class OverlayAdActivity extends Activity {
                 String sessionId
               , Activity hostActivity
               , OverlayAd owner
-              , com.google.android.gms.ads.nativead.NativeAd nativeAd
+              , NativeAd nativeAd
               , OverlayAd.OverlayAdStyle style
               , OverlayAd.PreparedFullScreenContent preparedContent) {
             this.sessionId = sessionId;

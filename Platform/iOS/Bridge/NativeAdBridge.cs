@@ -102,12 +102,12 @@ namespace RiseOn.NativeAdMob.iOS {
         internal static extern void ROOverlayAd_SetCountdownSec(
             IntPtr handle, int countdownSec);
         [DllImport("__Internal")]
-        internal static extern void ROOverlayAd_LoadAd(IntPtr handle);
+        internal static extern void ROOverlayAd_Load(IntPtr handle);
         [DllImport("__Internal")]
-        internal static extern void ROOverlayAd_ShowAd(
+        internal static extern void ROOverlayAd_Show(
             IntPtr handle, int showId, ShowCompletedDelegate onCompleted);
         [DllImport("__Internal")]
-        internal static extern void ROOverlayAd_HideAd(IntPtr handle);
+        internal static extern void ROOverlayAd_Hide(IntPtr handle);
         [DllImport("__Internal")]
         internal static extern void ROOverlayAd_Release(IntPtr handle);
 

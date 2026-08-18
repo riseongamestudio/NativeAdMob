@@ -9,6 +9,7 @@ import android.view.View;
 import android.widget.TextView;
 
 import com.google.android.gms.ads.MediaContent;
+import com.google.android.gms.ads.nativead.NativeAd;
 
 import java.util.ArrayList;
 
@@ -127,7 +128,7 @@ final class InFeedAdLayoutEngine {
         }
     }
 
-    private final com.google.android.gms.ads.nativead.NativeAd nativeAd;
+    private final NativeAd nativeAd;
     private int requestedX;
     private int requestedY;
     private final int requestedWidth;
@@ -139,7 +140,7 @@ final class InFeedAdLayoutEngine {
     private final String[] rejectionReasons = new String[TEMPLATE_COUNT];
 
     InFeedAdLayoutEngine(
-            com.google.android.gms.ads.nativead.NativeAd nativeAd
+            NativeAd nativeAd
           , int requestedX
           , int requestedY
           , int requestedWidth

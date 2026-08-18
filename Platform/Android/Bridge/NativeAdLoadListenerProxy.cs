@@ -22,7 +22,9 @@ namespace RiseOn.NativeAdMob.Android {
         public void OnLoadingCompleted(int errorCode, string errorMessage)
             => callbacks.OnLoadingCompleted(errorCode, errorMessage);
 
-        public void OnLoadingStarted() => callbacks.OnLoadingStarted();
+        // Nothing downstream listens for a load beginning, and neither
+        // AdMob nor MAX reports one. The native contract still calls it.
+        public void OnLoadingStarted() {}
 
         public void OnAdPaid(
             string adSource
@@ -30,16 +32,13 @@ namespace RiseOn.NativeAdMob.Android {
           , double value
           , string currencyCode
           , int precision)
-            => callbacks.OnAdPaid(new AdValue(
-                adSource
-              , adUnitId
-              , value
-              , currencyCode
-              , (AdValuePrecision)precision));
+            // Precision is reported by the SDK but nothing downstream asks
+            // for it, so it stops here rather than riding along unused.
+            => callbacks.OnAdPaid(adSource, adUnitId, value, currencyCode);
 
         public void OnDisplayed() => callbacks.OnDisplayed();
 
         public void OnPresentationFailed(int errorCode, string errorMessage)
-            => callbacks.OnPresentationFailed(errorCode, errorMessage);
+            => callbacks.OnDisplayFailed(errorCode, errorMessage);
     }
 }

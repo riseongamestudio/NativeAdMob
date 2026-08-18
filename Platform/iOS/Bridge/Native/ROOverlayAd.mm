@@ -106,7 +106,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
              numberOppositeSide:(BOOL)numberOppositeSide
                     heightRatio:(float)heightRatio
                 backgroundAlpha:(float)backgroundAlpha {
-    [RONativeAd runOnMainThread:^{
+    [ROBaseAd runOnMainThread:^{
         if (self.released) {
             NSLog(@"%@: Configure ignored after Release", kROTag);
             return;
@@ -128,7 +128,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 }
 
 - (void)setCountdownSec:(int32_t)countdownSec {
-    [RONativeAd runOnMainThread:^{
+    [ROBaseAd runOnMainThread:^{
         HBOverlayStyle *currentStyle = self->_configuredStyle;
         if (!self->_configured || self.released || currentStyle == nil) {
             NSLog(@"%@: SetCountdownSec ignored before Configure or after "
@@ -142,10 +142,10 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     }];
 }
 
-- (void)loadAd {
-    [RONativeAd runOnMainThread:^{
+- (void)load {
+    [ROBaseAd runOnMainThread:^{
         if (!self->_configured || self.released) {
-            NSLog(@"%@: LoadAd ignored before Configure or after Release"
+            NSLog(@"%@: Load ignored before Configure or after Release"
                   , kROTag);
             return;
         }
@@ -157,9 +157,9 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
         // load anyway. An empty cache is the only reason to load, whoever
         // is on screen.
         if (self->_nativeAd != nil) return;
-        UIViewController *host = [RONativeAd unityViewController];
-        if (![RONativeAd isViewControllerUsable:host]) {
-            NSLog(@"%@: LoadAd ignored because the host controller is not "
+        UIViewController *host = [ROBaseAd unityViewController];
+        if (![ROBaseAd isViewControllerUsable:host]) {
+            NSLog(@"%@: Load ignored because the host controller is not "
                     "usable", kROTag);
             return;
         }
@@ -178,7 +178,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
             initWithAdUnitID:_adUnitId
           rootViewController:host
                      adTypes:@[ GADAdLoaderAdTypeNative ]
-                     options:[RONativeAd adLoaderOptionsWithStartMuted:
+                     options:[ROBaseAd adLoaderOptionsWithStartMuted:
                                      !loadStyle.pausesGame]];
     _adLoader.delegate = self;
     [_adLoader loadRequest:[GADRequest request]];
@@ -186,7 +186,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 
 - (void)adLoader:(GADAdLoader *)adLoader
         didReceiveNativeAd:(GADNativeAd *)nativeAd {
-    [RONativeAd runOnMainThread:^{
+    [ROBaseAd runOnMainThread:^{
         if (self.released) return;
 
         self->_nativeAd = nativeAd;
@@ -223,7 +223,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 
 - (void)adLoader:(GADAdLoader *)adLoader
         didFailToReceiveAdWithError:(NSError *)error {
-    [RONativeAd runOnMainThread:^{
+    [ROBaseAd runOnMainThread:^{
         if (self.released) return;
 
         self->_isAdLoading = NO;
@@ -236,14 +236,14 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 // Not gated on generation: the ad that was clicked may well be the one on
 // screen from an earlier load, same as the Android AdListener comment.
 - (void)nativeAdDidRecordClick:(GADNativeAd *)nativeAd {
-    [RONativeAd runOnMainThread:^{
+    [ROBaseAd runOnMainThread:^{
         [self->_presentation onAdClicked];
     }];
 }
 
-- (void)showAdWithShowId:(int32_t)showId
+- (void)showWithShowId:(int32_t)showId
              onCompleted:(RONativeAdShowCompletedCallback)onCompleted {
-    [RONativeAd runOnMainThread:^{
+    [ROBaseAd runOnMainThread:^{
         if (self.released) {
             [self ro_invokeCompleted:onCompleted
                               showId:showId
@@ -262,11 +262,11 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
                           adConsumed:NO];
             return;
         }
-        UIViewController *host = [RONativeAd unityViewController];
+        UIViewController *host = [ROBaseAd unityViewController];
         HBOverlayStyle *requestedStyle = self->_configuredStyle;
         if (self->_nativeAd == nil
                 || requestedStyle == nil
-                || ![RONativeAd isViewControllerUsable:host]) {
+                || ![ROBaseAd isViewControllerUsable:host]) {
             [self ro_invokeCompleted:onCompleted
                               showId:showId
                              message:@"Ad not ready"
@@ -308,8 +308,8 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     }];
 }
 
-- (void)hideAd {
-    [RONativeAd runOnMainThread:^{
+- (void)hide {
+    [ROBaseAd runOnMainThread:^{
         ROOverlayAdPresentation *currentPresentation =
                 self->_presentation;
         if (currentPresentation != nil && currentPresentation.isShowing) {
@@ -322,7 +322,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     if (self.released) return;
     [self markReleased];
     [self invalidateLoadGeneration];
-    [RONativeAd runOnMainThread:^{
+    [ROBaseAd runOnMainThread:^{
         self->_isAdLoading = NO;
         [self ro_releasePreparedPresentation];
 
@@ -385,12 +385,12 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 - (void)ro_preparePresentationForAd:(GADNativeAd *)ad
                               style:(HBOverlayStyle *)style {
     [self ro_releasePreparedPresentation];
-    UIViewController *host = [RONativeAd unityViewController];
+    UIViewController *host = [ROBaseAd unityViewController];
     if (self.released
             || ad == nil
             || style == nil
             || _nativeAd != ad
-            || ![RONativeAd isViewControllerUsable:host]) {
+            || ![ROBaseAd isViewControllerUsable:host]) {
         return;
     }
 

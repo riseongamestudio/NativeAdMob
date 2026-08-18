@@ -76,8 +76,9 @@ namespace RiseOn.NativeAdMob.iOS {
             NativeAdBridge.Unregister(instanceId);
         }
 
-        void INativeAdSharedHandlers.HandleLoadingStarted()
-            => callbacks.OnLoadingStarted();
+        // Nothing downstream listens for a load beginning, and neither
+        // AdMob nor MAX reports one. The trampoline still arrives.
+        void INativeAdSharedHandlers.HandleLoadingStarted() {}
 
         void INativeAdSharedHandlers.HandleLoadingCompleted(
             int errorCode, string errorMessage)
@@ -89,12 +90,9 @@ namespace RiseOn.NativeAdMob.iOS {
           , double value
           , string currencyCode
           , int precision)
-            => callbacks.OnAdPaid(new AdValue(
-                source
-              , adUnitId
-              , value
-              , currencyCode
-              , (AdValuePrecision)precision));
+            // Precision is reported by the SDK but nothing downstream asks
+            // for it, so it stops here rather than riding along unused.
+            => callbacks.OnAdPaid(source, adUnitId, value, currencyCode);
 
         internal void HandleSlotDisplayed(int slotIndex)
             => callbacks.OnSlotDisplayed(slotIndex);
@@ -106,7 +104,7 @@ namespace RiseOn.NativeAdMob.iOS {
             int slotIndex
           , int errorCode
           , string errorMessage)
-            => callbacks.OnSlotPresentationFailed(
+            => callbacks.OnSlotDisplayFailed(
                 slotIndex
               , errorCode
               , errorMessage);

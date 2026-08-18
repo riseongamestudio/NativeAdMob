@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.os.SystemClock;
 import android.util.Log;
 import android.view.Choreographer;
+import com.google.android.gms.ads.nativead.NativeAd;
 
 // One display slot of an InFeedAd unit: a rect on screen, the presentation
 // pair being shown and warmed for it, and every trigger that decides when
@@ -53,7 +54,7 @@ final class InFeedAdSlot {
     }
 
     private static final class DisplayEntry {
-        final com.google.android.gms.ads.nativead.NativeAd ad;
+        final NativeAd ad;
         final InFeedAdPresentation presentation;
         final long loadedAtMs;
         long accumulatedVisibleMs;
@@ -64,7 +65,7 @@ final class InFeedAdSlot {
         boolean actuallyVisible;
 
         DisplayEntry(
-                com.google.android.gms.ads.nativead.NativeAd ad
+                NativeAd ad
               , InFeedAdPresentation presentation
               , long loadedAtMs) {
             this.ad = ad;
@@ -295,7 +296,7 @@ final class InFeedAdSlot {
                 || !configured
                 || materializingEntry != null
                 || !owner.HasCachedAd()
-                || !NativeAd.IsActivityUsable(owner.CurrentActivity())) {
+                || !BaseAd.IsActivityUsable(owner.CurrentActivity())) {
             return;
         }
         if (!IsActivityVisible(owner.CurrentActivity())) {
@@ -312,7 +313,7 @@ final class InFeedAdSlot {
             return;
         }
 
-        final com.google.android.gms.ads.nativead.NativeAd ad = next.ad;
+        final NativeAd ad = next.ad;
         final long loadedAtMs = next.loadedAtMs;
 
         final DisplayEntry[] holder = new DisplayEntry[1];
@@ -363,7 +364,7 @@ final class InFeedAdSlot {
             long retryDelayMs = ScheduleLayoutRetry();
             owner.NotifySlotPresentationFailed(
                     index
-                  , NativeAd.INTERNAL_PRESENTATION_ERROR
+                  , BaseAd.INTERNAL_PRESENTATION_ERROR
                   , BuildFailureMessage(
                         failureMessage == null
                                 ? "In-feed presentation failed before display"
@@ -453,14 +454,14 @@ final class InFeedAdSlot {
         if (failureMessage != null) {
             owner.NotifySlotPresentationFailed(
                     index
-                  , NativeAd.INTERNAL_PRESENTATION_ERROR
+                  , BaseAd.INTERNAL_PRESENTATION_ERROR
                   , BuildFailureMessage(failureMessage, retryDelayMs));
         }
     }
 
     private void HandleRefresh() {
         if (owner.released
-                || !NativeAd.IsActivityUsable(owner.CurrentActivity())) {
+                || !BaseAd.IsActivityUsable(owner.CurrentActivity())) {
             return;
         }
         if (!visibleRequested
@@ -643,7 +644,7 @@ final class InFeedAdSlot {
     // entry to become visible - has to wait for the foreground instead of
     // being treated as a failure.
     private static boolean IsActivityVisible(Activity currentActivity) {
-        return NativeAd.IsActivityUsable(currentActivity)
+        return BaseAd.IsActivityUsable(currentActivity)
                 && currentActivity.hasWindowFocus();
     }
 
@@ -651,7 +652,7 @@ final class InFeedAdSlot {
         owner.main.removeCallbacks(foregroundRecheckRunnable);
         if (owner.released
                 || IsActivityVisible(owner.CurrentActivity())
-                || !NativeAd.IsActivityUsable(owner.CurrentActivity())) {
+                || !BaseAd.IsActivityUsable(owner.CurrentActivity())) {
             return;
         }
         if (!visibleRequested && !(configured && owner.HasCachedAd())) return;
@@ -687,7 +688,7 @@ final class InFeedAdSlot {
     // otherwise only clear after MAX_CACHED_AD_AGE_MS or an app restart.
     private void HandleWatchdog() {
         if (owner.released
-                || !NativeAd.IsActivityUsable(owner.CurrentActivity())) {
+                || !BaseAd.IsActivityUsable(owner.CurrentActivity())) {
             return;
         }
         if (!IsActivityVisible(owner.CurrentActivity())) {
@@ -772,7 +773,7 @@ final class InFeedAdSlot {
                 || !visibleRequested
                 || activeEntry == null
                 || !activeEntry.actuallyVisible
-                || !NativeAd.IsActivityUsable(owner.CurrentActivity())) {
+                || !BaseAd.IsActivityUsable(owner.CurrentActivity())) {
             return;
         }
 
@@ -796,7 +797,7 @@ final class InFeedAdSlot {
                 || entry.visibleStartedAtMs != NO_VISIBLE_TIMER
                 || !visibleRequested
                 || !entry.actuallyVisible
-                || !NativeAd.IsActivityUsable(owner.CurrentActivity())) {
+                || !BaseAd.IsActivityUsable(owner.CurrentActivity())) {
             return;
         }
         entry.visibleStartedAtMs = SystemClock.elapsedRealtime();
@@ -896,7 +897,7 @@ final class InFeedAdSlot {
 
     private String DescribeRequestedRect() {
         if (rect == null) return "unavailable";
-        if (!NativeAd.IsActivityUsable(owner.CurrentActivity())) {
+        if (!BaseAd.IsActivityUsable(owner.CurrentActivity())) {
             return "["
                     + rect.xPx + "," + rect.yPx + ","
                     + rect.widthPx + "," + rect.heightPx + "]px";

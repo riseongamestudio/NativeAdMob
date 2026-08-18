@@ -14,6 +14,7 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
+import com.google.android.gms.ads.nativead.NativeAd;
 
 public final class OverlayAdPresentation
         extends Dialog
@@ -24,7 +25,7 @@ public final class OverlayAdPresentation
             WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL;
 
     private final Activity hostActivity;
-    private final com.google.android.gms.ads.nativead.NativeAd nativeAd;
+    private final NativeAd nativeAd;
     private final int countDownSec;
     private final boolean xRandom;
     private final boolean numberOpposite;
@@ -35,7 +36,7 @@ public final class OverlayAdPresentation
 
     public OverlayAdPresentation(
             Context context
-          , com.google.android.gms.ads.nativead.NativeAd nativeAd
+          , NativeAd nativeAd
           , int countDownSec
           , boolean xRandom
           , boolean numberOpposite

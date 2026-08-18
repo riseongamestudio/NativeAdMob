@@ -1,3 +1,5 @@
+using RiseOn.Analytics;
+
 namespace RiseOn.NativeAdMob {
     /// <summary>
     /// An overlay ad that covers the whole screen - app open, interstitial,
@@ -6,15 +8,28 @@ namespace RiseOn.NativeAdMob {
     public sealed class FullScreenAd : OverlayAd {
         public struct Settings {
             public string AdUnitId;
-            public int CountdownSec;
-            public bool XRandomSide;
-            public bool NumberOppositeSide;
-            public float BackgroundAlpha;
+            public int    CountdownSec;
+            public bool   XRandomSide;
+            public bool   NumberOppositeSide;
+            public float  BackgroundAlpha;
+
+            private AdFormat format;
+
+            /// <summary>
+            /// Where the game puts this placement. Unset means NATIVE.
+            /// </summary>
+            public AdFormat Format {
+                // A struct cannot initialise a field, so the default lives in
+                // the reading of it rather than in an assignment.
+                readonly get => format is AdFormat.UNKNOWN ? AdFormat.NATIVE : format;
+                set => format = value;
+            }
         }
 
         public FullScreenAd(in Settings settings)
             : base(
                 settings.AdUnitId
+              , settings.Format
               , coversFullScreen: true
               , settings.CountdownSec
               , settings.XRandomSide

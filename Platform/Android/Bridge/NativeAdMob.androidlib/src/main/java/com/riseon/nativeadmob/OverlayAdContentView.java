@@ -26,6 +26,7 @@ import android.widget.TextView;
 
 import com.google.android.gms.ads.nativead.MediaView;
 import com.google.android.gms.ads.nativead.NativeAdView;
+import com.google.android.gms.ads.nativead.NativeAd;
 
 import java.util.List;
 
@@ -187,7 +188,7 @@ final class OverlayAdContentView extends FrameLayout {
     private static final int TICKER_MAX_PANEL_DP = 120;
     private static final int TICKER_CTA_MIN_HEIGHT_DP = 32;
 
-    private final com.google.android.gms.ads.nativead.NativeAd nativeAd;
+    private final NativeAd nativeAd;
     private long countDownRemainingMs;
     private boolean sideMediaLayout;
     private int sideMediaWidthPx;
@@ -224,7 +225,7 @@ final class OverlayAdContentView extends FrameLayout {
 
     OverlayAdContentView(
             Context context
-          , com.google.android.gms.ads.nativead.NativeAd nativeAd
+          , NativeAd nativeAd
           , int countDownSec
           , boolean xRandom
           , boolean numberOpposite
@@ -246,7 +247,7 @@ final class OverlayAdContentView extends FrameLayout {
 
     OverlayAdContentView(
             Context context
-          , com.google.android.gms.ads.nativead.NativeAd nativeAd
+          , NativeAd nativeAd
           , long countDownRemainingMs
           , boolean closeOnLeft
           , boolean numberOpposite
@@ -2359,7 +2360,7 @@ final class OverlayAdContentView extends FrameLayout {
             headline.setText(headlineValue);
         }
 
-        com.google.android.gms.ads.nativead.NativeAd.Image iconAsset =
+        NativeAd.Image iconAsset =
                 nativeAd.getIcon();
         if (iconAsset == null || iconAsset.getDrawable() == null) {
             icon.setVisibility(View.GONE);
@@ -2745,11 +2746,11 @@ final class OverlayAdContentView extends FrameLayout {
     }
 
     private Drawable FindFallbackMediaImage() {
-        List<com.google.android.gms.ads.nativead.NativeAd.Image> images =
+        List<NativeAd.Image> images =
                 nativeAd.getImages();
         if (images == null) return null;
 
-        for (com.google.android.gms.ads.nativead.NativeAd.Image image
+        for (NativeAd.Image image
                 : images) {
             if (image != null && image.getDrawable() != null) {
                 return image.getDrawable();

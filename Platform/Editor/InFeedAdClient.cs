@@ -47,7 +47,6 @@ namespace RiseOn.NativeAdMob.Editor {
 
             var config = configs[slotIndex]?.Snapshot();
 
-            callbacks.OnLoadingStarted();
             if (config == null) return;
 
             previews[slotIndex] = EditorAd.Show(

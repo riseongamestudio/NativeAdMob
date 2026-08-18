@@ -26,7 +26,7 @@ typedef struct {
 extern const int32_t RONativeAdInternalLoadError;         // -1, same as Java
 extern const int32_t RONativeAdInternalPresentationError; // -2, same as Java
 
-@interface RONativeAd : NSObject
+@interface ROBaseAd : NSObject
 
 @property (atomic, readonly) BOOL released;
 @property (nonatomic, readonly) int32_t instanceId;

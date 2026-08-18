@@ -43,28 +43,28 @@ namespace RiseOn.NativeAdMob.iOS {
               , countdownSec);
         }
 
-        public void LoadAd() {
+        public void Load() {
             if (handle == IntPtr.Zero) return;
 
-            NativeAdBridge.ROOverlayAd_LoadAd(handle);
+            NativeAdBridge.ROOverlayAd_Load(handle);
         }
 
-        public void ShowAd(int showId) {
+        public void Show(int showId) {
             if (handle == IntPtr.Zero) {
                 callbacks.OnShowCompleted(showId, "Ad released", false);
                 return;
             }
 
-            NativeAdBridge.ROOverlayAd_ShowAd(
+            NativeAdBridge.ROOverlayAd_Show(
                 handle
               , showId
               , NativeAdBridge.OnShowCompletedCallback);
         }
 
-        public void HideAd() {
+        public void Hide() {
             if (handle == IntPtr.Zero) return;
 
-            NativeAdBridge.ROOverlayAd_HideAd(handle);
+            NativeAdBridge.ROOverlayAd_Hide(handle);
         }
 
         public void Release() {
@@ -76,8 +76,9 @@ namespace RiseOn.NativeAdMob.iOS {
             NativeAdBridge.Unregister(instanceId);
         }
 
-        void INativeAdSharedHandlers.HandleLoadingStarted()
-            => callbacks.OnLoadingStarted();
+        // Nothing downstream listens for a load beginning, and neither
+        // AdMob nor MAX reports one. The trampoline still arrives.
+        void INativeAdSharedHandlers.HandleLoadingStarted() {}
 
         void INativeAdSharedHandlers.HandleLoadingCompleted(
             int errorCode, string errorMessage)
@@ -89,12 +90,9 @@ namespace RiseOn.NativeAdMob.iOS {
           , double value
           , string currencyCode
           , int precision)
-            => callbacks.OnAdPaid(new AdValue(
-                source
-              , adUnitId
-              , value
-              , currencyCode
-              , (AdValuePrecision)precision));
+            // Precision is reported by the SDK but nothing downstream asks
+            // for it, so it stops here rather than riding along unused.
+            => callbacks.OnAdPaid(source, adUnitId, value, currencyCode);
 
         internal void HandleStateChanged(bool isReady, bool isLoading)
             => callbacks.OnStateChanged(isReady, isLoading);
@@ -104,7 +102,7 @@ namespace RiseOn.NativeAdMob.iOS {
         internal void HandleDisplayed() => callbacks.OnDisplayed();
 
         internal void HandlePresentationFailed(int errorCode, string errorMessage)
-            => callbacks.OnPresentationFailed(errorCode, errorMessage);
+            => callbacks.OnDisplayFailed(errorCode, errorMessage);
 
         internal void HandleShowCompleted(
             int showId

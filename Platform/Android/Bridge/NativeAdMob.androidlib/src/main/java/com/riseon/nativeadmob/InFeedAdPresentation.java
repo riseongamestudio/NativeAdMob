@@ -19,6 +19,7 @@ import android.view.WindowManager;
 import android.widget.FrameLayout;
 
 import com.google.android.gms.ads.nativead.NativeAdView;
+import com.google.android.gms.ads.nativead.NativeAd;
 
 import java.util.ArrayList;
 
@@ -38,7 +39,7 @@ final class InFeedAdPresentation extends FrameLayout
     private static final int BACKGROUND_BLUE = 0x29;
 
     private final Activity activity;
-    private final com.google.android.gms.ads.nativead.NativeAd nativeAd;
+    private final NativeAd nativeAd;
     private int requestedX;
     private int requestedY;
     private final int requestedWidth;
@@ -81,7 +82,7 @@ final class InFeedAdPresentation extends FrameLayout
 
     InFeedAdPresentation(
             Activity activity
-          , com.google.android.gms.ads.nativead.NativeAd nativeAd
+          , NativeAd nativeAd
           , int xPx
           , int yPx
           , int widthPx

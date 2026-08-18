@@ -8,9 +8,9 @@ namespace RiseOn.NativeAdMob.Android {
         private const string JAVA_SET_LISTENER_METHOD      = "SetListener";
         private const string JAVA_CONFIGURE_METHOD         = "Configure";
         private const string JAVA_SET_COUNTDOWN_SEC_METHOD = "SetCountdownSec";
-        private const string JAVA_LOAD_AD_METHOD           = "LoadAd";
-        private const string JAVA_SHOW_AD_METHOD           = "ShowAd";
-        private const string JAVA_HIDE_AD_METHOD           = "HideAd";
+        private const string JAVA_LOAD_AD_METHOD           = "Load";
+        private const string JAVA_SHOW_AD_METHOD           = "Show";
+        private const string JAVA_HIDE_AD_METHOD           = "Hide";
         private const string JAVA_RELEASE_METHOD           = "Release";
 
         private readonly IOverlayAdCallbacks callbacks;
@@ -44,13 +44,13 @@ namespace RiseOn.NativeAdMob.Android {
             javaObject?.Call(JAVA_SET_COUNTDOWN_SEC_METHOD, countdownSec);
         }
 
-        public void LoadAd() {
+        public void Load() {
             javaObject?.Call(
                 JAVA_LOAD_AD_METHOD
               , AndroidApplication.currentActivity);
         }
 
-        public void ShowAd(int showId) {
+        public void Show(int showId) {
             var completedListener = new NativeAdCompletedListenerProxy(
                 (errorMessage, adConsumed) =>
                     callbacks.OnShowCompleted(
@@ -69,7 +69,7 @@ namespace RiseOn.NativeAdMob.Android {
             }
         }
 
-        public void HideAd() {
+        public void Hide() {
             javaObject?.Call(JAVA_HIDE_AD_METHOD);
         }
 

@@ -12,6 +12,7 @@ import android.widget.TextView;
 
 import com.google.android.gms.ads.MediaContent;
 import com.google.android.gms.ads.nativead.NativeAdView;
+import com.google.android.gms.ads.nativead.NativeAd;
 
 import java.text.Normalizer;
 import java.util.ArrayList;
@@ -34,13 +35,13 @@ final class InFeedAdLayoutValidator {
     private static final int NULL_VIEW_SIGNATURE = -1;
     private static final int INVALID_VIEW_BOUNDS_SIGNATURE = -2;
 
-    private final com.google.android.gms.ads.nativead.NativeAd nativeAd;
+    private final NativeAd nativeAd;
     private final float density;
     private final InFeedAdViewFactory viewFactory;
     private String lastFailureReason;
 
     InFeedAdLayoutValidator(
-            com.google.android.gms.ads.nativead.NativeAd nativeAd
+            NativeAd nativeAd
           , float density
           , InFeedAdViewFactory viewFactory) {
         this.nativeAd = nativeAd;

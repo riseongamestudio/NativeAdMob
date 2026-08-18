@@ -300,21 +300,21 @@ static NSTimeInterval RONow(void) {
 - (BOOL)ro_isHostVisible {
     // A backgrounded host is still usable but does not draw; everything that
     // depends on drawing waits for the foreground instead of failing.
-    UIViewController *host = [RONativeAd unityViewController];
-    return [RONativeAd isViewControllerUsable:host]
+    UIViewController *host = [ROBaseAd unityViewController];
+    return [ROBaseAd isViewControllerUsable:host]
             && UIApplication.sharedApplication.applicationState
                     == UIApplicationStateActive;
 }
 
 - (void)presentCachedAd {
     ROInFeedAd *owner = _owner;
-    UIViewController *host = [RONativeAd unityViewController];
+    UIViewController *host = [ROBaseAd unityViewController];
     if (owner == nil
             || owner.released
             || !_configured
             || _materializingEntry != nil
             || ![owner hasCachedAd]
-            || ![RONativeAd isViewControllerUsable:host]) {
+            || ![ROBaseAd isViewControllerUsable:host]) {
         return;
     }
     if (![self ro_isHostVisible]) {

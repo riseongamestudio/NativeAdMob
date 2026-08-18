@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
+using RiseOn.Analytics;
 using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
@@ -10,8 +11,9 @@ namespace RiseOn.NativeAdMob {
     /// handle over one slot - and call Show/Hide/SetPosition there;
     /// everything unit-wide (settings, events, disposal) lives here.
     /// </summary>
-    public sealed class InFeedAd : NativeAd, IInFeedAdCallbacks {
+    public sealed class InFeedAd : BaseAd, IInFeedAdCallbacks {
         private const int MAX_SLOT_COUNT = 8;
+        private const AdFormat IN_FEED_FORMAT = AdFormat.NATIVE_IN_FEED;
 
         public struct Settings {
             public string AdUnitId;
@@ -34,9 +36,6 @@ namespace RiseOn.NativeAdMob {
                 this.index = index;
             }
 
-            public void Configure(Vector2Int positionPx, Vector2Int sizePx)
-                => owner.ConfigureSlot(index, positionPx, sizePx);
-
             public void Show(Action onDisplayed = null)
                 => owner.ShowSlot(index, onDisplayed);
 
@@ -46,10 +45,11 @@ namespace RiseOn.NativeAdMob {
                 => owner.SetSlotPosition(index, positionPx);
         }
 
-        /// <summary>(slotIndex, errorCode, errorMessage)</summary>
-        public event Action<int, int, string> OnSlotPresentationFailed;
+        /// <summary>(slotIndex, error)</summary>
+        public event Action<int, AdError> OnSlotDisplayFailed;
 
         private readonly Item[] items;
+        private bool            initialized;
         private readonly Action[] pendingOnDisplayed;
         private IInFeedAdClient client;
 
@@ -60,8 +60,27 @@ namespace RiseOn.NativeAdMob {
         [IndexerName("Slots")]
         public ref readonly Item this[int index] => ref items[index];
 
+        /// <summary>
+        /// Sizes every slot of this feed. Required before a slot can be
+        /// positioned or shown - a slot with no size has nowhere to draw -
+        /// and calling it again resizes them all.
+        /// </summary>
+        public void Initialize(Vector2Int sizePx) {
+            lock (nativeAdStateLock) {
+                if (releasedManaged) return;
+
+                for (var i = 0; i < items.Length; ++i) {
+                    pendingOnDisplayed[i] = null;
+                    client?.ConfigureSlot(i, default, sizePx);
+                }
+                initialized = true;
+            }
+        }
+
         public InFeedAd(in Settings settings)
-            : base(settings.AdUnitId) {
+            : base(
+                settings.AdUnitId
+              , IN_FEED_FORMAT) {
             if (settings.SlotCount < 1 || settings.SlotCount > MAX_SLOT_COUNT) {
                 throw new ArgumentOutOfRangeException(
                     nameof(settings)
@@ -83,21 +102,10 @@ namespace RiseOn.NativeAdMob {
             client = platform.CreateInFeed(settings, this);
         }
 
-        private void ConfigureSlot(
-            int slotIndex
-          , Vector2Int positionPx
-          , Vector2Int sizePx) {
-            lock (nativeAdStateLock) {
-                if (releasedManaged) return;
-
-                pendingOnDisplayed[slotIndex] = null;
-                client?.ConfigureSlot(slotIndex, positionPx, sizePx);
-            }
-        }
-
         private void ShowSlot(int slotIndex, Action onDisplayed) {
             lock (nativeAdStateLock) {
                 if (releasedManaged) return;
+                if (WarnIfNotInitialized(nameof(Item.Show))) return;
 
                 pendingOnDisplayed[slotIndex] = onDisplayed;
                 client?.ShowSlot(slotIndex);
@@ -107,6 +115,7 @@ namespace RiseOn.NativeAdMob {
         private void HideSlot(int slotIndex) {
             lock (nativeAdStateLock) {
                 if (releasedManaged) return;
+                if (!initialized) return;
 
                 pendingOnDisplayed[slotIndex] = null;
                 client?.HideSlot(slotIndex);
@@ -116,20 +125,23 @@ namespace RiseOn.NativeAdMob {
         private void SetSlotPosition(int slotIndex, Vector2Int positionPx) {
             lock (nativeAdStateLock) {
                 if (releasedManaged) return;
+                if (WarnIfNotInitialized(nameof(Item.SetPosition))) return;
 
                 client?.SetSlotPosition(slotIndex, positionPx);
             }
         }
 
-        void IInFeedAdCallbacks.OnLoadingStarted()
-            => DispatchFromNative(RaiseLoadingStarted);
-
         void IInFeedAdCallbacks.OnLoadingCompleted(int errorCode, string errorMessage)
             => DispatchFromNative(
                 () => RaiseLoadingCompleted(errorCode, errorMessage));
 
-        void IInFeedAdCallbacks.OnAdPaid(AdValue adValue)
-            => DispatchFromNative(() => RaiseAdPaid(adValue));
+        void IInFeedAdCallbacks.OnAdPaid(
+            string source
+          , string adUnitId
+          , double value
+          , string currencyCode)
+            => DispatchFromNative(
+                () => RaiseAdPaid(source, adUnitId, value, currencyCode));
 
         void IInFeedAdCallbacks.OnSlotDisplayed(int slotIndex)
             => DispatchFromNative(() => HandleSlotDisplayed(slotIndex));
@@ -140,15 +152,26 @@ namespace RiseOn.NativeAdMob {
                     $"{nameof(InFeedAd)} slot {slotIndex}: "
                     + "Show Called While Not Ready"));
 
-        void IInFeedAdCallbacks.OnSlotPresentationFailed(
+        void IInFeedAdCallbacks.OnSlotDisplayFailed(
             int slotIndex
           , int errorCode
           , string errorMessage)
             => DispatchFromNative(() => {
-                var handler = OnSlotPresentationFailed;
+                var handler = OnSlotDisplayFailed;
                 if (handler == null) return;
-                InvokeSafely(() => handler(slotIndex, errorCode, errorMessage));
+
+                AdError error = new(errorCode, errorMessage);
+                InvokeSafely(() => handler(slotIndex, error));
             });
+
+        private bool WarnIfNotInitialized(string operation) {
+            if (initialized) return false;
+
+            Debug.LogError(
+                $"{nameof(InFeedAd)}.{operation} called before "
+                + $"{nameof(Initialize)}; the feed has no size yet.");
+            return true;
+        }
 
         private void HandleSlotDisplayed(int slotIndex) {
             Action onDisplayed;

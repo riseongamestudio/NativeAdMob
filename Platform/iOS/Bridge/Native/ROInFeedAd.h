@@ -6,7 +6,7 @@
 
 #import <Foundation/Foundation.h>
 
-#import "RONativeAd.h"
+#import "ROBaseAd.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -22,7 +22,7 @@ typedef struct {
             _Nullable slotPresentationFailed;
 } ROInFeedAdListenerCallbacks;
 
-@interface ROInFeedAd : RONativeAd
+@interface ROInFeedAd : ROBaseAd
 
 - (instancetype)initWithAdUnitId:(NSString *)adUnitId
                        slotCount:(NSInteger)slotCount

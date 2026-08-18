@@ -33,12 +33,11 @@ namespace RiseOn.NativeAdMob.Editor {
             config?.SetCountdownSec(countdownSec);
         }
 
-        public void LoadAd() {
+        public void Load() {
             if (adLoading || adReady) return;
 
             adLoading = true;
             callbacks.OnStateChanged(false, true);
-            callbacks.OnLoadingStarted();
 
             adLoading = false;
             adReady   = true;
@@ -46,7 +45,7 @@ namespace RiseOn.NativeAdMob.Editor {
             callbacks.OnLoadingCompleted(0, string.Empty);
         }
 
-        public void ShowAd(int showId) {
+        public void Show(int showId) {
             if (!adReady) {
                 callbacks.OnShowCompleted(showId, AD_NOT_READY_ERROR, false);
                 return;
@@ -68,7 +67,7 @@ namespace RiseOn.NativeAdMob.Editor {
             }
         }
 
-        public void HideAd() {
+        public void Hide() {
             var current = preview;
             if (current) current.Dismiss();
         }

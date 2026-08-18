@@ -25,6 +25,7 @@ import android.widget.TextView;
 import com.google.android.gms.ads.MediaContent;
 import com.google.android.gms.ads.nativead.MediaView;
 import com.google.android.gms.ads.nativead.NativeAdView;
+import com.google.android.gms.ads.nativead.NativeAd;
 
 import java.util.List;
 
@@ -190,13 +191,13 @@ final class InFeedAdViewFactory {
     }
 
     private final Activity activity;
-    private final com.google.android.gms.ads.nativead.NativeAd nativeAd;
+    private final NativeAd nativeAd;
     private final float density;
     private final int slotShortSidePx;
 
     InFeedAdViewFactory(
             Activity activity
-          , com.google.android.gms.ads.nativead.NativeAd nativeAd
+          , NativeAd nativeAd
           , float density
           , int slotShortSidePx) {
         this.activity = activity;
@@ -360,22 +361,22 @@ final class InFeedAdViewFactory {
     }
 
     boolean HasUnrenderableIcon() {
-        com.google.android.gms.ads.nativead.NativeAd.Image icon =
+        NativeAd.Image icon =
                 nativeAd.getIcon();
         return icon != null && icon.getDrawable() == null;
     }
 
     boolean HasRenderableIcon() {
-        com.google.android.gms.ads.nativead.NativeAd.Image icon =
+        NativeAd.Image icon =
                 nativeAd.getIcon();
         return icon != null && icon.getDrawable() != null;
     }
 
     Drawable FindMainImage() {
-        List<com.google.android.gms.ads.nativead.NativeAd.Image> images =
+        List<NativeAd.Image> images =
                 nativeAd.getImages();
         if (images != null) {
-            for (com.google.android.gms.ads.nativead.NativeAd.Image image
+            for (NativeAd.Image image
                     : images) {
                 if (image != null && image.getDrawable() != null) {
                     return image.getDrawable();
@@ -1587,7 +1588,7 @@ final class InFeedAdViewFactory {
           , int size
           , int gap
           , boolean probe) {
-        com.google.android.gms.ads.nativead.NativeAd.Image iconAsset =
+        NativeAd.Image iconAsset =
                 nativeAd.getIcon();
         if (!HasRenderableIcon()) return;
 

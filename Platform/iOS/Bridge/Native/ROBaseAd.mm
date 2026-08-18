@@ -1,4 +1,4 @@
-#import "RONativeAd.h"
+#import "ROBaseAd.h"
 
 #include <stdatomic.h>
 
@@ -8,7 +8,7 @@ extern "C" UIViewController* UnityGetGLViewController(void);
 const int32_t RONativeAdInternalLoadError = -1;
 const int32_t RONativeAdInternalPresentationError = -2;
 
-@implementation RONativeAd {
+@implementation ROBaseAd {
     atomic_int _loadGeneration;
     atomic_bool _released;
     // Callbacks are read on SDK threads and written from Unity's thread; the
@@ -97,10 +97,10 @@ const int32_t RONativeAdInternalPresentationError = -2;
 - (void)bindPaidEventForAd:(GADNativeAd *)ad
               paidAdUnitId:(NSString *)paidAdUnitId
                isCurrentAd:(BOOL (^)(void))isCurrentAd {
-    __weak RONativeAd *weakSelf = self;
+    __weak ROBaseAd *weakSelf = self;
     __weak GADNativeAd *weakAd = ad;
     ad.paidEventHandler = ^(GADAdValue *_Nonnull adValue) {
-        RONativeAd *strongSelf = weakSelf;
+        ROBaseAd *strongSelf = weakSelf;
         if (strongSelf == nil
                 || strongSelf.released
                 || isCurrentAd == nil

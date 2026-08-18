@@ -7,6 +7,7 @@ import android.os.Looper;
 import com.google.android.gms.ads.ResponseInfo;
 import com.google.android.gms.ads.VideoOptions;
 import com.google.android.gms.ads.nativead.NativeAdOptions;
+import com.google.android.gms.ads.nativead.NativeAd;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
@@ -14,8 +15,8 @@ import java.util.function.BooleanSupplier;
 // Shared base of every ad format: main-thread dispatch, load generations,
 // request options, and the paid-event binding. The show/hide lifecycle of
 // each format lives in its subclass.
-public abstract class NativeAd {
-    protected static final String TAG = "NativeAd";
+public abstract class BaseAd {
+    protected static final String TAG = "BaseAd";
     protected static final int INTERNAL_LOAD_ERROR = -1;
     protected static final int INTERNAL_PRESENTATION_ERROR = -2;
     private static final double MICROS_PER_CURRENCY_UNIT = 1_000_000.0d;
@@ -25,7 +26,7 @@ public abstract class NativeAd {
 
     protected volatile boolean released;
 
-    protected NativeAd() {}
+    protected BaseAd() {}
 
     protected final int NextLoadGeneration() {
         return loadGeneration.incrementAndGet();
@@ -54,7 +55,7 @@ public abstract class NativeAd {
     }
 
     protected final void BindPaidEvent(
-            com.google.android.gms.ads.nativead.NativeAd ad
+            NativeAd ad
           , String paidAdUnitId
           , BooleanSupplier isCurrentAd) {
         ad.setOnPaidEventListener(adValue -> {

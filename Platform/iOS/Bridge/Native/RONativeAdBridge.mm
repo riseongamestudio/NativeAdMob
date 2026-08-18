@@ -178,12 +178,12 @@ void ROOverlayAd_SetCountdownSec(void* handle, int32_t countdownSec) {
     [(__bridge ROOverlayAd *)handle setCountdownSec:countdownSec];
 }
 
-void ROOverlayAd_LoadAd(void* handle) {
+void ROOverlayAd_Load(void* handle) {
     if (handle == NULL) return;
-    [(__bridge ROOverlayAd *)handle loadAd];
+    [(__bridge ROOverlayAd *)handle load];
 }
 
-void ROOverlayAd_ShowAd(
+void ROOverlayAd_Show(
         void* handle
       , int32_t showId
       , RONativeAdShowCompletedCallback onCompleted) {
@@ -193,13 +193,13 @@ void ROOverlayAd_ShowAd(
         }
         return;
     }
-    [(__bridge ROOverlayAd *)handle showAdWithShowId:showId
+    [(__bridge ROOverlayAd *)handle showWithShowId:showId
                                                   onCompleted:onCompleted];
 }
 
-void ROOverlayAd_HideAd(void* handle) {
+void ROOverlayAd_Hide(void* handle) {
     if (handle == NULL) return;
-    [(__bridge ROOverlayAd *)handle hideAd];
+    [(__bridge ROOverlayAd *)handle hide];
 }
 
 void ROOverlayAd_Release(void* handle) {

@@ -1,4 +1,5 @@
 using System;
+using RiseOn.Analytics;
 using UnityEngine;
 namespace RiseOn.NativeAdMob {
     /// <summary>
@@ -7,17 +8,20 @@ namespace RiseOn.NativeAdMob {
     /// screen; HalfScreenAd covers a bottom slice. The constructor
     /// is assembly-locked: those two are its only faces.
     /// </summary>
-    public abstract class OverlayAd : NativeAd, IOverlayAdCallbacks {
+    public abstract class OverlayAd : BaseAd, IOverlayAdCallbacks {
         private const int INVALID_GENERATION = 0;
         private const string AD_RELEASED_ERROR        = "Ad released";
         private const string AD_ALREADY_SHOWING_ERROR = "Ad already showing";
+        // A show that never reached the screen. The native side owns its own
+        // codes; this one is raised on this side of the boundary.
+        private const int SHOW_REJECTED_CODE = -1;
 
         /// <summary>Presentation-side events of this placement.</summary>
-        public event Action OnDisplayed;
-        public event Action<int, string> OnPresentationFailed;
+        public event Action OnAdDisplayed;
+        public event Action<AdError> OnAdDisplayFailed;
+        public event Action OnAdHidden;
 
         private IOverlayAdClient client;
-        private ShowCompletedHandler currentShowCompleted;
         private bool showPendingOrActive;
         private bool cachedAdReady;
         private bool cachedAdLoading;
@@ -25,13 +29,14 @@ namespace RiseOn.NativeAdMob {
 
         private protected OverlayAd(
             string adUnitId
+          , AdFormat format
           , bool coversFullScreen
           , int countdownSec
           , bool xRandomSide
           , bool numberOppositeSide
           , float heightRatio
           , float backgroundAlpha)
-            : base(adUnitId) {
+            : base(adUnitId, format) {
             var platform = AdPlatformRegistry.Installed;
             if (platform == null) {
                 Debug.Log(
@@ -60,16 +65,16 @@ namespace RiseOn.NativeAdMob {
             }
         }
 
-        public void LoadAd() {
+        public void Load() {
             lock (nativeAdStateLock) {
                 if (releasedManaged || client == null) return;
 
-                Debug.Log("LoadAd()");
-                client.LoadAd();
+                Debug.Log("Load()");
+                client.Load();
             }
         }
 
-        public void ShowAd(ShowCompletedHandler onAdCompleted) {
+        public void Show() {
             int    generation = INVALID_GENERATION;
             string rejectedError = null;
             lock (nativeAdStateLock) {
@@ -78,21 +83,19 @@ namespace RiseOn.NativeAdMob {
                 } else if (showPendingOrActive) {
                     rejectedError = AD_ALREADY_SHOWING_ERROR;
                 } else {
-                    showPendingOrActive  = true;
-                    currentShowCompleted = onAdCompleted;
-                    generation           = ++showGeneration;
+                    showPendingOrActive = true;
+                    generation          = ++showGeneration;
                 }
             }
 
+            // A show that is turned away never reaches the screen, which is
+            // the same news as one that breaks on the way there.
             if (rejectedError != null) {
-                InvokeCompletionSafely(
-                    onAdCompleted
-                  , rejectedError
-                  , false);
+                RaiseDisplayFailed(SHOW_REJECTED_CODE, rejectedError);
                 return;
             }
 
-            Debug.Log("ShowAd()");
+            Debug.Log("Show()");
             lock (nativeAdStateLock) {
                 if (!releasedManaged
                  && showPendingOrActive
@@ -100,20 +103,20 @@ namespace RiseOn.NativeAdMob {
                  && client != null) {
                     // The show id travels with the call and is echoed back, so
                     // a completion can only resolve the show that registered it.
-                    client.ShowAd(generation);
+                    client.Show(generation);
                 }
             }
         }
 
-        public void HideAd() {
+        public void Hide() {
             lock (nativeAdStateLock) {
                 if (releasedManaged) return;
 
-                client?.HideAd();
+                client?.Hide();
             }
         }
 
-        public bool IsAdReady() {
+        public bool IsReady() {
             lock (nativeAdStateLock) {
                 return
                     !releasedManaged
@@ -123,7 +126,7 @@ namespace RiseOn.NativeAdMob {
             }
         }
 
-        public bool IsAdLoading() {
+        public bool IsLoading() {
             lock (nativeAdStateLock) {
                 return
                     !releasedManaged
@@ -133,8 +136,8 @@ namespace RiseOn.NativeAdMob {
         }
 
         public void Release() {
-            IOverlayAdClient       releasedClient;
-            ShowCompletedHandler completed;
+            IOverlayAdClient releasedClient;
+            bool             showWasPending;
             lock (nativeAdStateLock) {
                 if (releasedManaged) return;
 
@@ -142,34 +145,33 @@ namespace RiseOn.NativeAdMob {
                 releasedClient  = client;
                 client          = null;
 
-                completed            = showPendingOrActive
-                        ? currentShowCompleted
-                        : null;
-                showPendingOrActive  = false;
-                currentShowCompleted = null;
-                cachedAdReady        = false;
-                cachedAdLoading      = false;
+                showWasPending      = showPendingOrActive;
+                showPendingOrActive = false;
+                cachedAdReady       = false;
+                cachedAdLoading     = false;
                 ++showGeneration;
             }
 
             releasedClient?.Release();
-            InvokeCompletionSafely(
-                completed
-              , AD_RELEASED_ERROR
-              , false);
+            // A show still in flight can no longer land.
+            if (showWasPending) {
+                RaiseDisplayFailed(SHOW_REJECTED_CODE, AD_RELEASED_ERROR);
+            }
         }
-
-        void IOverlayAdCallbacks.OnLoadingStarted()
-            => DispatchFromNative(RaiseLoadingStarted);
 
         void IOverlayAdCallbacks.OnLoadingCompleted(int errorCode, string errorMessage)
             => DispatchFromNative(
                 () => RaiseLoadingCompleted(errorCode, errorMessage));
 
-        void IOverlayAdCallbacks.OnAdPaid(AdValue adValue)
-            => DispatchFromNative(() => RaiseAdPaid(adValue));
+        void IOverlayAdCallbacks.OnAdPaid(
+            string source
+          , string adUnitId
+          , double value
+          , string currencyCode)
+            => DispatchFromNative(
+                () => RaiseAdPaid(source, adUnitId, value, currencyCode));
 
-        // Synchronous under the lock: IsAdReady right after a load completes
+        // Synchronous under the lock: IsReady right after a load completes
         // must already see the new state.
         void IOverlayAdCallbacks.OnStateChanged(bool isReady, bool isLoading) {
             lock (nativeAdStateLock) {
@@ -184,36 +186,32 @@ namespace RiseOn.NativeAdMob {
 
         void IOverlayAdCallbacks.OnDisplayed() {
             DispatchFromNative(() => {
-                InvokeSafely(OnDisplayed);
+                InvokeSafely(OnAdDisplayed);
                 // The replacement starts the moment this ad reaches the
                 // screen, so the next placement finds one waiting instead
                 // of a load that only began when this ad closed.
-                LoadAd();
+                Load();
             });
         }
 
-        void IOverlayAdCallbacks.OnPresentationFailed(int errorCode, string errorMessage)
-            => DispatchFromNative(() => {
-                var handler = OnPresentationFailed;
-                if (handler == null) return;
-                InvokeSafely(() => handler(errorCode, errorMessage));
-            });
+        void IOverlayAdCallbacks.OnDisplayFailed(int errorCode, string errorMessage)
+            => DispatchFromNative(() => RaiseDisplayFailed(errorCode, errorMessage));
 
         void IOverlayAdCallbacks.OnShowCompleted(
             int showId
           , string errorMessage
           , bool adConsumed) {
             GoogleMobileAds.Common.MobileAdsEventExecutor.ExecuteInUpdate(() => {
-                if (!TryTakeShowCompletion(showId, out var completed))
-                    return;
+                if (!TryTakeShow(showId)) return;
 
-                // The game callback must fully return before the consumed ad
-                // starts its automatic replacement load.
-                InvokeCompletionSafely(
-                    completed
-                  , errorMessage
-                  , adConsumed);
-                if (adConsumed) LoadAd();
+                // Listeners must fully return before the consumed ad starts
+                // its automatic replacement load.
+                if (string.IsNullOrEmpty(errorMessage)) {
+                    InvokeSafely(OnAdHidden);
+                } else {
+                    RaiseDisplayFailed(SHOW_REJECTED_CODE, errorMessage);
+                }
+                if (adConsumed) Load();
             });
         }
 
@@ -223,32 +221,24 @@ namespace RiseOn.NativeAdMob {
         // away while this completion waits a frame in Unity's queue. Wiping
         // the flag here would therefore overwrite the truth with a stale
         // assumption and strand a perfectly good cached ad.
-        private bool TryTakeShowCompletion(
-            int generation
-          , out ShowCompletedHandler completed) {
+        private bool TryTakeShow(int generation) {
             lock (nativeAdStateLock) {
                 if (!showPendingOrActive || generation != showGeneration) {
-                    completed = null;
                     return false;
                 }
 
-                showPendingOrActive  = false;
-                completed            = currentShowCompleted;
-                currentShowCompleted = null;
+                showPendingOrActive = false;
             }
 
             return true;
         }
 
-        private static void InvokeCompletionSafely(
-            ShowCompletedHandler completion
-          , string errorMessage
-          , bool adConsumed) {
-            try {
-                completion?.Invoke(errorMessage, adConsumed);
-            } catch (Exception exception) {
-                Debug.LogException(exception);
-            }
+        private void RaiseDisplayFailed(int errorCode, string errorMessage) {
+            var handler = OnAdDisplayFailed;
+            if (handler == null) return;
+
+            AdError error = new(errorCode, errorMessage);
+            InvokeSafely(() => handler(error));
         }
     }
 }
