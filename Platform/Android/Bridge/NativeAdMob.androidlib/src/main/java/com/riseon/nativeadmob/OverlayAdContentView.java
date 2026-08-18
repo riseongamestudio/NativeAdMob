@@ -192,6 +192,9 @@ final class OverlayAdContentView extends FrameLayout {
     private long countDownRemainingMs;
     private boolean sideMediaLayout;
     private int sideMediaWidthPx;
+    // What the media's left edge costs the row: 0 while the picture bleeds,
+    // the side padding once something stands under it.
+    private int sideRowLeftInsetPx;
     private boolean mediaAvoidsControlStrip;
     private boolean mediaAspectReported;
     private boolean mediaAboveIdentity;
@@ -580,9 +583,39 @@ final class OverlayAdContentView extends FrameLayout {
                   , "Side-media layout: media "
                             + sideMediaWidth + "x" + sideMediaHeight
                             + " in panel height " + sidePanelHeight);
+            // Height the media leaves unused belongs to the content, not
+            // to the column beside the picture: what fits under the row
+            // moves there and spans the whole panel instead of being
+            // squeezed into a narrow rail. The button goes first, the body
+            // follows only when the leftover comfortably holds both.
+            int seam = Math.round(MEDIA_LOWER_SEAM_DP * density);
+            int belowCallToActionHeight =
+                    Math.round(AVOID_CALL_TO_ACTION_HEIGHT_DP * density);
+            int bodyLineHeight = Math.round(
+                    MIN_BODY_TEXT_SIZE_SP
+                            * BODY_LINE_HEIGHT_RATIO
+                            * density);
+            int sideLeftover = sidePanelHeight - sideMediaHeight;
+            boolean callToActionBelow =
+                    sideLeftover >= belowCallToActionHeight + seam;
+            boolean bodyBelow = callToActionBelow
+                    && sideLeftover >= belowCallToActionHeight
+                            + 2 * bodyLineHeight
+                            + 2 * seam;
+            // Media bleeds to the edge only while nothing stands under it.
+            // The moment something spills below, the two read as one column,
+            // and a column with two different left edges reads as a mistake.
+            // The verdict lands before the row is built: everything measured
+            // from the media's edge - the rail's width, the icon sized from
+            // it, the badge beside the picture - counts this inset in.
+            sideRowLeftInsetPx = callToActionBelow || bodyBelow
+                    ? horizontalPadding
+                    : 0;
+
             contentColumn.setPadding(0, 0, 0, 0);
             LinearLayout sideRow = new LinearLayout(context);
             sideRow.setOrientation(LinearLayout.HORIZONTAL);
+            sideRow.setPadding(sideRowLeftInsetPx, 0, 0, 0);
             LinearLayout.LayoutParams sideMediaParams =
                     new LinearLayout.LayoutParams(
                             sideMediaWidth
@@ -598,7 +631,9 @@ final class OverlayAdContentView extends FrameLayout {
             // its ground for content.
             int railOuterWidth = Math.max(
                     0
-                  , displayMetrics.widthPixels - sideMediaWidth);
+                  , displayMetrics.widthPixels
+                            - sideMediaWidth
+                            - sideRowLeftInsetPx);
             int railPad = Math.max(
                     Math.round(RAIL_MIN_SIDE_PADDING_DP * density)
                   , Math.min(
@@ -632,33 +667,6 @@ final class OverlayAdContentView extends FrameLayout {
                         Math.round(RAIL_ICON_GAP_DP * density);
                 rail.addView(icon, railIconParams);
             }
-            // Height the media leaves unused belongs to the content, not
-            // to the column beside the picture: what fits under the row
-            // moves there and spans the whole panel instead of being
-            // squeezed into a narrow rail. The button goes first, the body
-            // follows only when the leftover comfortably holds both.
-            int seam = Math.round(MEDIA_LOWER_SEAM_DP * density);
-            int belowCallToActionHeight =
-                    Math.round(AVOID_CALL_TO_ACTION_HEIGHT_DP * density);
-            int bodyLineHeight = Math.round(
-                    MIN_BODY_TEXT_SIZE_SP
-                            * BODY_LINE_HEIGHT_RATIO
-                            * density);
-            int sideLeftover = sidePanelHeight - sideMediaHeight;
-            boolean callToActionBelow =
-                    sideLeftover >= belowCallToActionHeight + seam;
-            boolean bodyBelow = callToActionBelow
-                    && sideLeftover >= belowCallToActionHeight
-                            + 2 * bodyLineHeight
-                            + 2 * seam;
-
-            // Media bleeds to the edge only while nothing stands under it.
-            // The moment something spills below, the two read as one column,
-            // and a column with two different left edges reads as a mistake.
-            if (callToActionBelow || bodyBelow) {
-                sideRow.setPadding(horizontalPadding, 0, 0, 0);
-            }
-
             rail.addView(identityRow);
             if (!bodyBelow) rail.addView(body);
             if (!callToActionBelow) {
@@ -786,7 +794,8 @@ final class OverlayAdContentView extends FrameLayout {
         // lines up beside it.
         if (sideMediaLayout) {
             attributionLayoutParams.leftMargin =
-                    sideMediaWidthPx
+                    sideRowLeftInsetPx
+                            + sideMediaWidthPx
                             + Math.max(1, (int) (CONTROL_GAP_DP * density));
         }
         nativeAdView.addView(attribution, attributionLayoutParams);
@@ -843,7 +852,9 @@ final class OverlayAdContentView extends FrameLayout {
             if (sideMediaLayout) {
                 ConfigureResponsiveSideRail(
                         sideRail
-                      , displayMetrics.widthPixels - sideMediaWidthPx
+                      , displayMetrics.widthPixels
+                                - sideMediaWidthPx
+                                - sideRowLeftInsetPx
                       , sideRailHeightPx > 0
                                 ? sideRailHeightPx
                                 : requestedPanelHeight

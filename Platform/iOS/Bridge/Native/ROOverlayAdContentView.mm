@@ -179,6 +179,9 @@ static void ROCentreUnderIcon(UIView *view) {
     BOOL _hasDisplayableMedia;
     BOOL _sideMediaLayout;
     CGFloat _sideMediaWidthPx;
+    // What the media's left edge costs the row: 0 while the picture bleeds,
+    // the side padding once something stands under it.
+    CGFloat _sideRowLeftInset;
     BOOL _mediaAvoidsControlStrip;
     BOOL _mediaAspectReported;
     BOOL _mediaAboveIdentity;
@@ -479,9 +482,36 @@ static void ROCentreUnderIcon(UIView *view) {
               , round(sideMediaWidth / _mediaAspectRatio));
         NSLog(@"%@: Side-media layout: media %gx%g in panel height %g"
               , kROTag, sideMediaWidth, sideMediaHeight, sidePanelHeight);
+        // Height the media leaves unused belongs to the content, not to
+        // the column beside the picture: what fits under the row moves
+        // there and spans the whole panel instead of being squeezed into a
+        // narrow rail. The button goes first, the body follows only when
+        // the leftover comfortably holds both.
+        CGFloat seam = kROMediaLowerSeam;
+        CGFloat belowCallToActionHeight = kROAvoidCallToActionHeight;
+        CGFloat bodyLineHeight =
+                kROMinBodyTextSize * kROBodyLineHeightRatio;
+        CGFloat sideLeftover = sidePanelHeight - sideMediaHeight;
+        BOOL callToActionBelow =
+                sideLeftover >= belowCallToActionHeight + seam;
+        BOOL bodyBelow = callToActionBelow
+                && sideLeftover >= belowCallToActionHeight
+                        + 2 * bodyLineHeight
+                        + 2 * seam;
+        // Media bleeds to the edge only while nothing stands under it. The
+        // moment something spills below, the two read as one column, and a
+        // column with two different left edges reads as a mistake. The
+        // verdict lands before the row is built: everything measured from
+        // the media's edge - the rail's width, the icon sized from it, the
+        // badge beside the picture - counts this inset in.
+        _sideRowLeftInset = callToActionBelow || bodyBelow
+                ? kROHorizontalPadding
+                : 0;
+
         _contentColumn.ro_padding = UIEdgeInsetsZero;
         HBLinearLayoutView *sideRow = [[HBLinearLayoutView alloc] init];
         sideRow.ro_vertical = NO;
+        sideRow.ro_padding = UIEdgeInsetsMake(0, _sideRowLeftInset, 0, 0);
         _mediaView.ro_layoutWidth = sideMediaWidth;
         _mediaView.ro_layoutHeight = sideMediaHeight;
         _mediaView.ro_layoutGravity = HBGravityCenterVertical;
@@ -497,7 +527,9 @@ static void ROCentreUnderIcon(UIView *view) {
         // content.
         CGFloat railOuterWidth = MAX(
                 0
-              , UIScreen.mainScreen.bounds.size.width - sideMediaWidth);
+              , UIScreen.mainScreen.bounds.size.width
+                        - sideMediaWidth
+                        - _sideRowLeftInset);
         CGFloat railPad = MAX(
                 kRORailMinSidePadding
               , MIN(
@@ -525,31 +557,8 @@ static void ROCentreUnderIcon(UIView *view) {
                     UIEdgeInsetsMake(0, 0, kRORailIconGap, 0);
             [rail addSubview:_icon];
         }
-        // Height the media leaves unused belongs to the content, not to
-        // the column beside the picture: what fits under the row moves
-        // there and spans the whole panel instead of being squeezed into a
-        // narrow rail. The button goes first, the body follows only when
-        // the leftover comfortably holds both.
-        CGFloat seam = kROMediaLowerSeam;
-        CGFloat belowCallToActionHeight = kROAvoidCallToActionHeight;
-        CGFloat bodyLineHeight =
-                kROMinBodyTextSize * kROBodyLineHeightRatio;
-        CGFloat sideLeftover = sidePanelHeight - sideMediaHeight;
-        BOOL callToActionBelow =
-                sideLeftover >= belowCallToActionHeight + seam;
-        BOOL bodyBelow = callToActionBelow
-                && sideLeftover >= belowCallToActionHeight
-                        + 2 * bodyLineHeight
-                        + 2 * seam;
 
         [rail addSubview:_identityRow];
-        // Media bleeds to the edge only while nothing stands under it. The
-        // moment something spills below, the two read as one column, and a
-        // column with two different left edges reads as a mistake.
-        if (callToActionBelow || bodyBelow) {
-            sideRow.ro_padding =
-                    UIEdgeInsetsMake(0, kROHorizontalPadding, 0, 0);
-        }
 
         if (!bodyBelow) [rail addSubview:_body];
         if (!callToActionBelow) [rail addSubview:_callToAction];
@@ -1005,7 +1014,9 @@ static void ROCentreUnderIcon(UIView *view) {
     // to spare.
     CGFloat railOuterWidth = MAX(
             0
-          , UIScreen.mainScreen.bounds.size.width - _sideMediaWidthPx);
+          , UIScreen.mainScreen.bounds.size.width
+                    - _sideMediaWidthPx
+                    - _sideRowLeftInset);
     CGFloat railScaleCap = MAX(
             0
           , MIN(
@@ -1128,7 +1139,8 @@ static void ROCentreUnderIcon(UIView *view) {
                           , MAX(
                                 0
                               , UIScreen.mainScreen.bounds.size.width
-                                        - _sideMediaWidthPx))
+                                        - _sideMediaWidthPx
+                                        - _sideRowLeftInset))
                             heightSpec:
                     HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
     return _sideRail.ro_measuredSize.height <= panelHeight;
@@ -1402,7 +1414,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     // hugs the media's right edge, and the left corner control then lines
     // up beside it.
     CGFloat attributionX = _sideMediaLayout
-            ? _sideMediaWidthPx + kROControlGap
+            ? _sideRowLeftInset + _sideMediaWidthPx + kROControlGap
             : 0;
     _attribution.frame = CGRectMake(
             attributionX, 0, attributionSize.width, attributionSize.height);
