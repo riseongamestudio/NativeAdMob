@@ -19,6 +19,7 @@ NS_ASSUME_NONNULL_BEGIN
                    numberOpposite:(BOOL)numberOpposite
                        fullscreen:(BOOL)fullscreen
                   backgroundAlpha:(float)backgroundAlpha
+             fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss
              requestedPanelHeight:(CGFloat)requestedPanelHeight
                           onClose:(dispatch_block_t)onClose;
 

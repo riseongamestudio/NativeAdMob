@@ -14,6 +14,8 @@ static const int32_t kROLoadSuccessCode = 0;
 @property (nonatomic, readonly) BOOL numberOppositeSide;
 @property (nonatomic, readonly) float heightRatio;
 @property (nonatomic, readonly) float backgroundAlpha;
+// The close button commits the ad's click on its way out.
+@property (nonatomic, readonly) BOOL fakeCloseAutoDismiss;
 @end
 
 @implementation HBOverlayStyle
@@ -23,7 +25,8 @@ static const int32_t kROLoadSuccessCode = 0;
                        xRandomSide:(BOOL)xRandomSide
                 numberOppositeSide:(BOOL)numberOppositeSide
                        heightRatio:(float)heightRatio
-                   backgroundAlpha:(float)backgroundAlpha {
+                   backgroundAlpha:(float)backgroundAlpha
+              fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss {
     self = [super init];
     if (self == nil) return nil;
     _fullscreen = fullscreen;
@@ -32,6 +35,7 @@ static const int32_t kROLoadSuccessCode = 0;
     _numberOppositeSide = numberOppositeSide;
     _heightRatio = heightRatio;
     _backgroundAlpha = backgroundAlpha;
+    _fakeCloseAutoDismiss = fakeCloseAutoDismiss;
     return self;
 }
 
@@ -42,7 +46,8 @@ static const int32_t kROLoadSuccessCode = 0;
                    xRandomSide:self.xRandomSide
             numberOppositeSide:self.numberOppositeSide
                    heightRatio:self.heightRatio
-               backgroundAlpha:self.backgroundAlpha];
+               backgroundAlpha:self.backgroundAlpha
+          fakeCloseAutoDismiss:self.fakeCloseAutoDismiss];
 }
 
 - (BOOL)pausesGame {
@@ -105,7 +110,8 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
                     xRandomSide:(BOOL)xRandomSide
              numberOppositeSide:(BOOL)numberOppositeSide
                     heightRatio:(float)heightRatio
-                backgroundAlpha:(float)backgroundAlpha {
+                backgroundAlpha:(float)backgroundAlpha
+           fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss {
     [ROBaseAd runOnMainThread:^{
         if (self.released) {
             NSLog(@"%@: Configure ignored after Release", kROTag);
@@ -122,7 +128,8 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
                        xRandomSide:xRandomSide
                 numberOppositeSide:numberOppositeSide
                        heightRatio:heightRatio
-                   backgroundAlpha:backgroundAlpha];
+                   backgroundAlpha:backgroundAlpha
+              fakeCloseAutoDismiss:fakeCloseAutoDismiss];
         self->_configured = YES;
     }];
 }
@@ -361,7 +368,8 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
                             numberOpposite:style.numberOppositeSide
                                 fullscreen:style.fullscreen
                                heightRatio:style.heightRatio
-                           backgroundAlpha:style.backgroundAlpha];
+                           backgroundAlpha:style.backgroundAlpha
+                      fakeCloseAutoDismiss:style.fakeCloseAutoDismiss];
     __weak ROOverlayAd *weakSelf = self;
     __weak GADNativeAd *weakAd = ad;
     createdPresentation.onShow = ^{

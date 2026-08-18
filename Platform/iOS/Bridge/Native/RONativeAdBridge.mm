@@ -162,7 +162,8 @@ void ROOverlayAd_Configure(
       , bool xRandomSide
       , bool numberOppositeSide
       , float heightRatio
-      , float backgroundAlpha) {
+      , float backgroundAlpha
+      , bool fakeCloseAutoDismiss) {
     if (handle == NULL) return;
     [(__bridge ROOverlayAd *)handle
             configureWithFullscreen:fullscreen
@@ -170,7 +171,8 @@ void ROOverlayAd_Configure(
                         xRandomSide:xRandomSide
                  numberOppositeSide:numberOppositeSide
                         heightRatio:heightRatio
-                    backgroundAlpha:backgroundAlpha];
+                    backgroundAlpha:backgroundAlpha
+               fakeCloseAutoDismiss:fakeCloseAutoDismiss];
 }
 
 void ROOverlayAd_SetCountdownSec(void* handle, int32_t countdownSec) {

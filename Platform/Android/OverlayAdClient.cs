@@ -33,7 +33,8 @@ namespace RiseOn.NativeAdMob.Android {
               , settings.XRandomSide
               , settings.NumberOppositeSide
               , settings.HeightRatio
-              , settings.BackgroundAlpha);
+              , settings.BackgroundAlpha
+              , settings.FakeCloseAutoDismiss);
             listener = new NativeAdLoadListenerProxy(callbacks);
             javaObject.Call(
                 JAVA_SET_LISTENER_METHOD

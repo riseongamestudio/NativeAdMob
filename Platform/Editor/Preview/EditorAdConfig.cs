@@ -53,7 +53,8 @@ namespace RiseOn.NativeAdMob.Editor {
           , bool randomCloseSide
           , bool numberOpposite
           , float heightRatio
-          , float backgroundAlpha) {
+          , float backgroundAlpha
+          , bool fakeCloseAutoDismiss) {
             return new(
                 adUnitId
               , fullscreen
@@ -71,7 +72,9 @@ namespace RiseOn.NativeAdMob.Editor {
                         : COLLAPSIBLE_DEFAULT_ALPHA)
               , default
               , default
-              , true);
+              , true) {
+                FakeCloseAutoDismiss = fakeCloseAutoDismiss
+            };
         }
 
         internal static EditorAdConfig CreateInFeed(
@@ -93,6 +96,12 @@ namespace RiseOn.NativeAdMob.Editor {
               , true);
         }
 
+        /// <summary>
+        /// Mirrors the device rule: the close button commits the ad's click
+        /// on its way out.
+        /// </summary>
+        internal bool FakeCloseAutoDismiss { get; private set; }
+
         internal void SetCountdownSec(int countdownSec) {
             CountdownSec = Mathf.Max(0, countdownSec);
         }
@@ -113,7 +122,9 @@ namespace RiseOn.NativeAdMob.Editor {
               , BackgroundAlpha
               , PositionPx
               , SizePx
-              , AllowsVideo);
+              , AllowsVideo) {
+                FakeCloseAutoDismiss = FakeCloseAutoDismiss
+            };
         }
 
         private static float ResolveAlpha(float value, float defaultValue) {

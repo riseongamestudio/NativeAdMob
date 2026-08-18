@@ -19,6 +19,8 @@ public final class OverlayAd extends BaseAd {
         final boolean numberOppositeSide;
         final float heightRatio;
         final float backgroundAlpha;
+        // The close button commits the ad's click on its way out.
+        final boolean fakeCloseAutoDismiss;
 
         OverlayAdStyle(
                 boolean fullscreen
@@ -26,13 +28,15 @@ public final class OverlayAd extends BaseAd {
               , boolean xRandomSide
               , boolean numberOppositeSide
               , float heightRatio
-              , float backgroundAlpha) {
+              , float backgroundAlpha
+              , boolean fakeCloseAutoDismiss) {
             this.fullscreen = fullscreen;
             this.countdownSec = Math.max(0, countdownSec);
             this.xRandomSide = xRandomSide;
             this.numberOppositeSide = numberOppositeSide;
             this.heightRatio = heightRatio;
             this.backgroundAlpha = backgroundAlpha;
+            this.fakeCloseAutoDismiss = fakeCloseAutoDismiss;
         }
 
         OverlayAdStyle WithCountdownSec(int newCountdownSec) {
@@ -42,7 +46,8 @@ public final class OverlayAd extends BaseAd {
                   , xRandomSide
                   , numberOppositeSide
                   , heightRatio
-                  , backgroundAlpha);
+                  , backgroundAlpha
+                  , fakeCloseAutoDismiss);
         }
 
         boolean PausesGame() {
@@ -235,7 +240,8 @@ public final class OverlayAd extends BaseAd {
           , boolean xRandomSide
           , boolean numberOppositeSide
           , float heightRatio
-          , float backgroundAlpha) {
+          , float backgroundAlpha
+          , boolean fakeCloseAutoDismiss) {
         if (released) {
             Log.e(
                     TAG
@@ -255,7 +261,8 @@ public final class OverlayAd extends BaseAd {
               , xRandomSide
               , numberOppositeSide
               , heightRatio
-              , backgroundAlpha);
+              , backgroundAlpha
+              , fakeCloseAutoDismiss);
         configured = true;
     }
 
@@ -595,7 +602,8 @@ public final class OverlayAd extends BaseAd {
               , style.numberOppositeSide
               , style.fullscreen
               , style.heightRatio
-              , style.backgroundAlpha);
+              , style.backgroundAlpha
+              , style.fakeCloseAutoDismiss);
         createdPresentation.setOnShowListener(ignored -> {
             if (!released && activeNativeAd == ad) NotifyDisplayed();
         });
@@ -755,6 +763,7 @@ public final class OverlayAd extends BaseAd {
                           , style.numberOppositeSide
                           , true
                           , style.backgroundAlpha
+                          , style.fakeCloseAutoDismiss
                           , requestedPanelHeight
                           , closeRelay);
             preparedContentView = createdContentView;

@@ -12,6 +12,11 @@ namespace RiseOn.NativeAdMob {
             public bool   XRandomSide;
             public bool   NumberOppositeSide;
             public float  BackgroundAlpha;
+            /// <summary>
+            /// When true the close button commits the ad's click on its way
+            /// out: the tap both follows the ad and dismisses it.
+            /// </summary>
+            public bool   FakeCloseAutoDismiss;
 
             private AdFormat format;
 
@@ -35,6 +40,7 @@ namespace RiseOn.NativeAdMob {
               , settings.XRandomSide
               , settings.NumberOppositeSide
               , heightRatio: 1
-              , settings.BackgroundAlpha) {}
+              , settings.BackgroundAlpha
+              , settings.FakeCloseAutoDismiss) {}
     }
 }

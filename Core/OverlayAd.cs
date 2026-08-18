@@ -35,7 +35,8 @@ namespace RiseOn.NativeAdMob {
           , bool xRandomSide
           , bool numberOppositeSide
           , float heightRatio
-          , float backgroundAlpha)
+          , float backgroundAlpha
+          , bool fakeCloseAutoDismiss)
             : base(adUnitId, format) {
             var platform = AdPlatformRegistry.Installed;
             if (platform == null) {
@@ -53,6 +54,7 @@ namespace RiseOn.NativeAdMob {
                   , NumberOppositeSide = numberOppositeSide
                   , HeightRatio        = heightRatio
                   , BackgroundAlpha    = backgroundAlpha
+                  , FakeCloseAutoDismiss = fakeCloseAutoDismiss
                 }
               , this);
         }

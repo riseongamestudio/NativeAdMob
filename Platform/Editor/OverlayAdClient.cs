@@ -26,7 +26,8 @@ namespace RiseOn.NativeAdMob.Editor {
               , settings.XRandomSide
               , settings.NumberOppositeSide
               , settings.HeightRatio
-              , settings.BackgroundAlpha);
+              , settings.BackgroundAlpha
+              , settings.FakeCloseAutoDismiss);
         }
 
         public void SetCountdownSec(int countdownSec) {

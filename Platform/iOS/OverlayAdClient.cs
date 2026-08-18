@@ -23,7 +23,8 @@ namespace RiseOn.NativeAdMob.iOS {
               , settings.XRandomSide
               , settings.NumberOppositeSide
               , settings.HeightRatio
-              , settings.BackgroundAlpha);
+              , settings.BackgroundAlpha
+              , settings.FakeCloseAutoDismiss);
             NativeAdBridge.ROOverlayAd_SetListener(
                 handle
               , NativeAdBridge.OnLoadingStartedCallback

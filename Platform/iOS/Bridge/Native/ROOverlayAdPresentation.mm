@@ -59,7 +59,8 @@ static NSString *const kROTag = @"Overlay";
                         numberOpposite:(BOOL)numberOpposite
                             fullscreen:(BOOL)fullscreen
                            heightRatio:(float)heightRatio
-                       backgroundAlpha:(float)backgroundAlpha {
+                       backgroundAlpha:(float)backgroundAlpha
+                  fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss {
     self = [super init];
     if (self == nil) return nil;
 
@@ -71,6 +72,7 @@ static NSString *const kROTag = @"Overlay";
     _fullscreen = fullscreen;
     _heightRatio = heightRatio;
     _backgroundAlpha = backgroundAlpha;
+    _fakeCloseAutoDismiss = fakeCloseAutoDismiss;
     return self;
 }
 
@@ -95,6 +97,7 @@ static NSString *const kROTag = @"Overlay";
               numberOpposite:_numberOpposite
                   fullscreen:_fullscreen
              backgroundAlpha:_backgroundAlpha
+        fakeCloseAutoDismiss:_fakeCloseAutoDismiss
         requestedPanelHeight:requestedPanelHeight
                      onClose:^{ [weakSelf dismiss]; }];
     return _contentView != nil;

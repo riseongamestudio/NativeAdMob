@@ -20,7 +20,8 @@ NS_ASSUME_NONNULL_BEGIN
                     xRandomSide:(BOOL)xRandomSide
              numberOppositeSide:(BOOL)numberOppositeSide
                     heightRatio:(float)heightRatio
-                backgroundAlpha:(float)backgroundAlpha;
+                backgroundAlpha:(float)backgroundAlpha
+           fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss;
 - (void)setCountdownSec:(int32_t)countdownSec;
 - (void)load;
 - (void)showWithShowId:(int32_t)showId

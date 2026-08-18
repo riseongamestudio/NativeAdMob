@@ -7,5 +7,6 @@ namespace RiseOn.NativeAdMob {
         public bool NumberOppositeSide;
         public float HeightRatio;
         public float BackgroundAlpha;
+        public bool FakeCloseAutoDismiss;
     }
 }

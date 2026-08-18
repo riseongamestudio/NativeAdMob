@@ -133,7 +133,8 @@ void ROOverlayAd_Configure(
       , bool xRandomSide
       , bool numberOppositeSide
       , float heightRatio
-      , float backgroundAlpha);
+      , float backgroundAlpha
+      , bool fakeCloseAutoDismiss);
 void ROOverlayAd_SetCountdownSec(void* handle, int32_t countdownSec);
 void ROOverlayAd_Load(void* handle);
 void ROOverlayAd_Show(

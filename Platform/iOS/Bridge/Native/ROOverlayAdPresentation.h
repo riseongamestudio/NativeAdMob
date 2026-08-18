@@ -22,7 +22,8 @@ NS_ASSUME_NONNULL_BEGIN
                         numberOpposite:(BOOL)numberOpposite
                             fullscreen:(BOOL)fullscreen
                            heightRatio:(float)heightRatio
-                       backgroundAlpha:(float)backgroundAlpha;
+                       backgroundAlpha:(float)backgroundAlpha
+                  fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss;
 
 @property (nonatomic, copy, nullable) dispatch_block_t onShow;
 @property (nonatomic, copy, nullable) dispatch_block_t onDismiss;

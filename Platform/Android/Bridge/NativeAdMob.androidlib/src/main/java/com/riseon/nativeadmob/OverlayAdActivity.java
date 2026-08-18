@@ -219,6 +219,7 @@ public final class OverlayAdActivity extends Activity {
                       , session.style.numberOppositeSide
                       , true
                       , session.style.backgroundAlpha
+                      , session.style.fakeCloseAutoDismiss
                       , requestedPanelHeight
                       , () -> CompletePresentation(""));
             }

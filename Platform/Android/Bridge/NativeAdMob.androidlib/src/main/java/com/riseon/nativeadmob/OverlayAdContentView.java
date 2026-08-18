@@ -211,6 +211,7 @@ final class OverlayAdContentView extends FrameLayout {
     private int avoidanceHorizontalPadding;
     private int avoidancePanelHeight;
     private final boolean closeOnLeft;
+    private final boolean fakeCloseAutoDismiss;
     private final boolean numberOpposite;
     private final boolean fullscreen;
     private final float backgroundAlpha;
@@ -221,6 +222,7 @@ final class OverlayAdContentView extends FrameLayout {
     private NativeAdView nativeAdView;
     private TextView countdown;
     private TextView close;
+    private Button callToActionView;
     private boolean released;
 
     OverlayAdContentView(
@@ -231,6 +233,7 @@ final class OverlayAdContentView extends FrameLayout {
           , boolean numberOpposite
           , boolean fullscreen
           , float backgroundAlpha
+          , boolean fakeCloseAutoDismiss
           , int requestedPanelHeight
           , Runnable onClose) {
         this(
@@ -241,6 +244,7 @@ final class OverlayAdContentView extends FrameLayout {
               , numberOpposite
               , fullscreen
               , backgroundAlpha
+              , fakeCloseAutoDismiss
               , requestedPanelHeight
               , onClose);
     }
@@ -253,6 +257,7 @@ final class OverlayAdContentView extends FrameLayout {
           , boolean numberOpposite
           , boolean fullscreen
           , float backgroundAlpha
+          , boolean fakeCloseAutoDismiss
           , int requestedPanelHeight
           , Runnable onClose) {
         super(context);
@@ -262,6 +267,7 @@ final class OverlayAdContentView extends FrameLayout {
         this.numberOpposite = numberOpposite;
         this.fullscreen = fullscreen;
         this.backgroundAlpha = backgroundAlpha;
+        this.fakeCloseAutoDismiss = fakeCloseAutoDismiss;
         this.onClose = onClose;
         Build(requestedPanelHeight);
         ApplyFullscreenContentInset();
@@ -803,6 +809,7 @@ final class OverlayAdContentView extends FrameLayout {
         nativeAdView.setStarRatingView(starRating);
         nativeAdView.setBodyView(body);
         nativeAdView.setCallToActionView(callToAction);
+        callToActionView = callToAction;
         BindAssets(
                 headline
               , advertiser
@@ -948,6 +955,12 @@ final class OverlayAdContentView extends FrameLayout {
               , 0);
         close.setLayoutParams(closeLayoutParams);
         close.setOnClickListener(view -> {
+            // The button the SDK registered is the only honest way to follow
+            // an ad: performing its click keeps the redirect and the click
+            // accounting in Google's hands rather than faking either.
+            if (fakeCloseAutoDismiss && callToActionView != null) {
+                callToActionView.performClick();
+            }
             if (onClose != null) onClose.run();
         });
 

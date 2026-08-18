@@ -1100,7 +1100,12 @@ namespace RiseOn.NativeAdMob.Editor {
               , CLOSE_TEXT
               , CLOSE_FONT_SIZE
               , closeOnLeft);
-            closeButton.onClick.AddListener(Dismiss);
+            closeButton.onClick.AddListener(() => {
+                if (config.FakeCloseAutoDismiss) {
+                    TryOpenUrl(TEST_AD_CLICK_URL, CLICK_LOG_TEXT);
+                }
+                Dismiss();
+            });
 
             countdownControlOnLeft =
                     config.NumberOpposite

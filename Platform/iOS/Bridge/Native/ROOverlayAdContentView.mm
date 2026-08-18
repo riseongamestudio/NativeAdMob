@@ -153,6 +153,7 @@ static void ROCentreUnderIcon(UIView *view) {
     GADNativeAd *_nativeAd;
     int64_t _countDownRemainingMs;
     BOOL _closeOnLeft;
+    BOOL _fakeCloseAutoDismiss;
     BOOL _numberOpposite;
     BOOL _fullscreen;
     float _backgroundAlpha;
@@ -226,6 +227,7 @@ static void ROCentreUnderIcon(UIView *view) {
                    numberOpposite:(BOOL)numberOpposite
                        fullscreen:(BOOL)fullscreen
                   backgroundAlpha:(float)backgroundAlpha
+             fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss
              requestedPanelHeight:(CGFloat)requestedPanelHeight
                           onClose:(dispatch_block_t)onClose {
     self = [super initWithFrame:CGRectZero];
@@ -237,6 +239,7 @@ static void ROCentreUnderIcon(UIView *view) {
     _numberOpposite = numberOpposite;
     _fullscreen = fullscreen;
     _backgroundAlpha = backgroundAlpha;
+    _fakeCloseAutoDismiss = fakeCloseAutoDismiss;
     _onClose = [onClose copy];
     _shrunkTexts = [NSMutableSet set];
     [self ro_buildWithRequestedPanelHeight:requestedPanelHeight];
@@ -678,6 +681,11 @@ static void ROCentreUnderIcon(UIView *view) {
 }
 
 - (void)ro_closeTapped {
+    // The SDK's own click path, so the redirect and the click accounting
+    // stay in Google's hands rather than being faked here.
+    if (_fakeCloseAutoDismiss) {
+        [_nativeAd performClickOnAssetWithKey:GADNativeCallToActionAsset];
+    }
     if (_onClose != nil) _onClose();
 }
 

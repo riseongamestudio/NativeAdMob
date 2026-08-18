@@ -28,6 +28,7 @@ public final class OverlayAdPresentation
     private final NativeAd nativeAd;
     private final int countDownSec;
     private final boolean xRandom;
+    private final boolean fakeCloseAutoDismiss;
     private final boolean numberOpposite;
     private final boolean fullscreen;
     private final float heightRatio;
@@ -42,7 +43,8 @@ public final class OverlayAdPresentation
           , boolean numberOpposite
           , boolean fullscreen
           , float heightRatio
-          , float backgroundAlpha) {
+          , float backgroundAlpha
+          , boolean fakeCloseAutoDismiss) {
         super(
                 context
               , android.R.style.Theme_Black_NoTitleBar_Fullscreen);
@@ -53,6 +55,7 @@ public final class OverlayAdPresentation
         this.nativeAd = nativeAd;
         this.countDownSec = countDownSec;
         this.xRandom = xRandom;
+        this.fakeCloseAutoDismiss = fakeCloseAutoDismiss;
         this.numberOpposite = numberOpposite;
         this.fullscreen = fullscreen;
         this.heightRatio = heightRatio;
@@ -85,6 +88,7 @@ public final class OverlayAdPresentation
               , numberOpposite
               , fullscreen
               , backgroundAlpha
+              , fakeCloseAutoDismiss
               , requestedPanelHeight
               , this::dismiss);
         setContentView(contentView);
