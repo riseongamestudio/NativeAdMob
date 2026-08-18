@@ -26,7 +26,8 @@ PluginImporter:
       iPhone: iOS
     second:
       enabled: 1
-      settings: {}
+      settings:
+        CompileFlags: -fobjc-exceptions
   userData: 
   assetBundleName: 
   assetBundleVariant: 

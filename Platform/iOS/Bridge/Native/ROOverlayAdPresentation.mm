@@ -118,7 +118,7 @@ static NSString *const kROTag = @"Overlay";
                 [[ROOverlayAdViewController alloc] init];
         _presentedController.contentView = _contentView;
         _presentedController.modalPresentationStyle =
-                UIModalPresentationOverOverlay;
+                UIModalPresentationOverFullScreen;
         _presentedController.modalTransitionStyle =
                 UIModalTransitionStyleCrossDissolve;
         UIViewController *presenter = host;
