@@ -95,6 +95,7 @@ namespace RiseOn.NativeAdMob.iOS {
           , [MarshalAs(UnmanagedType.I1)] bool fullscreen
           , float heightRatio
           , float backgroundAlpha
+          , int cacheSize
           , int cooldown
           , int closeSide
           , int timerSide

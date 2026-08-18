@@ -21,6 +21,7 @@ namespace RiseOn.NativeAdMob.iOS {
               , settings.CoversFullScreen
               , settings.HeightRatio
               , settings.BackgroundAlpha
+              , settings.CacheSize
               , settings.Close.Cooldown
               , (int)settings.Close.CloseSide
               , (int)settings.Close.TimerSide

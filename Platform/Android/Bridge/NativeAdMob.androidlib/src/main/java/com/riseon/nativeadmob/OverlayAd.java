@@ -1,6 +1,7 @@
 package com.riseon.nativeadmob;
 
 import android.app.Activity;
+import android.os.SystemClock;
 import android.util.Log;
 
 import com.google.android.gms.ads.AdListener;
@@ -10,7 +11,22 @@ import com.google.android.gms.ads.LoadAdError;
 import com.google.android.gms.ads.nativead.NativeAdOptions;
 import com.google.android.gms.ads.nativead.NativeAd;
 
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
 public final class OverlayAd extends BaseAd {
+
+    // The ceiling the in-feed unit already keeps: past a handful, warm ads
+    // expire unseen and the impressions are simply burnt.
+    private static final int MAX_CACHE_SIZE      = 5;
+    // developers.google.com/admob/android/native/start, Request ads:
+    // "Since ads expire after an hour, you should clear this cache and
+    // reload with new ads every hour." The in-feed unit keeps the same
+    // number, from the same sentence.
+    private static final long MAX_CACHED_AD_AGE_MS = 3_600_000L;
 
     private static final int SIDE_LEFT           = 0;
     private static final int SIDE_RIGHT          = 1;
@@ -86,8 +102,24 @@ public final class OverlayAd extends BaseAd {
 
     private final String adUnitId;
     private volatile OverlayAdStyle configuredStyle;
+    private volatile int cacheSize = 1;
 
-    private volatile NativeAd nativeAd;
+    // The warm ads, oldest first. The head is the one the next Show takes,
+    // and the only one worth a prepared face. Oldest first also means the
+    // head is always the first to go stale.
+    private final ArrayDeque<CachedAd> cachedAds = new ArrayDeque<>();
+    private final Runnable cacheExpiryRunnable = this::HandleCacheExpiry;
+    // The stage a timer-driven reload builds on. Every Load and Show hands
+    // one in; the sweep that fires an hour later has none of its own.
+    private Activity cacheActivity;
+    // The deque lives on the main thread; readiness is asked for from
+    // Unity's. One volatile count is the crossing point.
+    private volatile int cachedCount;
+    // The paid event fires on whatever thread the SDK picked, while the
+    // deque is a main-thread structure. Membership answers "is this still
+    // ours" without walking one that may be changing underneath.
+    private final Set<NativeAd> ownedAds =
+            Collections.newSetFromMap(new ConcurrentHashMap<>());
     private volatile NativeAd activeNativeAd;
     private volatile boolean configured;
     private volatile boolean isAdLoading;
@@ -108,6 +140,20 @@ public final class OverlayAd extends BaseAd {
     // at load time is only valid while this stays the same: assets that
     // finish arriving later change the layout the ad needs, and a stale
     // face must be rebuilt rather than shown.
+    // An ad and the moment it arrived - the only two things needed to know
+    // whether it may still be shown.
+    private static final class CachedAd {
+        final NativeAd ad;
+        final long loadedAtMs;
+
+        CachedAd(
+                NativeAd ad
+              , long loadedAtMs) {
+            this.ad = ad;
+            this.loadedAtMs = loadedAtMs;
+        }
+    }
+
     private static String MediaSignature(
             NativeAd nativeAd) {
         com.google.android.gms.ads.MediaContent mediaContent =
@@ -267,6 +313,7 @@ public final class OverlayAd extends BaseAd {
             boolean fullscreen
           , float heightRatio
           , float backgroundAlpha
+          , int newCacheSize
           , int cooldown
           , int closeSide
           , int timerSide
@@ -284,6 +331,10 @@ public final class OverlayAd extends BaseAd {
             return;
         }
 
+        // How many ads stay warm at once. One - always hold a spare -
+        // is the placement that never asked; a chained placement raises it
+        // so the follow-up is already in hand when the first ad closes.
+        cacheSize = Math.max(1, Math.min(MAX_CACHE_SIZE, newCacheSize));
         configuredStyle = new OverlayAdStyle(
                 fullscreen
               , cooldown
@@ -329,21 +380,31 @@ public final class OverlayAd extends BaseAd {
         final String requestAdUnitId = adUnitId;
         final OverlayAdStyle loadStyle = configuredStyle;
 
-        RunOnMainThread(() -> {
-            if (released || !configured || isAdLoading
-                    || !IsActivityUsable(activity)) {
-                return;
-            }
+        RunOnMainThread(
+                () -> StartLoad(activity, requestAdUnitId, loadStyle));
+    }
 
-            // A cached ad is the whole point of loading, so one is never
-            // thrown away to fetch another - that is what made the
-            // replacement fetched during the show die at dismissal and
-            // the player wait for a fresh load anyway. An empty cache is
-            // the only reason to load, whoever is on screen.
-            if (nativeAd != null) return;
+    // The one gate every load passes. A warm ad is never thrown away to
+    // fetch another - that is what made the replacement fetched during a
+    // show die at dismissal and the player wait for a fresh load anyway -
+    // so a free seat in the cache is the only reason to load, whoever is
+    // on screen. Says whether a request actually left.
+    private boolean StartLoad(
+            final Activity activity
+          , final String requestAdUnitId
+          , final OverlayAdStyle loadStyle) {
+        if (released
+                || !configured
+                || isAdLoading
+                || loadStyle == null
+                || cachedAds.size() >= cacheSize
+                || !IsActivityUsable(activity)) {
+            return false;
+        }
 
-            DoLoadAd(activity, requestAdUnitId, loadStyle);
-        });
+        cacheActivity = activity;
+        DoLoadAd(activity, requestAdUnitId, loadStyle);
+        return true;
     }
 
     private void DoLoadAd(
@@ -366,36 +427,21 @@ public final class OverlayAd extends BaseAd {
                             ad.destroy();
                             return;
                         }
-                        if (nativeAd != null) nativeAd.destroy();
-                        nativeAd = ad;
+                        AddCachedAd(ad);
                         // Bound to the ad's own identity, never to the
-                        // load generation: the replacement now loads while
-                        // this ad is still on screen, and a generation
-                        // guard would silence the revenue event of the ad
-                        // the player is actually watching.
+                        // load generation: ads keep loading while this one
+                        // is still on screen, and a generation guard would
+                        // silence the revenue event of the ad the player
+                        // is actually watching.
                         BindPaidEvent(
                                 ad
                               , requestAdUnitId
-                              , () -> nativeAd == ad
-                                      || activeNativeAd == ad);
-                        OverlayAdStyle presentationStyle =
-                                configuredStyle;
-                        if (presentationStyle != null
-                                && !presentationStyle.fullscreen) {
-                            ReleasePreparedFullScreenContent();
-                            PreparePresentation(
-                                    activity
-                                  , ad
-                                  , presentationStyle);
-                        } else if (presentationStyle != null) {
-                            ReleasePreparedPresentation();
-                            PrepareFullScreenContent(
-                                    activity
-                                  , ad
-                                  , presentationStyle);
-                        } else {
-                            ReleasePreparedPresentation();
-                            ReleasePreparedFullScreenContent();
+                              , () -> OwnsAd(ad));
+                        // Only the head earns a face - it is the one the
+                        // next Show takes. Those behind it get theirs on
+                        // reaching the front.
+                        if (IsHeadAd(ad)) {
+                            PrepareFace(activity, ad, configuredStyle);
                         }
                     })
                     .withNativeAdOptions(nativeAdOptions)
@@ -417,6 +463,13 @@ public final class OverlayAd extends BaseAd {
                             isAdLoading = false;
                             NotifyCurrentState();
                             NotifyLoadingCompleted(0, "");
+                            // One request per ad: this chains on until the
+                            // cache is full, and the last one simply finds
+                            // no seat left.
+                            StartLoad(
+                                    activity
+                                  , requestAdUnitId
+                                  , configuredStyle);
                         }
 
                         @Override
@@ -474,18 +527,34 @@ public final class OverlayAd extends BaseAd {
                       , false);
                 return;
             }
-            if (nativeAd == null || requestedShowStyle == null
+            cacheActivity = activity;
+            if (RemoveExpiredCachedAds()) {
+                RefreshHeadFace();
+                NotifyCurrentState();
+                StartLoad(activity, adUnitId, configuredStyle);
+            }
+            if (cachedAds.isEmpty() || requestedShowStyle == null
                     || !IsActivityUsable(activity)) {
                 NotifyCompleted(onCompleted, "Ad not ready", false);
                 return;
             }
 
-            final NativeAd shownAd =
-                    nativeAd;
-            nativeAd = null;
+            final NativeAd shownAd = TakeCachedAd();
             activeNativeAd = shownAd;
             activeShowCompleted = onCompleted;
             NotifyCurrentState();
+            // The seat this show emptied is refilled at once, and whoever
+            // is at the head now earns a face. Both wait a turn so this
+            // show takes the face it was promised first.
+            main.post(() -> {
+                if (released) return;
+
+                StartLoad(activity, adUnitId, configuredStyle);
+                NativeAd head = HeadAd();
+                if (head != null) {
+                    PrepareFace(activity, head, configuredStyle);
+                }
+            });
 
             if (requestedShowStyle.fullscreen) {
                 ReleasePreparedPresentation();
@@ -573,7 +642,7 @@ public final class OverlayAd extends BaseAd {
 
     public boolean IsReady() {
         return configured && !released && activeNativeAd == null
-                && nativeAd != null;
+                && cachedCount > 0;
     }
 
     public boolean IsLoading() {
@@ -610,19 +679,148 @@ public final class OverlayAd extends BaseAd {
                           , exception);
                 }
             }
-            if (nativeAd != null) {
-                nativeAd.destroy();
-                nativeAd = null;
-            }
-            if (activeNativeAd != null) {
-                activeNativeAd.destroy();
-                activeNativeAd = null;
-            }
+            for (CachedAd cached : cachedAds) ForgetAd(cached.ad);
+            cachedAds.clear();
+            cachedCount = 0;
+            cacheActivity = null;
+            ForgetAd(activeNativeAd);
+            activeNativeAd = null;
             activeShowCompleted = null;
 
             configuredStyle = null;
             ClearLoadListener();
         });
+    }
+
+    private void AddCachedAd(NativeAd ad) {
+        ownedAds.add(ad);
+        cachedAds.addLast(
+                new CachedAd(ad, SystemClock.elapsedRealtime()));
+        cachedCount = cachedAds.size();
+        ScheduleCacheExpiry();
+    }
+
+    // Pops for one show; the caller starts the replacement.
+    private NativeAd TakeCachedAd() {
+        CachedAd next = cachedAds.pollFirst();
+        cachedCount = cachedAds.size();
+        ScheduleCacheExpiry();
+        return next == null ? null : next.ad;
+    }
+
+    private NativeAd HeadAd() {
+        CachedAd head = cachedAds.peekFirst();
+        return head == null ? null : head.ad;
+    }
+
+    // An hour after it arrived a warm ad may no longer be shown, so it is
+    // destroyed and replaced. The head ages out first, which is also the
+    // one holding a prepared face - hence the rebuild.
+    private void HandleCacheExpiry() {
+        if (released) return;
+
+        if (RemoveExpiredCachedAds()) {
+            RefreshHeadFace();
+            NotifyCurrentState();
+        }
+        StartLoad(cacheActivity, adUnitId, configuredStyle);
+        ScheduleCacheExpiry();
+    }
+
+    private void ScheduleCacheExpiry() {
+        main.removeCallbacks(cacheExpiryRunnable);
+        if (released) return;
+
+        long nextExpiryAtMs = Long.MAX_VALUE;
+        for (CachedAd cached : cachedAds) {
+            nextExpiryAtMs = Math.min(
+                    nextExpiryAtMs
+                  , cached.loadedAtMs + MAX_CACHED_AD_AGE_MS);
+        }
+        if (nextExpiryAtMs == Long.MAX_VALUE) return;
+
+        main.postDelayed(
+                cacheExpiryRunnable
+              , Math.max(
+                    0L
+                  , nextExpiryAtMs - SystemClock.elapsedRealtime()));
+    }
+
+    // Also swept on the way into a Show: the timer runs on uptime, which
+    // stops while the device sleeps, so a phone woken after a long night
+    // can hold ads older than the timer believes.
+    private boolean RemoveExpiredCachedAds() {
+        long nowMs = SystemClock.elapsedRealtime();
+        CachedAd head = cachedAds.peekFirst();
+        // Oldest first, so nothing behind the head can be stale while the
+        // head is not: one look answers for the whole queue.
+        if (head == null
+                || nowMs - head.loadedAtMs < MAX_CACHED_AD_AGE_MS) {
+            return false;
+        }
+
+        // The prepared face is built on the ad about to be destroyed, so it
+        // goes first. Releasing a presentation whose creative is already
+        // gone is not a road worth walking.
+        ReleasePreparedPresentation();
+        ReleasePreparedFullScreenContent();
+        for (Iterator<CachedAd> it = cachedAds.iterator(); it.hasNext(); ) {
+            CachedAd cached = it.next();
+            if (nowMs - cached.loadedAtMs < MAX_CACHED_AD_AGE_MS) continue;
+
+            ForgetAd(cached.ad);
+            it.remove();
+        }
+        cachedCount = cachedAds.size();
+        return true;
+    }
+
+    // The face went out with the ad it was built on; whoever stands at the
+    // front now gets one of their own.
+    private void RefreshHeadFace() {
+        NativeAd head = HeadAd();
+        if (head == null) return;
+
+        PrepareFace(cacheActivity, head, configuredStyle);
+    }
+
+    // Ours until destroyed - cached or on screen, both count. The paid
+    // event asks this from the SDK's thread.
+    private boolean OwnsAd(NativeAd ad) {
+        return !released && ad != null && ownedAds.contains(ad);
+    }
+
+    private boolean IsHeadAd(NativeAd ad) {
+        return ad != null && HeadAd() == ad;
+    }
+
+    private void ForgetAd(NativeAd ad) {
+        if (ad == null) return;
+
+        ownedAds.remove(ad);
+        ad.destroy();
+    }
+
+    // The face of the ad at the head, prepaid before any show asks for it:
+    // the bottom-slice kind prebuilds a whole presentation, the full-screen
+    // kind the Activity's content view. Only one of the two is ever held.
+    private void PrepareFace(
+            Activity activity
+          , NativeAd ad
+          , OverlayAdStyle style) {
+        if (style == null) {
+            ReleasePreparedPresentation();
+            ReleasePreparedFullScreenContent();
+            return;
+        }
+
+        if (style.fullscreen) {
+            ReleasePreparedPresentation();
+            PrepareFullScreenContent(activity, ad, style);
+        } else {
+            ReleasePreparedFullScreenContent();
+            PreparePresentation(activity, ad, style);
+        }
     }
 
     private OverlayAdPresentation CreatePresentation(
@@ -657,7 +855,7 @@ public final class OverlayAd extends BaseAd {
         if (released
                 || ad == null
                 || style == null
-                || nativeAd != ad
+                || !IsHeadAd(ad)
                 || !IsActivityUsable(activity)) {
             return false;
         }
@@ -667,7 +865,7 @@ public final class OverlayAd extends BaseAd {
             createdPresentation = CreatePresentation(activity, ad, style);
             if (!createdPresentation.Prepare()
                     || released
-                    || nativeAd != ad
+                    || !IsHeadAd(ad)
                     || configuredStyle != style
                     || !IsActivityUsable(activity)) {
                 createdPresentation.Release();
@@ -702,20 +900,20 @@ public final class OverlayAd extends BaseAd {
         // stale config.
         RunOnMainThread(() -> {
             // A show in progress is no reason to skip: the rebuild only
-            // ever touches the prepared face of the CACHED ad, never the
-            // one on screen, and skipping it left the replacement fetched
-            // during the show holding a stale countdown, which then had to
-            // be rebuilt at show time.
+            // ever touches the prepared face of the ad at the HEAD of
+            // the cache, never the one on screen, and skipping it left the
+            // replacement fetched during the show holding a stale
+            // countdown, which then had to be rebuilt at show time.
             if (released
                     || requestedStyle == null
                     || requestedStyle.fullscreen
                     || configuredStyle != requestedStyle
-                    || nativeAd == null) {
+                    || cachedAds.isEmpty()) {
                 return;
             }
 
             Activity activity = preparedActivity;
-            NativeAd ad = nativeAd;
+            NativeAd ad = HeadAd();
             ReleasePreparedPresentation();
             if (IsActivityUsable(activity)) {
                 PreparePresentation(activity, ad, requestedStyle);
@@ -773,7 +971,7 @@ public final class OverlayAd extends BaseAd {
         if (released
                 || ad == null
                 || style == null
-                || nativeAd != ad
+                || !IsHeadAd(ad)
                 || !IsActivityUsable(activity)) {
             return;
         }
@@ -894,7 +1092,7 @@ public final class OverlayAd extends BaseAd {
         activeShowCompleted = null;
         activeNativeAd = null;
         activeActivitySessionId = null;
-        if (shownAd != null) shownAd.destroy();
+        ForgetAd(shownAd);
         presentation = null;
 
         // Unity runs the game callback on its main thread first, then the

@@ -131,6 +131,7 @@ void ROOverlayAd_Configure(
       , bool fullscreen
       , float heightRatio
       , float backgroundAlpha
+      , int32_t cacheSize
       , int32_t cooldown
       , int32_t closeSide
       , int32_t timerSide

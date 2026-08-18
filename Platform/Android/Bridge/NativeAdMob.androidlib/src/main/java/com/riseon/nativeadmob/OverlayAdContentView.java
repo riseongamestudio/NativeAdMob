@@ -88,7 +88,13 @@ final class OverlayAdContentView extends FrameLayout {
     private static final int FULL_SCREEN_BACKGROUND_RGB = 0x000000;
     private static final int COLLAPSIBLE_BACKGROUND_RGB = 0x1B2029;
     // 20dp a side spent 40dp of every screen on nothing the ad needed.
-    private static final int HORIZONTAL_PADDING_DP = 8;
+    // Five rather than eight because the side layout with content below
+    // wears this padding three times across - one panel edge, the media's
+    // left, the other panel edge - and it exists to make the plain side
+    // layout prettier. Three fives are less than the two eights the plain
+    // one used to spend, so the nicer arrangement can never be the one
+    // that runs out of width first.
+    private static final int HORIZONTAL_PADDING_DP = 5;
     private static final int CONTROL_STRIP_HEIGHT_DP = 30;
     private static final int CONTROL_GAP_DP = 2;
     private static final int RIGHT_CONTROL_INSET_DP = 18;
@@ -140,7 +146,7 @@ final class OverlayAdContentView extends FrameLayout {
     private static final float SIDE_MEDIA_MAX_WIDTH_SHARE = 0.56f;
     private static final int SIDE_MEDIA_MIN_RAIL_DP = 120;
     // The rail's side padding follows the rail's width; a narrow column
-    // cannot afford the full 8dp on each side.
+    // cannot afford the full HORIZONTAL_PADDING_DP on each side.
     private static final float RAIL_SIDE_PADDING_RATIO = 0.03f;
     private static final int RAIL_MIN_SIDE_PADDING_DP = 2;
     private static final int RAIL_ICON_GAP_DP = 4;
@@ -571,18 +577,13 @@ final class OverlayAdContentView extends FrameLayout {
                     displayMetrics
                   , mediaAspectRatio
                   , sidePanelHeight);
-            sideMediaWidthPx = sideMediaWidth;
             // The media column is exactly as tall as the creative can fill
             // at its own aspect, centred - never a band of dead backfill
             // painted to the panel's height.
-            int sideMediaHeight = Math.min(
-                    sidePanelHeight
-                  , Math.round(sideMediaWidth / mediaAspectRatio));
-            Log.i(
-                    TAG
-                  , "Side-media layout: media "
-                            + sideMediaWidth + "x" + sideMediaHeight
-                            + " in panel height " + sidePanelHeight);
+            int sideMediaHeight = SideMediaHeight(
+                    sideMediaWidth
+                  , mediaAspectRatio
+                  , sidePanelHeight);
             // Height the media leaves unused belongs to the content, not
             // to the column beside the picture: what fits under the row
             // moves there and spans the whole panel instead of being
@@ -595,22 +596,57 @@ final class OverlayAdContentView extends FrameLayout {
                     MIN_BODY_TEXT_SIZE_SP
                             * BODY_LINE_HEIGHT_RATIO
                             * density);
-            int sideLeftover = sidePanelHeight - sideMediaHeight;
             boolean callToActionBelow =
-                    sideLeftover >= belowCallToActionHeight + seam;
+                    sidePanelHeight - sideMediaHeight
+                            >= belowCallToActionHeight + seam;
+            int sideLeftover = sidePanelHeight - sideMediaHeight;
             boolean bodyBelow = callToActionBelow
                     && sideLeftover >= belowCallToActionHeight
                             + 2 * bodyLineHeight
                             + 2 * seam;
+            sideMediaWidthPx = sideMediaWidth;
+
             // Media bleeds to the edge only while nothing stands under it.
             // The moment something spills below, the two read as one column,
             // and a column with two different left edges reads as a mistake.
-            // The verdict lands before the row is built: everything measured
-            // from the media's edge - the rail's width, the icon sized from
-            // it, the badge beside the picture - counts this inset in.
-            sideRowLeftInsetPx = callToActionBelow || bodyBelow
-                    ? horizontalPadding
-                    : 0;
+            //
+            // That left edge is CARVED OUT of the budget, never added on top
+            // of it. The budget is what the plain arrangement spends across:
+            // the gap between picture and rail, plus the panel's right edge.
+            // Two shares there, three here - the same pie either way - so
+            // the rail measures the same to the pixel and a creative that
+            // fitted plainly cannot fail to fit here.
+            int railOuterPlain = Math.max(
+                    0
+                  , displayMetrics.widthPixels - sideMediaWidth);
+            int sidePaddingBudget = 2 * SideRailPadding(
+                    railOuterPlain
+                  , horizontalPadding
+                  , density);
+            int railGap;
+            int sideRowRightPadding;
+            if (callToActionBelow) {
+                int share = sidePaddingBudget / 3;
+                int spare = sidePaddingBudget - 3 * share;
+                // One pixel over goes to the seam between picture and rail,
+                // where a closed gap reads worst; two go to the outer edges,
+                // which must stay a matched pair.
+                sideRowLeftInsetPx = share + (spare == 2 ? 1 : 0);
+                sideRowRightPadding = sideRowLeftInsetPx;
+                railGap = share + (spare == 1 ? 1 : 0);
+            } else {
+                sideRowLeftInsetPx = 0;
+                railGap = sidePaddingBudget / 2;
+                sideRowRightPadding = sidePaddingBudget - railGap;
+            }
+            Log.i(
+                    TAG
+                  , "Side-media layout: media "
+                            + sideMediaWidth + "x" + sideMediaHeight
+                            + " padding " + sideRowLeftInsetPx
+                            + "/" + railGap + "/" + sideRowRightPadding
+                            + " of " + sidePaddingBudget
+                            + " in panel height " + sidePanelHeight);
 
             contentColumn.setPadding(0, 0, 0, 0);
             LinearLayout sideRow = new LinearLayout(context);
@@ -625,25 +661,19 @@ final class OverlayAdContentView extends FrameLayout {
             LinearLayout rail = new LinearLayout(context);
             rail.setOrientation(LinearLayout.VERTICAL);
             rail.setGravity(Gravity.CENTER_VERTICAL);
-            // The corner controls and AdChoices live over the rail's top, so
-            // the rail alone keeps the strip inset; the media needs none.
-            // Side padding follows the rail's width - a narrow column keeps
-            // its ground for content.
+            // The corner controls and AdChoices live over the rail's top,
+            // so the rail alone keeps the strip inset; the media needs none.
+            // Its two side paddings are the shares taken above: the left one
+            // is the seam beside the picture, the right one the panel's edge.
             int railOuterWidth = Math.max(
                     0
                   , displayMetrics.widthPixels
                             - sideMediaWidth
                             - sideRowLeftInsetPx);
-            int railPad = Math.max(
-                    Math.round(RAIL_MIN_SIDE_PADDING_DP * density)
-                  , Math.min(
-                        horizontalPadding
-                      , Math.round(
-                            railOuterWidth * RAIL_SIDE_PADDING_RATIO)));
             rail.setPadding(
-                    railPad
+                    railGap
                   , controlStripHeight
-                  , railPad
+                  , sideRowRightPadding
                   , 0);
             // The rail is narrow, so the icon never shares a line with text
             // here: it stands alone and the identity stack follows below at
@@ -651,7 +681,7 @@ final class OverlayAdContentView extends FrameLayout {
             if (!iconHero) {
                 int railWidth = Math.max(
                         0
-                      , railOuterWidth - 2 * railPad);
+                      , railOuterWidth - railGap - sideRowRightPadding);
                 int railIconSize = Math.max(
                         Math.round(MIN_ICON_SIZE_DP * density)
                       , Math.min(
@@ -700,8 +730,8 @@ final class OverlayAdContentView extends FrameLayout {
                                 ViewGroup.LayoutParams.MATCH_PARENT
                               , ViewGroup.LayoutParams.WRAP_CONTENT);
                 belowBodyParams.topMargin = seam;
-                belowBodyParams.leftMargin = horizontalPadding;
-                belowBodyParams.rightMargin = horizontalPadding;
+                belowBodyParams.leftMargin = sideRowLeftInsetPx;
+                belowBodyParams.rightMargin = sideRowRightPadding;
                 contentColumn.addView(body, belowBodyParams);
             }
             if (callToActionBelow) {
@@ -710,8 +740,8 @@ final class OverlayAdContentView extends FrameLayout {
                                 ViewGroup.LayoutParams.MATCH_PARENT
                               , ViewGroup.LayoutParams.WRAP_CONTENT);
                 belowCallToActionParams.topMargin = seam;
-                belowCallToActionParams.leftMargin = horizontalPadding;
-                belowCallToActionParams.rightMargin = horizontalPadding;
+                belowCallToActionParams.leftMargin = sideRowLeftInsetPx;
+                belowCallToActionParams.rightMargin = sideRowRightPadding;
                 contentColumn.addView(
                         callToAction
                       , belowCallToActionParams);
@@ -855,6 +885,7 @@ final class OverlayAdContentView extends FrameLayout {
                       , displayMetrics.widthPixels
                                 - sideMediaWidthPx
                                 - sideRowLeftInsetPx
+                      , displayMetrics.widthPixels - sideMediaWidthPx
                       , sideRailHeightPx > 0
                                 ? sideRailHeightPx
                                 : requestedPanelHeight
@@ -1283,6 +1314,7 @@ final class OverlayAdContentView extends FrameLayout {
     private void ConfigureResponsiveSideRail(
             LinearLayout rail
           , int railOuterWidth
+          , int railScaleWidth
           , int railHeight
           , float density
           , LinearLayout identityRow
@@ -1330,12 +1362,14 @@ final class OverlayAdContentView extends FrameLayout {
 
         // Text no larger than the rail can wear: the ceiling follows the
         // rail's width, so a narrow column keeps modest sizes even with
-        // height to spare.
+        // height to spare. It reads the column the PLAIN arrangement would
+        // have had, so the picture's left edge cannot cost a step of text
+        // size either.
         float railScaleCap = Math.max(
                 0f
               , Math.min(
                     1f
-                  , (railOuterWidth
+                  , (railScaleWidth
                             - RAIL_SCALE_CAP_MIN_WIDTH_DP * density)
                             / (RAIL_SCALE_CAP_RANGE_DP * density)));
         float railScale = railScaleCap;
@@ -1914,7 +1948,7 @@ final class OverlayAdContentView extends FrameLayout {
         boolean leftOccupied = true;
         boolean rightOccupied = true;
         // The media's field: its sides NEVER pass the panel's side padding
-        // - the same 8dp every element below wears - its ceiling is the
+        // - the same 5dp every element below wears - its ceiling is the
         // panel's top edge, and rising into the control band adds the two
         // control columns as walls. The walls stand on both sides whatever
         // is currently visible there, so the media never re-anchors when the
@@ -2565,10 +2599,8 @@ final class OverlayAdContentView extends FrameLayout {
                 displayMetrics
               , mediaAspectRatio
               , panelHeight);
-        int minimumMediaSize = (int) Math.ceil(
-                MIN_VIDEO_MEDIA_SIZE_DP * density);
         int railWidth = displayMetrics.widthPixels - mediaWidth;
-        return mediaWidth >= minimumMediaSize
+        return mediaWidth >= SideMediaFloor(density)
                 && railWidth >= (int) (SIDE_MEDIA_MIN_RAIL_DP * density);
     }
 
@@ -2581,6 +2613,37 @@ final class OverlayAdContentView extends FrameLayout {
               , Math.round(
                     displayMetrics.widthPixels
                             * SIDE_MEDIA_MAX_WIDTH_SHARE));
+    }
+
+    // The side padding one edge of the rail wears on its own: the panel's
+    // inset, or 3% of the rail's width where that is narrower - a slim
+    // column cannot afford a fixed gutter.
+    private static int SideRailPadding(
+            int railOuterWidth
+          , int horizontalPadding
+          , float density) {
+        return Math.max(
+                Math.round(RAIL_MIN_SIDE_PADDING_DP * density)
+              , Math.min(
+                    horizontalPadding
+                  , Math.round(
+                        railOuterWidth * RAIL_SIDE_PADDING_RATIO)));
+    }
+
+    private static int SideMediaHeight(
+            int mediaWidth
+          , float mediaAspectRatio
+          , int panelHeight) {
+        return Math.min(
+                panelHeight
+              , Math.round(mediaWidth / mediaAspectRatio));
+    }
+
+    // The width a picture must keep to earn the rail beside it - the line
+    // that admits the layout, and the line it may not cross when it pays
+    // for its own left edge.
+    private static int SideMediaFloor(float density) {
+        return (int) Math.ceil(MIN_VIDEO_MEDIA_SIZE_DP * density);
     }
 
     private static void SetTopInset(LinearLayout column, int topInset) {

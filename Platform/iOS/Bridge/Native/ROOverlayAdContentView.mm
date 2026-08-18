@@ -19,8 +19,13 @@ static const float kROOverlayDefaultAlpha = 0.80f;
 static const float kROCollapsibleDefaultAlpha = 0.95f;
 static const uint32_t kROOverlayBackgroundRgb = 0x000000;
 static const uint32_t kROCollapsibleBackgroundRgb = 0x1B2029;
-// 20pt a side spent 40pt of every screen on nothing the ad needed.
-static const CGFloat kROHorizontalPadding = 8;
+// 20pt a side spent 40pt of every screen on nothing the ad needed. Five
+// rather than eight because the side layout with content below wears this
+// padding three times across - one panel edge, the media's left, the other
+// panel edge - and it exists to make the plain side layout prettier. Three
+// fives are less than the two eights the plain one used to spend, so the
+// nicer arrangement can never be the one that runs out of width first.
+static const CGFloat kROHorizontalPadding = 5;
 static const CGFloat kROControlStripHeight = 30;
 static const CGFloat kROControlGap = 2;
 static const CGFloat kRORightControlInset = 18;
@@ -35,9 +40,18 @@ static const CGFloat kROSideMediaMaxAspect = 0.85f;
 static const CGFloat kROSideMediaMaxWidthShare = 0.56f;
 static const CGFloat kROSideMediaMinRail = 120;
 // The rail's side padding follows the rail's width; a narrow column cannot
-// afford the full 8pt on each side.
+// afford the full kROHorizontalPadding on each side.
 static const CGFloat kRORailSidePaddingRatio = 0.03f;
 static const CGFloat kRORailMinSidePadding = 2;
+
+// The side padding one edge of the rail wears on its own.
+static inline CGFloat ROSideRailPadding(CGFloat railOuterWidth) {
+    return MAX(
+            kRORailMinSidePadding
+          , MIN(
+                kROHorizontalPadding
+              , railOuterWidth * kRORailSidePaddingRatio));
+}
 static const CGFloat kRORailIconGap = 4;
 // Text no larger than the rail can wear: the scale ceiling follows the
 // rail's width, reaching full size only in a genuinely wide rail.
@@ -473,15 +487,12 @@ static void ROCentreUnderIcon(UIView *view) {
     if (_sideMediaLayout) {
         CGFloat sideMediaWidth =
                 [self ro_sideMediaWidthForPanelHeight:sidePanelHeight];
-        _sideMediaWidthPx = sideMediaWidth;
         // The media column is exactly as tall as the creative can fill at
         // its own aspect, centred - never a band of dead backfill painted
         // to the panel's height.
-        CGFloat sideMediaHeight = MIN(
-                sidePanelHeight
-              , round(sideMediaWidth / _mediaAspectRatio));
-        NSLog(@"%@: Side-media layout: media %gx%g in panel height %g"
-              , kROTag, sideMediaWidth, sideMediaHeight, sidePanelHeight);
+        CGFloat sideMediaHeight =
+                [self ro_sideMediaHeightForWidth:sideMediaWidth
+                                     panelHeight:sidePanelHeight];
         // Height the media leaves unused belongs to the content, not to
         // the column beside the picture: what fits under the row moves
         // there and spans the whole panel instead of being squeezed into a
@@ -491,22 +502,46 @@ static void ROCentreUnderIcon(UIView *view) {
         CGFloat belowCallToActionHeight = kROAvoidCallToActionHeight;
         CGFloat bodyLineHeight =
                 kROMinBodyTextSize * kROBodyLineHeightRatio;
+        BOOL callToActionBelow = sidePanelHeight - sideMediaHeight
+                >= belowCallToActionHeight + seam;
         CGFloat sideLeftover = sidePanelHeight - sideMediaHeight;
-        BOOL callToActionBelow =
-                sideLeftover >= belowCallToActionHeight + seam;
         BOOL bodyBelow = callToActionBelow
                 && sideLeftover >= belowCallToActionHeight
                         + 2 * bodyLineHeight
                         + 2 * seam;
+        _sideMediaWidthPx = sideMediaWidth;
+
         // Media bleeds to the edge only while nothing stands under it. The
         // moment something spills below, the two read as one column, and a
-        // column with two different left edges reads as a mistake. The
-        // verdict lands before the row is built: everything measured from
-        // the media's edge - the rail's width, the icon sized from it, the
-        // badge beside the picture - counts this inset in.
-        _sideRowLeftInset = callToActionBelow || bodyBelow
-                ? kROHorizontalPadding
-                : 0;
+        // column with two different left edges reads as a mistake.
+        //
+        // That left edge is CARVED OUT of the budget, never added on top of
+        // it. The budget is what the plain arrangement spends across: the
+        // gap between picture and rail, plus the panel's right edge. Two
+        // shares there, three here - the same pie either way - so the rail
+        // measures the same and a creative that fitted plainly cannot fail
+        // to fit here. Points divide evenly, so unlike the Android side
+        // there is never a spare pixel to hand out.
+        CGFloat railOuterPlain = MAX(
+                0
+              , UIScreen.mainScreen.bounds.size.width - sideMediaWidth);
+        CGFloat sidePaddingBudget = 2 * ROSideRailPadding(railOuterPlain);
+        CGFloat railGap;
+        CGFloat sideRowRightPadding;
+        if (callToActionBelow) {
+            _sideRowLeftInset = sidePaddingBudget / 3;
+            sideRowRightPadding = _sideRowLeftInset;
+            railGap = _sideRowLeftInset;
+        } else {
+            _sideRowLeftInset = 0;
+            railGap = sidePaddingBudget / 2;
+            sideRowRightPadding = railGap;
+        }
+        NSLog(@"%@: Side-media layout: media %gx%g padding %g/%g/%g of %g"
+                " in panel height %g"
+              , kROTag, sideMediaWidth, sideMediaHeight, _sideRowLeftInset
+              , railGap, sideRowRightPadding, sidePaddingBudget
+              , sidePanelHeight);
 
         _contentColumn.ro_padding = UIEdgeInsetsZero;
         HBLinearLayoutView *sideRow = [[HBLinearLayoutView alloc] init];
@@ -521,30 +556,26 @@ static void ROCentreUnderIcon(UIView *view) {
         HBLinearLayoutView *rail = [[HBLinearLayoutView alloc] init];
         rail.ro_vertical = YES;
         rail.ro_gravity = HBGravityCenterVertical;
-        // The corner controls and AdChoices sit over the rail's top, so only
-        // the rail keeps the strip inset; the media needs none. Side padding
-        // follows the rail's width - a narrow column keeps its ground for
-        // content.
+        // The corner controls and AdChoices sit over the rail's top, so
+        // only the rail keeps the strip inset; the media needs none. Its two
+        // side paddings are the shares taken above: the left one is the seam
+        // beside the picture, the right one the panel's edge.
         CGFloat railOuterWidth = MAX(
                 0
               , UIScreen.mainScreen.bounds.size.width
                         - sideMediaWidth
                         - _sideRowLeftInset);
-        CGFloat railPad = MAX(
-                kRORailMinSidePadding
-              , MIN(
-                    kROHorizontalPadding
-                  , railOuterWidth * kRORailSidePaddingRatio));
         rail.ro_padding = UIEdgeInsetsMake(
                 kROControlStripHeight
-              , railPad
+              , railGap
               , 0
-              , railPad);
+              , sideRowRightPadding);
         // The rail is narrow, so the icon never shares a line with text
         // here: it stands alone and the identity stack follows below at the
         // rail's full width.
         if (!_iconHero) {
-            CGFloat railWidth = MAX(0, railOuterWidth - 2 * railPad);
+            CGFloat railWidth = MAX(
+                    0, railOuterWidth - railGap - sideRowRightPadding);
             CGFloat railIconSize = MAX(
                     kROMinIconSize
                   , MIN(
@@ -579,13 +610,13 @@ static void ROCentreUnderIcon(UIView *view) {
             _body.maxLines = kROSideBelowBodyMaxLineCount;
             _body.ro_layoutWidth = ROLayoutMatchParent;
             _body.ro_layoutMargins = UIEdgeInsetsMake(
-                    seam, kROHorizontalPadding, 0, kROHorizontalPadding);
+                    seam, _sideRowLeftInset, 0, sideRowRightPadding);
             [_contentColumn addSubview:_body];
         }
         if (callToActionBelow) {
             _callToAction.ro_layoutWidth = ROLayoutMatchParent;
             _callToAction.ro_layoutMargins = UIEdgeInsetsMake(
-                    seam, kROHorizontalPadding, 0, kROHorizontalPadding);
+                    seam, _sideRowLeftInset, 0, sideRowRightPadding);
             [_contentColumn addSubview:_callToAction];
         }
         _sideRail = rail;
@@ -1011,12 +1042,11 @@ static void ROCentreUnderIcon(UIView *view) {
 
     // Text no larger than the rail can wear: the ceiling follows the
     // rail's width, so a narrow column keeps modest sizes even with height
-    // to spare.
+    // to spare. It reads the column the PLAIN arrangement would have had,
+    // so the picture's left edge cannot cost a step of text size either.
     CGFloat railOuterWidth = MAX(
             0
-          , UIScreen.mainScreen.bounds.size.width
-                    - _sideMediaWidthPx
-                    - _sideRowLeftInset);
+          , UIScreen.mainScreen.bounds.size.width - _sideMediaWidthPx);
     CGFloat railScaleCap = MAX(
             0
           , MIN(
@@ -1237,6 +1267,11 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
                     kROMinCallToActionHeight
                   , kROMaxCallToActionHeight
                   , resolvedScale)));
+}
+
+- (CGFloat)ro_sideMediaHeightForWidth:(CGFloat)mediaWidth
+                          panelHeight:(CGFloat)panelHeight {
+    return MIN(panelHeight, round(mediaWidth / _mediaAspectRatio));
 }
 
 - (BOOL)ro_shouldUseSideMediaForPanelHeight:(CGFloat)panelHeight {
@@ -1547,7 +1582,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     BOOL leftOccupied = YES;
     BOOL rightOccupied = YES;
     // The media's field: its sides NEVER pass the panel's side padding -
-    // the same 8pt every element below wears - its ceiling is the panel's
+    // the same 5pt every element below wears - its ceiling is the panel's
     // top edge, and rising into the control band adds the two control
     // columns as walls. The walls stand on both sides whatever is currently
     // visible there, so the media never re-anchors when the timer hands over

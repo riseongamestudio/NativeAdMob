@@ -12,7 +12,15 @@ namespace RiseOn.NativeAdMob {
         public struct Settings {
             public string AdUnitId;
             public float  HeightRatio;
-            public float  BackgroundAlpha;
+
+            /// <summary>
+            /// How many ads this placement keeps warm at once. 0 means 1 -
+            /// always hold a spare. Raise it where one show is followed
+            /// straight by another, so the second is already in hand.
+            /// </summary>
+            public int CacheSize;
+
+            public float BackgroundAlpha;
 
             [SerializeField] private AdFormat format;
 
@@ -42,6 +50,7 @@ namespace RiseOn.NativeAdMob {
               , settings.Format
               , coversFullScreen: false
               , settings.HeightRatio
+              , settings.CacheSize
               , settings.BackgroundAlpha
               , settings.Close) {}
     }

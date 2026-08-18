@@ -32,6 +32,7 @@ namespace RiseOn.NativeAdMob {
           , AdFormat format
           , bool coversFullScreen
           , float heightRatio
+          , int cacheSize
           , float backgroundAlpha
           , in CloseSettings controls)
             : base(adUnitId, format) {
@@ -47,6 +48,7 @@ namespace RiseOn.NativeAdMob {
                     AdUnitId         = adUnitId
                   , CoversFullScreen = coversFullScreen
                   , HeightRatio      = heightRatio
+                  , CacheSize        = cacheSize
                   , BackgroundAlpha  = backgroundAlpha
                   , Close         = controls
                 }

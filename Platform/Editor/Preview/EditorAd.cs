@@ -48,9 +48,9 @@ namespace RiseOn.NativeAdMob.Editor {
                 FULLSCREEN_CANVAS_SORTING_ORDER - 1;
         private const int IN_FEED_CANVAS_SORTING_ORDER =
                 NON_FULLSCREEN_CANVAS_SORTING_ORDER - 1;
-        // The device spends 8dp a side, not the 20dp gutters an early build
+        // The device spends 5dp a side, not the 20dp gutters an early build
         // had - and only on text: the media bleeds edge to edge.
-        private const int CONTENT_HORIZONTAL_PADDING_DP     = 8;
+        private const int CONTENT_HORIZONTAL_PADDING_DP     = 5;
         private const int CONTENT_SPACING_DP                = 4;
         // The device's control strip: CONTROL_STRIP_HEIGHT_DP on Android,
         // kROControlStripHeight on iOS. Both are 30.
@@ -399,7 +399,7 @@ namespace RiseOn.NativeAdMob.Editor {
             content.anchorMin = Vector2.zero;
             content.anchorMax = Vector2.one;
             // Both overlay modes share the device's inset: the media box is
-            // an element like every other, 8dp off the sides, sitting below
+            // an element like every other, 5dp off the sides, sitting below
             // the control band.
             content.offsetMin = new(
                 CONTENT_HORIZONTAL_PADDING_DP

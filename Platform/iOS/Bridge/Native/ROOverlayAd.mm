@@ -4,6 +4,28 @@
 
 static NSString *const kROTag = @"Overlay";
 static const int32_t kROLoadSuccessCode = 0;
+// The ceiling the in-feed unit already keeps: past a handful, warm ads
+// expire unseen and the impressions are simply burnt.
+static const NSInteger kROMaxCacheSize = 5;
+// developers.google.com/admob/ios/native/start, Request ads: "Since ads
+// expire after an hour, you should clear this cache and reload with new ads
+// every hour." The in-feed unit keeps the same number, from the same
+// sentence.
+static const NSTimeInterval kROMaxCachedAdAge = 3600;
+
+static NSTimeInterval RONow(void) {
+    return [NSProcessInfo processInfo].systemUptime;
+}
+
+// An ad and the moment it arrived - the only two things needed to know
+// whether it may still be shown.
+@interface ROOverlayCachedAd : NSObject
+@property (nonatomic, strong) GADNativeAd *ad;
+@property (nonatomic, assign) NSTimeInterval loadedAt;
+@end
+
+@implementation ROOverlayCachedAd
+@end
 
 // The style snapshot Configure publishes and every show reads - the same
 // immutable OverlayStyle the Java side passes around.
@@ -109,7 +131,16 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     BOOL _isAdLoading;
 
     GADAdLoader *_adLoader;
-    GADNativeAd *_nativeAd;
+    NSInteger _cacheSize;
+    // The warm ads, oldest first. The head is the one the next show takes,
+    // and the only one worth a prepared face. Oldest first also means the
+    // head is always the first to go stale.
+    NSMutableArray<ROOverlayCachedAd *> *_cachedAds;
+    NSTimer *_cacheExpiryTimer;
+    // The paid event fires on whatever thread the SDK picked, while the
+    // array is a main-thread structure. Membership answers "is this still
+    // ours" without walking one that may be changing underneath.
+    NSHashTable<GADNativeAd *> *_ownedAds;
     GADNativeAd *_activeNativeAd;
     ROOverlayAdPresentation *_presentation;
     ROOverlayAdPresentation *_preparedPresentation;
@@ -125,12 +156,16 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     self = [super initWithInstanceId:instanceId];
     if (self == nil) return nil;
     _adUnitId = [adUnitId copy];
+    _cacheSize = 1;
+    _cachedAds = [NSMutableArray array];
+    _ownedAds = [NSHashTable weakObjectsHashTable];
     return self;
 }
 
 - (void)configureWithFullscreen:(BOOL)fullscreen
                     heightRatio:(float)heightRatio
                 backgroundAlpha:(float)backgroundAlpha
+                      cacheSize:(int32_t)cacheSize
                        cooldown:(int32_t)cooldown
                       closeSide:(int32_t)closeSide
                       timerSide:(int32_t)timerSide
@@ -145,6 +180,10 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
             return;
         }
 
+        // How many ads stay warm at once. One - always hold a spare -
+        // is the placement that never asked; a chained placement raises it
+        // so the follow-up is already in hand when the first ad closes.
+        self->_cacheSize = MAX(1, MIN(kROMaxCacheSize, (NSInteger)cacheSize));
         self->_configuredStyle = [[HBOverlayStyle alloc]
                 initWithFullscreen:fullscreen
                           cooldown:cooldown
@@ -185,22 +224,34 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
                   , kROTag);
             return;
         }
-        if (self->_isAdLoading) return;
-
-        // A cached ad is the whole point of loading, so one is never thrown
-        // away to fetch another - that is what made the replacement fetched
-        // during the show die at dismissal and the player wait for a fresh
-        // load anyway. An empty cache is the only reason to load, whoever
-        // is on screen.
-        if (self->_nativeAd != nil) return;
         UIViewController *host = [ROBaseAd unityViewController];
         if (![ROBaseAd isViewControllerUsable:host]) {
             NSLog(@"%@: Load ignored because the host controller is not "
                     "usable", kROTag);
             return;
         }
-        [self ro_doLoadAdWithHost:host style:self->_configuredStyle];
+        [self ro_startLoadWithHost:host];
     }];
+}
+
+// The one gate every load passes. A warm ad is never thrown away to fetch
+// another - that is what made the replacement fetched during a show die at
+// dismissal and the player wait for a fresh load anyway - so a free seat in
+// the cache is the only reason to load, whoever is on screen. Says whether
+// a request actually left.
+- (BOOL)ro_startLoadWithHost:(UIViewController *)host {
+    HBOverlayStyle *loadStyle = _configuredStyle;
+    if (self.released
+            || !_configured
+            || _isAdLoading
+            || loadStyle == nil
+            || (NSInteger)_cachedAds.count >= _cacheSize
+            || ![ROBaseAd isViewControllerUsable:host]) {
+        return NO;
+    }
+
+    [self ro_doLoadAdWithHost:host style:loadStyle];
+    return YES;
 }
 
 - (void)ro_doLoadAdWithHost:(UIViewController *)host
@@ -225,7 +276,14 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     [ROBaseAd runOnMainThread:^{
         if (self.released) return;
 
-        self->_nativeAd = nativeAd;
+        @synchronized (self->_ownedAds) {
+            [self->_ownedAds addObject:nativeAd];
+        }
+        ROOverlayCachedAd *cached = [[ROOverlayCachedAd alloc] init];
+        cached.ad = nativeAd;
+        cached.loadedAt = RONow();
+        [self->_cachedAds addObject:cached];
+        [self ro_scheduleCacheExpiry];
         nativeAd.delegate = self;
         __weak ROOverlayAd *weakSelf = self;
         __weak GADNativeAd *weakAd = nativeAd;
@@ -234,26 +292,33 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
                      isCurrentAd:^BOOL{
             ROOverlayAd *strongSelf = weakSelf;
             GADNativeAd *strongAd = weakAd;
-            return strongSelf != nil
-                    && strongAd != nil
-                    && (strongSelf->_nativeAd == strongAd
-                            || strongSelf->_activeNativeAd == strongAd);
+            if (strongSelf == nil || strongAd == nil) return NO;
+            @synchronized (strongSelf->_ownedAds) {
+                return [strongSelf->_ownedAds containsObject:strongAd];
+            }
         }];
 
         // Both formats prepay their face at load time - the Android side
         // prebuilds the Activity's content view, this side the whole
         // presentation - so the show itself has nothing slow left to do.
-        HBOverlayStyle *presentationStyle = self->_configuredStyle;
-        if (presentationStyle != nil) {
-            [self ro_preparePresentationForAd:nativeAd
-                                        style:presentationStyle];
-        } else {
-            [self ro_releasePreparedPresentation];
+        // Only the head earns one: it is the ad the next show takes, and
+        // those behind it get theirs on reaching the front.
+        if ([self ro_isHeadAd:nativeAd]) {
+            [self ro_prepareHeadFace];
         }
 
         self->_isAdLoading = NO;
         [self ro_notifyCurrentState];
         [self notifyLoadingCompletedWithCode:kROLoadSuccessCode message:@""];
+        // One request per ad: this chains on until the cache is full, and
+        // the last one simply finds no seat left. A turn later, never here:
+        // starting the next load swaps _adLoader, and this ad's own loader
+        // is still walking its callbacks on the stack above us.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (self.released) return;
+
+            [self ro_startLoadWithHost:[ROBaseAd unityViewController]];
+        });
     }];
 }
 
@@ -300,7 +365,8 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
         }
         UIViewController *host = [ROBaseAd unityViewController];
         HBOverlayStyle *requestedStyle = self->_configuredStyle;
-        if (self->_nativeAd == nil
+        [self ro_sweepExpiredCachedAds];
+        if (self->_cachedAds.count == 0
                 || requestedStyle == nil
                 || ![ROBaseAd isViewControllerUsable:host]) {
             [self ro_invokeCompleted:onCompleted
@@ -310,12 +376,22 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
             return;
         }
 
-        GADNativeAd *shownAd = self->_nativeAd;
-        self->_nativeAd = nil;
+        GADNativeAd *shownAd = self->_cachedAds.firstObject.ad;
+        [self->_cachedAds removeObjectAtIndex:0];
+        [self ro_scheduleCacheExpiry];
         self->_activeNativeAd = shownAd;
         self->_activeShowCompleted = onCompleted;
         self->_activeShowId = showId;
         [self ro_notifyCurrentState];
+        // The seat this show emptied is refilled at once, and whoever is at
+        // the head now earns a face. Both wait a turn so this show takes
+        // the face it was promised first.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (self.released) return;
+
+            [self ro_startLoadWithHost:[ROBaseAd unityViewController]];
+            [self ro_prepareHeadFace];
+        });
 
         ROOverlayAdPresentation *createdPresentation =
                 [self ro_takePreparedPresentationForAd:shownAd
@@ -367,7 +443,9 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
         self->_presentation = nil;
         [currentPresentation releasePresentation];
 
-        self->_nativeAd = nil;
+        [self->_cacheExpiryTimer invalidate];
+        self->_cacheExpiryTimer = nil;
+        [self->_cachedAds removeAllObjects];
         self->_activeNativeAd = nil;
         RONativeAdShowCompletedCallback completed =
                 self->_activeShowCompleted;
@@ -421,6 +499,92 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     return createdPresentation;
 }
 
+- (BOOL)ro_isHeadAd:(GADNativeAd *)ad {
+    return ad != nil && _cachedAds.firstObject.ad == ad;
+}
+
+// An hour after it arrived a warm ad may no longer be shown, so it goes and
+// a fresh one is fetched. The head ages out first, which is also the one
+// holding a prepared face - hence the rebuild.
+- (void)ro_handleCacheExpiry {
+    if (self.released) return;
+
+    if ([self ro_removeExpiredCachedAds]) {
+        [self ro_prepareHeadFace];
+        [self ro_notifyCurrentState];
+    }
+    [self ro_startLoadWithHost:[ROBaseAd unityViewController]];
+    [self ro_scheduleCacheExpiry];
+}
+
+- (void)ro_scheduleCacheExpiry {
+    [_cacheExpiryTimer invalidate];
+    _cacheExpiryTimer = nil;
+    if (self.released) return;
+
+    NSTimeInterval nextExpiryAt = DBL_MAX;
+    for (ROOverlayCachedAd *cached in _cachedAds) {
+        nextExpiryAt = MIN(nextExpiryAt, cached.loadedAt + kROMaxCachedAdAge);
+    }
+    if (nextExpiryAt == DBL_MAX) return;
+
+    __weak ROOverlayAd *weakSelf = self;
+    _cacheExpiryTimer = [NSTimer
+            scheduledTimerWithTimeInterval:MAX(0.01, nextExpiryAt - RONow())
+                                   repeats:NO
+                                     block:^(NSTimer *timer) {
+        [weakSelf ro_handleCacheExpiry];
+    }];
+}
+
+// The show's own sweep: systemUptime keeps counting while the device sleeps
+// but the timer does not fire, so a phone woken after a long night can hold
+// ads older than the schedule believes.
+- (void)ro_sweepExpiredCachedAds {
+    if (![self ro_removeExpiredCachedAds]) return;
+
+    [self ro_prepareHeadFace];
+    [self ro_notifyCurrentState];
+    [self ro_startLoadWithHost:[ROBaseAd unityViewController]];
+    [self ro_scheduleCacheExpiry];
+}
+
+- (BOOL)ro_removeExpiredCachedAds {
+    NSTimeInterval now = RONow();
+    ROOverlayCachedAd *head = _cachedAds.firstObject;
+    // Oldest first, so nothing behind the head can be stale while the head
+    // is not: one look answers for the whole queue.
+    if (head == nil || now - head.loadedAt < kROMaxCachedAdAge) return NO;
+
+    // The prepared face is built on the ad about to go, so it goes first.
+    [self ro_releasePreparedPresentation];
+    NSMutableArray<ROOverlayCachedAd *> *expired = [NSMutableArray array];
+    for (ROOverlayCachedAd *cached in _cachedAds) {
+        if (now - cached.loadedAt >= kROMaxCachedAdAge) {
+            [expired addObject:cached];
+        }
+    }
+    for (ROOverlayCachedAd *cached in expired) {
+        @synchronized (_ownedAds) {
+            [_ownedAds removeObject:cached.ad];
+        }
+        [_cachedAds removeObject:cached];
+    }
+    return YES;
+}
+
+// The face of the ad at the head, prepaid before any show asks for it.
+- (void)ro_prepareHeadFace {
+    GADNativeAd *head = _cachedAds.firstObject.ad;
+    HBOverlayStyle *style = _configuredStyle;
+    if (head == nil || style == nil) {
+        [self ro_releasePreparedPresentation];
+        return;
+    }
+
+    [self ro_preparePresentationForAd:head style:style];
+}
+
 - (void)ro_preparePresentationForAd:(GADNativeAd *)ad
                               style:(HBOverlayStyle *)style {
     [self ro_releasePreparedPresentation];
@@ -428,7 +592,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     if (self.released
             || ad == nil
             || style == nil
-            || _nativeAd != ad
+            || ![self ro_isHeadAd:ad]
             || ![ROBaseAd isViewControllerUsable:host]) {
         return;
     }
@@ -437,7 +601,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
             [self ro_createPresentationWithHost:host ad:ad style:style];
     if (![createdPresentation prepare]
             || self.released
-            || _nativeAd != ad
+            || ![self ro_isHeadAd:ad]
             || _configuredStyle != style) {
         [createdPresentation releasePresentation];
         return;
@@ -453,15 +617,16 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     // Every runtime style setter publishes a new snapshot and passes through
     // here so a prepared face never keeps stale config.
     // A show in progress is no reason to skip: the rebuild only ever
-    // touches the prepared face of the CACHED ad, never the one on screen.
+    // touches the prepared face of the ad at the HEAD of the cache, never
+    // the one on screen.
     if (self.released
             || requestedStyle == nil
             || _configuredStyle != requestedStyle
-            || _nativeAd == nil) {
+            || _cachedAds.count == 0) {
         return;
     }
 
-    GADNativeAd *ad = _nativeAd;
+    GADNativeAd *ad = _cachedAds.firstObject.ad;
     [self ro_releasePreparedPresentation];
     [self ro_preparePresentationForAd:ad style:requestedStyle];
 }
@@ -523,7 +688,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     BOOL isReady = _configured
             && !self.released
             && _activeNativeAd == nil
-            && _nativeAd != nil;
+            && _cachedAds.count > 0;
     BOOL isLoading = _configured && !self.released && _isAdLoading;
     [self notifyStateChangedWithReady:isReady loading:isLoading];
 }

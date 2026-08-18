@@ -3,6 +3,7 @@ namespace RiseOn.NativeAdMob {
         public string        AdUnitId;
         public bool          CoversFullScreen;
         public float         HeightRatio;
+        public int           CacheSize;
         public float         BackgroundAlpha;
         public CloseSettings Close;
     }
