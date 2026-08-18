@@ -543,6 +543,14 @@ static void ROCentreUnderIcon(UIView *view) {
                         + 2 * seam;
 
         [rail addSubview:_identityRow];
+        // Media bleeds to the edge only while nothing stands under it. The
+        // moment something spills below, the two read as one column, and a
+        // column with two different left edges reads as a mistake.
+        if (callToActionBelow || bodyBelow) {
+            sideRow.ro_padding =
+                    UIEdgeInsetsMake(0, kROHorizontalPadding, 0, 0);
+        }
+
         if (!bodyBelow) [rail addSubview:_body];
         if (!callToActionBelow) [rail addSubview:_callToAction];
         rail.ro_layoutWidth = 0;

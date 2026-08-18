@@ -652,6 +652,13 @@ final class OverlayAdContentView extends FrameLayout {
                             + 2 * bodyLineHeight
                             + 2 * seam;
 
+            // Media bleeds to the edge only while nothing stands under it.
+            // The moment something spills below, the two read as one column,
+            // and a column with two different left edges reads as a mistake.
+            if (callToActionBelow || bodyBelow) {
+                sideRow.setPadding(horizontalPadding, 0, 0, 0);
+            }
+
             rail.addView(identityRow);
             if (!bodyBelow) rail.addView(body);
             if (!callToActionBelow) {
