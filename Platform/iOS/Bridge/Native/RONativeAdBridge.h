@@ -129,13 +129,18 @@ void ROOverlayAd_SetListener(
 void ROOverlayAd_Configure(
         void* handle
       , bool fullscreen
-      , int32_t countdownSec
-      , bool xRandomSide
-      , bool numberOppositeSide
       , float heightRatio
       , float backgroundAlpha
-      , bool fakeCloseAutoDismiss);
-void ROOverlayAd_SetCountdownSec(void* handle, int32_t countdownSec);
+      , int32_t cooldown
+      , int32_t closeSide
+      , int32_t timerSide
+      , bool redirectOnClose);
+void ROOverlayAd_SetClose(
+        void* handle
+      , int32_t cooldown
+      , int32_t closeSide
+      , int32_t timerSide
+      , bool redirectOnClose);
 void ROOverlayAd_Load(void* handle);
 void ROOverlayAd_Show(
         void* handle

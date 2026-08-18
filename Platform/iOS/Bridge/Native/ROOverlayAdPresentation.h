@@ -18,8 +18,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithViewController:(UIViewController *)viewController
                               nativeAd:(GADNativeAd *)nativeAd
                           countdownSec:(int32_t)countdownSec
-                               xRandom:(BOOL)xRandom
-                        numberOpposite:(BOOL)numberOpposite
+                           closeOnLeft:(BOOL)closeOnLeft
+                           timerOnLeft:(BOOL)timerOnLeft
                             fullscreen:(BOOL)fullscreen
                            heightRatio:(float)heightRatio
                        backgroundAlpha:(float)backgroundAlpha

@@ -9,9 +9,11 @@ static const int32_t kROLoadSuccessCode = 0;
 // immutable OverlayStyle the Java side passes around.
 @interface HBOverlayStyle : NSObject
 @property (nonatomic, readonly) BOOL fullscreen;
-@property (nonatomic, readonly) int32_t countdownSec;
-@property (nonatomic, readonly) BOOL xRandomSide;
-@property (nonatomic, readonly) BOOL numberOppositeSide;
+@property (nonatomic, readonly) int32_t cooldown;
+// Ordinals shared with the C# enums: Left 0, Right 1, Random 2, and for the
+// timer OppositeOfClose 3, SameAsClose 4.
+@property (nonatomic, readonly) int32_t closeSide;
+@property (nonatomic, readonly) int32_t timerSide;
 @property (nonatomic, readonly) float heightRatio;
 @property (nonatomic, readonly) float backgroundAlpha;
 // The close button commits the ad's click on its way out.
@@ -21,33 +23,54 @@ static const int32_t kROLoadSuccessCode = 0;
 @implementation HBOverlayStyle
 
 - (instancetype)initWithFullscreen:(BOOL)fullscreen
-                      countdownSec:(int32_t)countdownSec
-                       xRandomSide:(BOOL)xRandomSide
-                numberOppositeSide:(BOOL)numberOppositeSide
+                          cooldown:(int32_t)cooldown
+                         closeSide:(int32_t)closeSide
+                         timerSide:(int32_t)timerSide
                        heightRatio:(float)heightRatio
                    backgroundAlpha:(float)backgroundAlpha
               fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss {
     self = [super init];
     if (self == nil) return nil;
     _fullscreen = fullscreen;
-    _countdownSec = MAX(0, countdownSec);
-    _xRandomSide = xRandomSide;
-    _numberOppositeSide = numberOppositeSide;
+    _cooldown = MAX(0, cooldown);
+    _closeSide = closeSide;
+    _timerSide = timerSide;
     _heightRatio = heightRatio;
     _backgroundAlpha = backgroundAlpha;
     _fakeCloseAutoDismiss = fakeCloseAutoDismiss;
     return self;
 }
 
-- (HBOverlayStyle *)styleWithCountdownSec:(int32_t)countdownSec {
+- (HBOverlayStyle *)styleWithCooldown:(int32_t)cooldown
+                            closeSide:(int32_t)closeSide
+                            timerSide:(int32_t)timerSide
+                      redirectOnClose:(BOOL)redirectOnClose {
     return [[HBOverlayStyle alloc]
             initWithFullscreen:self.fullscreen
-                  countdownSec:countdownSec
-                   xRandomSide:self.xRandomSide
-            numberOppositeSide:self.numberOppositeSide
+                      cooldown:cooldown
+                     closeSide:closeSide
+                     timerSide:timerSide
                    heightRatio:self.heightRatio
                backgroundAlpha:self.backgroundAlpha
-          fakeCloseAutoDismiss:self.fakeCloseAutoDismiss];
+          fakeCloseAutoDismiss:redirectOnClose];
+}
+
+// Random is answered once per presentation; the relative timer modes then
+// read that answer rather than rolling again.
+- (BOOL)resolveCloseOnLeft {
+    if (self.closeSide == 0) return YES;
+    if (self.closeSide == 1) return NO;
+    return arc4random_uniform(2) == 0;
+}
+
+- (BOOL)resolveTimerOnLeft:(BOOL)closeOnLeft {
+    switch (self.timerSide) {
+        case 0:  return YES;
+        case 1:  return NO;
+        case 3:  return !closeOnLeft;
+        case 4:  return closeOnLeft;
+        default: return arc4random_uniform(2) == 0;
+    }
 }
 
 - (BOOL)pausesGame {
@@ -106,12 +129,12 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 }
 
 - (void)configureWithFullscreen:(BOOL)fullscreen
-                   countdownSec:(int32_t)countdownSec
-                    xRandomSide:(BOOL)xRandomSide
-             numberOppositeSide:(BOOL)numberOppositeSide
                     heightRatio:(float)heightRatio
                 backgroundAlpha:(float)backgroundAlpha
-           fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss {
+                       cooldown:(int32_t)cooldown
+                      closeSide:(int32_t)closeSide
+                      timerSide:(int32_t)timerSide
+                redirectOnClose:(BOOL)redirectOnClose {
     [ROBaseAd runOnMainThread:^{
         if (self.released) {
             NSLog(@"%@: Configure ignored after Release", kROTag);
@@ -124,26 +147,32 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 
         self->_configuredStyle = [[HBOverlayStyle alloc]
                 initWithFullscreen:fullscreen
-                      countdownSec:countdownSec
-                       xRandomSide:xRandomSide
-                numberOppositeSide:numberOppositeSide
+                          cooldown:cooldown
+                         closeSide:closeSide
+                         timerSide:timerSide
                        heightRatio:heightRatio
                    backgroundAlpha:backgroundAlpha
-              fakeCloseAutoDismiss:fakeCloseAutoDismiss];
+              fakeCloseAutoDismiss:redirectOnClose];
         self->_configured = YES;
     }];
 }
 
-- (void)setCountdownSec:(int32_t)countdownSec {
+- (void)setCloseWithCooldown:(int32_t)cooldown
+                   closeSide:(int32_t)closeSide
+                   timerSide:(int32_t)timerSide
+             redirectOnClose:(BOOL)redirectOnClose {
     [ROBaseAd runOnMainThread:^{
         HBOverlayStyle *currentStyle = self->_configuredStyle;
         if (!self->_configured || self.released || currentStyle == nil) {
-            NSLog(@"%@: SetCountdownSec ignored before Configure or after "
+            NSLog(@"%@: SetClose ignored before Configure or after "
                     "Release", kROTag);
             return;
         }
         HBOverlayStyle *updatedStyle =
-                [currentStyle styleWithCountdownSec:countdownSec];
+                [currentStyle styleWithCooldown:cooldown
+                                             closeSide:closeSide
+                                             timerSide:timerSide
+                                       redirectOnClose:redirectOnClose];
         self->_configuredStyle = updatedStyle;
         [self ro_rebuildPreparedPresentationForStyle:updatedStyle];
     }];
@@ -359,13 +388,15 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
         ro_createPresentationWithHost:(UIViewController *)host
                                    ad:(GADNativeAd *)ad
                                 style:(HBOverlayStyle *)style {
+    BOOL closeOnLeftForPresentation = [style resolveCloseOnLeft];
     ROOverlayAdPresentation *createdPresentation =
             [[ROOverlayAdPresentation alloc]
                     initWithViewController:host
                                   nativeAd:ad
-                              countdownSec:style.countdownSec
-                                   xRandom:style.xRandomSide
-                            numberOpposite:style.numberOppositeSide
+                              countdownSec:style.cooldown
+                               closeOnLeft:closeOnLeftForPresentation
+                               timerOnLeft:[style resolveTimerOnLeft:
+                                            closeOnLeftForPresentation]
                                 fullscreen:style.fullscreen
                                heightRatio:style.heightRatio
                            backgroundAlpha:style.backgroundAlpha

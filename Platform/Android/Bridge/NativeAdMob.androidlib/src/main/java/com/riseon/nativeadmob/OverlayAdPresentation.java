@@ -27,9 +27,9 @@ public final class OverlayAdPresentation
     private final Activity hostActivity;
     private final NativeAd nativeAd;
     private final int countDownSec;
-    private final boolean xRandom;
+    private final boolean closeOnLeft;
+    private final boolean timerOnLeft;
     private final boolean fakeCloseAutoDismiss;
-    private final boolean numberOpposite;
     private final boolean fullscreen;
     private final float heightRatio;
     private final float backgroundAlpha;
@@ -39,8 +39,8 @@ public final class OverlayAdPresentation
             Context context
           , NativeAd nativeAd
           , int countDownSec
-          , boolean xRandom
-          , boolean numberOpposite
+          , boolean closeOnLeft
+          , boolean timerOnLeft
           , boolean fullscreen
           , float heightRatio
           , float backgroundAlpha
@@ -54,9 +54,9 @@ public final class OverlayAdPresentation
                         : null;
         this.nativeAd = nativeAd;
         this.countDownSec = countDownSec;
-        this.xRandom = xRandom;
+        this.closeOnLeft = closeOnLeft;
+        this.timerOnLeft = timerOnLeft;
         this.fakeCloseAutoDismiss = fakeCloseAutoDismiss;
-        this.numberOpposite = numberOpposite;
         this.fullscreen = fullscreen;
         this.heightRatio = heightRatio;
         this.backgroundAlpha = backgroundAlpha;
@@ -84,8 +84,8 @@ public final class OverlayAdPresentation
                 context
               , nativeAd
               , countDownSec
-              , xRandom
-              , numberOpposite
+              , closeOnLeft
+              , timerOnLeft
               , fullscreen
               , backgroundAlpha
               , fakeCloseAutoDismiss

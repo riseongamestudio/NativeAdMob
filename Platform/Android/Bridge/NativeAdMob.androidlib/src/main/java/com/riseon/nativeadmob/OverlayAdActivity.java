@@ -216,7 +216,7 @@ public final class OverlayAdActivity extends Activity {
                       , session.nativeAd
                       , session.GetRemainingCountdownMs()
                       , session.closeOnLeft
-                      , session.style.numberOppositeSide
+                      , session.style.ResolveTimerOnLeft(session.closeOnLeft)
                       , true
                       , session.style.backgroundAlpha
                       , session.style.fakeCloseAutoDismiss
@@ -890,15 +890,14 @@ public final class OverlayAdActivity extends Activity {
                 this.preparedContentView = preparedContent.view;
                 this.preparedCloseRelay = preparedContent.closeRelay;
             } else {
-                this.closeOnLeft =
-                        style.xRandomSide && Math.random() < 0.5d;
+                this.closeOnLeft = style.ResolveCloseOnLeft();
             }
             this.showRequestedAtMs = SystemClock.uptimeMillis();
             this.resumedHostActivity =
                     new WeakReference<>(hostActivity);
             this.hostResumed = true;
             this.countdownRemainingMs =
-                    Math.max(0, style.countdownSec) * 1000L;
+                    Math.max(0, style.cooldown) * 1000L;
         }
 
         OverlayAdContentView TakePreparedContentView() {

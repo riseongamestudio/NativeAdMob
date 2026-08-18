@@ -19,12 +19,12 @@ namespace RiseOn.NativeAdMob.iOS {
             NativeAdBridge.ROOverlayAd_Configure(
                 handle
               , settings.CoversFullScreen
-              , settings.CountdownSec
-              , settings.XRandomSide
-              , settings.NumberOppositeSide
               , settings.HeightRatio
               , settings.BackgroundAlpha
-              , settings.FakeCloseAutoDismiss);
+              , settings.Close.Cooldown
+              , (int)settings.Close.CloseSide
+              , (int)settings.Close.TimerSide
+              , settings.Close.RedirectOnClose);
             NativeAdBridge.ROOverlayAd_SetListener(
                 handle
               , NativeAdBridge.OnLoadingStartedCallback
@@ -36,12 +36,15 @@ namespace RiseOn.NativeAdMob.iOS {
               , NativeAdBridge.OnShowNotReadyCallback);
         }
 
-        public void SetCountdownSec(int countdownSec) {
+        public void SetClose(in CloseSettings controls) {
             if (handle == IntPtr.Zero) return;
 
-            NativeAdBridge.ROOverlayAd_SetCountdownSec(
+            NativeAdBridge.ROOverlayAd_SetClose(
                 handle
-              , countdownSec);
+              , controls.Cooldown
+              , (int)controls.CloseSide
+              , (int)controls.TimerSide
+              , controls.RedirectOnClose);
         }
 
         public void Load() {

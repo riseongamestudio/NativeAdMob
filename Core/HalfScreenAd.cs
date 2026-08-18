@@ -1,4 +1,6 @@
+using System;
 using RiseOn.Analytics;
+using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
     /// <summary>
@@ -6,23 +8,17 @@ namespace RiseOn.NativeAdMob {
     /// collapsible placement. HeightRatio is the covered fraction.
     /// </summary>
     public sealed class HalfScreenAd : OverlayAd {
+        [Serializable]
         public struct Settings {
             public string AdUnitId;
-            public int CountdownSec;
-            public bool XRandomSide;
-            public bool NumberOppositeSide;
-            public float HeightRatio;
-            public float BackgroundAlpha;
-            /// <summary>
-            /// When true the close button commits the ad's click on its way
-            /// out: the tap both follows the ad and dismisses it.
-            /// </summary>
-            public bool FakeCloseAutoDismiss;
+            public float  HeightRatio;
+            public float  BackgroundAlpha;
 
-            private AdFormat format;
+            [SerializeField] private AdFormat format;
 
             /// <summary>
-            /// Where the game puts this placement. Unset means NATIVE_COLLAPSIBLE.
+            /// Where the game puts this placement. Unset means
+            /// NATIVE_COLLAPSIBLE.
             /// </summary>
             public AdFormat Format {
                 // A struct cannot initialise a field, so the default lives in
@@ -32,6 +28,12 @@ namespace RiseOn.NativeAdMob {
                         : format;
                 set => format = value;
             }
+
+            /// <summary>
+            /// The close button and the countdown that gates it. Changeable
+            /// afterwards through SetClose.
+            /// </summary>
+            public CloseSettings Close;
         }
 
         public HalfScreenAd(in Settings settings)
@@ -39,11 +41,8 @@ namespace RiseOn.NativeAdMob {
                 settings.AdUnitId
               , settings.Format
               , coversFullScreen: false
-              , settings.CountdownSec
-              , settings.XRandomSide
-              , settings.NumberOppositeSide
               , settings.HeightRatio
               , settings.BackgroundAlpha
-              , settings.FakeCloseAutoDismiss) {}
+              , settings.Close) {}
     }
 }

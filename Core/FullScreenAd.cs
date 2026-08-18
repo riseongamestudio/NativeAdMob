@@ -1,4 +1,6 @@
+using System;
 using RiseOn.Analytics;
+using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
     /// <summary>
@@ -6,19 +8,12 @@ namespace RiseOn.NativeAdMob {
     /// end card. The bottom-slice sibling is HalfScreenAd.
     /// </summary>
     public sealed class FullScreenAd : OverlayAd {
+        [Serializable]
         public struct Settings {
             public string AdUnitId;
-            public int    CountdownSec;
-            public bool   XRandomSide;
-            public bool   NumberOppositeSide;
             public float  BackgroundAlpha;
-            /// <summary>
-            /// When true the close button commits the ad's click on its way
-            /// out: the tap both follows the ad and dismisses it.
-            /// </summary>
-            public bool   FakeCloseAutoDismiss;
 
-            private AdFormat format;
+            [SerializeField] private AdFormat format;
 
             /// <summary>
             /// Where the game puts this placement. Unset means NATIVE.
@@ -29,6 +24,12 @@ namespace RiseOn.NativeAdMob {
                 readonly get => format is AdFormat.UNKNOWN ? AdFormat.NATIVE : format;
                 set => format = value;
             }
+
+            /// <summary>
+            /// The close button and the countdown that gates it. Changeable
+            /// afterwards through SetClose.
+            /// </summary>
+            public CloseSettings Close;
         }
 
         public FullScreenAd(in Settings settings)
@@ -36,11 +37,8 @@ namespace RiseOn.NativeAdMob {
                 settings.AdUnitId
               , settings.Format
               , coversFullScreen: true
-              , settings.CountdownSec
-              , settings.XRandomSide
-              , settings.NumberOppositeSide
               , heightRatio: 1
               , settings.BackgroundAlpha
-              , settings.FakeCloseAutoDismiss) {}
+              , settings.Close) {}
     }
 }

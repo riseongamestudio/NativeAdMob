@@ -16,13 +16,16 @@ NS_ASSUME_NONNULL_BEGIN
                       instanceId:(int32_t)instanceId;
 
 - (void)configureWithFullscreen:(BOOL)fullscreen
-                   countdownSec:(int32_t)countdownSec
-                    xRandomSide:(BOOL)xRandomSide
-             numberOppositeSide:(BOOL)numberOppositeSide
                     heightRatio:(float)heightRatio
                 backgroundAlpha:(float)backgroundAlpha
-           fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss;
-- (void)setCountdownSec:(int32_t)countdownSec;
+                       cooldown:(int32_t)cooldown
+                      closeSide:(int32_t)closeSide
+                      timerSide:(int32_t)timerSide
+                redirectOnClose:(BOOL)redirectOnClose;
+- (void)setCloseWithCooldown:(int32_t)cooldown
+                   closeSide:(int32_t)closeSide
+                   timerSide:(int32_t)timerSide
+             redirectOnClose:(BOOL)redirectOnClose;
 - (void)load;
 - (void)showWithShowId:(int32_t)showId
              onCompleted:(RONativeAdShowCompletedCallback _Nullable)onCompleted;

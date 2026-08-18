@@ -1,6 +1,6 @@
 namespace RiseOn.NativeAdMob {
     internal interface IOverlayAdClient {
-        void SetCountdownSec(int countdownSec);
+        void SetClose(in CloseSettings controls);
         void Load();
         void Show(int showId);
         void Hide();

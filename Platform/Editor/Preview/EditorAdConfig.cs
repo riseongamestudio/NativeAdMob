@@ -12,22 +12,18 @@ namespace RiseOn.NativeAdMob.Editor {
         internal string                    AdUnitId          { get; }
         internal EditorAdMode Mode              { get; }
         internal bool                      PausesGame        { get; }
-        internal bool                      RandomCloseSide   { get; }
-        internal bool                      NumberOpposite    { get; }
+        internal CloseSettings             Close             { get; private set; }
         internal float                     HeightRatio       { get; }
         internal float                     BackgroundAlpha   { get; }
         internal Vector2Int                PositionPx        { get; private set; }
         internal Vector2Int                SizePx            { get; }
         internal bool                      AllowsVideo       { get; }
-        internal int                       CountdownSec      { get; private set; }
 
         private EditorAdConfig(
             string adUnitId
           , EditorAdMode mode
           , bool pausesGame
-          , int countdownSec
-          , bool randomCloseSide
-          , bool numberOpposite
+          , in CloseSettings controls
           , float heightRatio
           , float backgroundAlpha
           , Vector2Int positionPx
@@ -36,9 +32,7 @@ namespace RiseOn.NativeAdMob.Editor {
             AdUnitId        = adUnitId;
             Mode            = mode;
             PausesGame      = pausesGame;
-            CountdownSec    = Mathf.Max(0, countdownSec);
-            RandomCloseSide = randomCloseSide;
-            NumberOpposite  = numberOpposite;
+            Close = controls;
             HeightRatio     = heightRatio;
             BackgroundAlpha = backgroundAlpha;
             PositionPx      = positionPx;
@@ -49,21 +43,16 @@ namespace RiseOn.NativeAdMob.Editor {
         internal static EditorAdConfig CreateFullScreen(
             string adUnitId
           , bool fullscreen
-          , int countdownSec
-          , bool randomCloseSide
-          , bool numberOpposite
           , float heightRatio
           , float backgroundAlpha
-          , bool fakeCloseAutoDismiss) {
+          , in CloseSettings controls) {
             return new(
                 adUnitId
               , fullscreen
                     ? EditorAdMode.FullScreen
                     : EditorAdMode.Collapsible
               , fullscreen
-              , countdownSec
-              , randomCloseSide
-              , numberOpposite
+              , controls
               , ResolveRatio(heightRatio, DEFAULT_HEIGHT_RATIO)
               , ResolveAlpha(
                     backgroundAlpha
@@ -72,9 +61,7 @@ namespace RiseOn.NativeAdMob.Editor {
                         : COLLAPSIBLE_DEFAULT_ALPHA)
               , default
               , default
-              , true) {
-                FakeCloseAutoDismiss = fakeCloseAutoDismiss
-            };
+              , true);
         }
 
         internal static EditorAdConfig CreateInFeed(
@@ -87,8 +74,6 @@ namespace RiseOn.NativeAdMob.Editor {
               , EditorAdMode.InFeed
               , false
               , default
-              , false
-              , false
               , default
               , ResolveInFeedAlpha(backgroundAlpha)
               , positionPx
@@ -96,14 +81,8 @@ namespace RiseOn.NativeAdMob.Editor {
               , true);
         }
 
-        /// <summary>
-        /// Mirrors the device rule: the close button commits the ad's click
-        /// on its way out.
-        /// </summary>
-        internal bool FakeCloseAutoDismiss { get; private set; }
-
-        internal void SetCountdownSec(int countdownSec) {
-            CountdownSec = Mathf.Max(0, countdownSec);
+        internal void SetClose(in CloseSettings controls) {
+            Close = controls;
         }
 
         internal void SetPosition(Vector2Int positionPx) {
@@ -115,16 +94,12 @@ namespace RiseOn.NativeAdMob.Editor {
                 AdUnitId
               , Mode
               , PausesGame
-              , CountdownSec
-              , RandomCloseSide
-              , NumberOpposite
+              , Close
               , HeightRatio
               , BackgroundAlpha
               , PositionPx
               , SizePx
-              , AllowsVideo) {
-                FakeCloseAutoDismiss = FakeCloseAutoDismiss
-            };
+              , AllowsVideo);
         }
 
         private static float ResolveAlpha(float value, float defaultValue) {

@@ -40,7 +40,7 @@ static NSString *const kROTag = @"Overlay";
     GADNativeAd *_nativeAd;
     int32_t _countdownSec;
     BOOL _closeOnLeft;
-    BOOL _numberOpposite;
+    BOOL _timerOnLeft;
     BOOL _fullscreen;
     float _heightRatio;
     float _backgroundAlpha;
@@ -55,8 +55,8 @@ static NSString *const kROTag = @"Overlay";
 - (instancetype)initWithViewController:(UIViewController *)viewController
                               nativeAd:(GADNativeAd *)nativeAd
                           countdownSec:(int32_t)countdownSec
-                               xRandom:(BOOL)xRandom
-                        numberOpposite:(BOOL)numberOpposite
+                           closeOnLeft:(BOOL)closeOnLeft
+                           timerOnLeft:(BOOL)timerOnLeft
                             fullscreen:(BOOL)fullscreen
                            heightRatio:(float)heightRatio
                        backgroundAlpha:(float)backgroundAlpha
@@ -67,8 +67,8 @@ static NSString *const kROTag = @"Overlay";
     _hostViewController = viewController;
     _nativeAd = nativeAd;
     _countdownSec = MAX(0, countdownSec);
-    _closeOnLeft = xRandom && arc4random_uniform(2) == 0;
-    _numberOpposite = numberOpposite;
+    _closeOnLeft = closeOnLeft;
+    _timerOnLeft = timerOnLeft;
     _fullscreen = fullscreen;
     _heightRatio = heightRatio;
     _backgroundAlpha = backgroundAlpha;
@@ -94,7 +94,7 @@ static NSString *const kROTag = @"Overlay";
             initWithNativeAd:_nativeAd
         countDownRemainingMs:(int64_t)_countdownSec * 1000
                  closeOnLeft:_closeOnLeft
-              numberOpposite:_numberOpposite
+                 timerOnLeft:_timerOnLeft
                   fullscreen:_fullscreen
              backgroundAlpha:_backgroundAlpha
         fakeCloseAutoDismiss:_fakeCloseAutoDismiss

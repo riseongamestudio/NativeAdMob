@@ -7,7 +7,7 @@ namespace RiseOn.NativeAdMob.Android {
         private const string JAVA_CLASS_NAME               = "com.riseon.nativeadmob.OverlayAd";
         private const string JAVA_SET_LISTENER_METHOD      = "SetListener";
         private const string JAVA_CONFIGURE_METHOD         = "Configure";
-        private const string JAVA_SET_COUNTDOWN_SEC_METHOD = "SetCountdownSec";
+        private const string JAVA_SET_CLOSE_METHOD         = "SetClose";
         private const string JAVA_LOAD_AD_METHOD           = "Load";
         private const string JAVA_SHOW_AD_METHOD           = "Show";
         private const string JAVA_HIDE_AD_METHOD           = "Hide";
@@ -29,20 +29,25 @@ namespace RiseOn.NativeAdMob.Android {
             javaObject.Call(
                 JAVA_CONFIGURE_METHOD
               , settings.CoversFullScreen
-              , settings.CountdownSec
-              , settings.XRandomSide
-              , settings.NumberOppositeSide
               , settings.HeightRatio
               , settings.BackgroundAlpha
-              , settings.FakeCloseAutoDismiss);
+              , settings.Close.Cooldown
+              , (int)settings.Close.CloseSide
+              , (int)settings.Close.TimerSide
+              , settings.Close.RedirectOnClose);
             listener = new NativeAdLoadListenerProxy(callbacks);
             javaObject.Call(
                 JAVA_SET_LISTENER_METHOD
               , new object[] { listener });
         }
 
-        public void SetCountdownSec(int countdownSec) {
-            javaObject?.Call(JAVA_SET_COUNTDOWN_SEC_METHOD, countdownSec);
+        public void SetClose(in CloseSettings controls) {
+            javaObject?.Call(
+                JAVA_SET_CLOSE_METHOD
+              , controls.Cooldown
+              , (int)controls.CloseSide
+              , (int)controls.TimerSide
+              , controls.RedirectOnClose);
         }
 
         public void Load() {

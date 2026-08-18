@@ -12,11 +12,18 @@ import com.google.android.gms.ads.nativead.NativeAd;
 
 public final class OverlayAd extends BaseAd {
 
+    private static final int SIDE_LEFT           = 0;
+    private static final int SIDE_RIGHT          = 1;
+    private static final int TIMER_SIDE_OPPOSITE = 3;
+    private static final int TIMER_SIDE_SAME     = 4;
+
     static final class OverlayAdStyle {
         final boolean fullscreen;
-        final int countdownSec;
-        final boolean xRandomSide;
-        final boolean numberOppositeSide;
+        final int cooldown;
+        // Ordinals shared with the C# enums: Left 0, Right 1, Random 2, and
+        // for the timer OppositeOfClose 3, SameAsClose 4.
+        final int closeSide;
+        final int timerSide;
         final float heightRatio;
         final float backgroundAlpha;
         // The close button commits the ad's click on its way out.
@@ -24,30 +31,52 @@ public final class OverlayAd extends BaseAd {
 
         OverlayAdStyle(
                 boolean fullscreen
-              , int countdownSec
-              , boolean xRandomSide
-              , boolean numberOppositeSide
+              , int cooldown
+              , int closeSide
+              , int timerSide
               , float heightRatio
               , float backgroundAlpha
               , boolean fakeCloseAutoDismiss) {
             this.fullscreen = fullscreen;
-            this.countdownSec = Math.max(0, countdownSec);
-            this.xRandomSide = xRandomSide;
-            this.numberOppositeSide = numberOppositeSide;
+            this.cooldown = Math.max(0, cooldown);
+            this.closeSide = closeSide;
+            this.timerSide = timerSide;
             this.heightRatio = heightRatio;
             this.backgroundAlpha = backgroundAlpha;
             this.fakeCloseAutoDismiss = fakeCloseAutoDismiss;
         }
 
-        OverlayAdStyle WithCountdownSec(int newCountdownSec) {
+        OverlayAdStyle WithClose(
+                int newCooldown
+              , int newCloseSide
+              , int newTimerSide
+              , boolean newRedirectOnClose) {
             return new OverlayAdStyle(
                     fullscreen
-                  , newCountdownSec
-                  , xRandomSide
-                  , numberOppositeSide
+                  , newCooldown
+                  , newCloseSide
+                  , newTimerSide
                   , heightRatio
                   , backgroundAlpha
-                  , fakeCloseAutoDismiss);
+                  , newRedirectOnClose);
+        }
+
+        // Random is answered once per presentation; the relative timer modes
+        // then read that answer rather than rolling again.
+        boolean ResolveCloseOnLeft() {
+            if (closeSide == SIDE_LEFT) return true;
+            if (closeSide == SIDE_RIGHT) return false;
+            return Math.random() < 0.5d;
+        }
+
+        boolean ResolveTimerOnLeft(boolean closeOnLeft) {
+            switch (timerSide) {
+                case SIDE_LEFT:               return true;
+                case SIDE_RIGHT:              return false;
+                case TIMER_SIDE_OPPOSITE:     return !closeOnLeft;
+                case TIMER_SIDE_SAME:         return closeOnLeft;
+                default:                      return Math.random() < 0.5d;
+            }
         }
 
         boolean PausesGame() {
@@ -236,12 +265,12 @@ public final class OverlayAd extends BaseAd {
 
     public synchronized void Configure(
             boolean fullscreen
-          , int countdownSec
-          , boolean xRandomSide
-          , boolean numberOppositeSide
           , float heightRatio
           , float backgroundAlpha
-          , boolean fakeCloseAutoDismiss) {
+          , int cooldown
+          , int closeSide
+          , int timerSide
+          , boolean redirectOnClose) {
         if (released) {
             Log.e(
                     TAG
@@ -257,23 +286,30 @@ public final class OverlayAd extends BaseAd {
 
         configuredStyle = new OverlayAdStyle(
                 fullscreen
-              , countdownSec
-              , xRandomSide
-              , numberOppositeSide
+              , cooldown
+              , closeSide
+              , timerSide
               , heightRatio
               , backgroundAlpha
-              , fakeCloseAutoDismiss);
+              , redirectOnClose);
         configured = true;
     }
 
-    public void SetCountdownSec(int countdownSec) {
+    public void SetClose(
+            int cooldown
+          , int closeSide
+          , int timerSide
+          , boolean redirectOnClose) {
         OverlayAdStyle currentStyle = configuredStyle;
         if (!configured || released || currentStyle == null) {
-            Log.e(TAG, "SetCountdownSec ignored before Configure or after Release");
+            Log.e(TAG, "SetClose ignored before Configure or after Release");
             return;
         }
-        OverlayAdStyle updatedStyle =
-                currentStyle.WithCountdownSec(countdownSec);
+        OverlayAdStyle updatedStyle = currentStyle.WithClose(
+                cooldown
+              , closeSide
+              , timerSide
+              , redirectOnClose);
         configuredStyle = updatedStyle;
         RequestPreparedPresentationRebuild(updatedStyle);
     }
@@ -593,13 +629,14 @@ public final class OverlayAd extends BaseAd {
             Activity activity
           , NativeAd ad
           , OverlayAdStyle style) {
+        boolean closeOnLeftForPresentation = style.ResolveCloseOnLeft();
         OverlayAdPresentation createdPresentation =
                 new OverlayAdPresentation(
                 activity
               , ad
-              , style.countdownSec
-              , style.xRandomSide
-              , style.numberOppositeSide
+              , style.cooldown
+              , closeOnLeftForPresentation
+              , style.ResolveTimerOnLeft(closeOnLeftForPresentation)
               , style.fullscreen
               , style.heightRatio
               , style.backgroundAlpha
@@ -750,17 +787,16 @@ public final class OverlayAd extends BaseAd {
                           , true
                           , style.heightRatio
                           , hasVideoContent);
-            boolean closeOnLeft =
-                    style.xRandomSide && Math.random() < 0.5d;
+            boolean closeOnLeft = style.ResolveCloseOnLeft();
             OverlayAdActivity.CloseRelay closeRelay =
                     new OverlayAdActivity.CloseRelay();
             OverlayAdContentView createdContentView =
                     new OverlayAdContentView(
                             activity
                           , ad
-                          , style.countdownSec * 1000L
+                          , style.cooldown * 1000L
                           , closeOnLeft
-                          , style.numberOppositeSide
+                          , style.ResolveTimerOnLeft(closeOnLeft)
                           , true
                           , style.backgroundAlpha
                           , style.fakeCloseAutoDismiss

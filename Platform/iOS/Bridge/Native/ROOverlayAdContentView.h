@@ -16,7 +16,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithNativeAd:(GADNativeAd *)nativeAd
              countDownRemainingMs:(int64_t)countDownRemainingMs
                       closeOnLeft:(BOOL)closeOnLeft
-                   numberOpposite:(BOOL)numberOpposite
+                   timerOnLeft:(BOOL)timerOnLeft
                        fullscreen:(BOOL)fullscreen
                   backgroundAlpha:(float)backgroundAlpha
              fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss

@@ -31,12 +31,9 @@ namespace RiseOn.NativeAdMob {
             string adUnitId
           , AdFormat format
           , bool coversFullScreen
-          , int countdownSec
-          , bool xRandomSide
-          , bool numberOppositeSide
           , float heightRatio
           , float backgroundAlpha
-          , bool fakeCloseAutoDismiss)
+          , in CloseSettings controls)
             : base(adUnitId, format) {
             var platform = AdPlatformRegistry.Installed;
             if (platform == null) {
@@ -47,23 +44,25 @@ namespace RiseOn.NativeAdMob {
             }
             client = platform.CreateOverlay(
                 new OverlayAdSettings {
-                    AdUnitId           = adUnitId
-                  , CoversFullScreen   = coversFullScreen
-                  , CountdownSec       = countdownSec
-                  , XRandomSide        = xRandomSide
-                  , NumberOppositeSide = numberOppositeSide
-                  , HeightRatio        = heightRatio
-                  , BackgroundAlpha    = backgroundAlpha
-                  , FakeCloseAutoDismiss = fakeCloseAutoDismiss
+                    AdUnitId         = adUnitId
+                  , CoversFullScreen = coversFullScreen
+                  , HeightRatio      = heightRatio
+                  , BackgroundAlpha  = backgroundAlpha
+                  , Close         = controls
                 }
               , this);
         }
 
-        public void SetCountdownSec(int countdownSec) {
+        /// <summary>
+        /// Replaces the whole control strip: the ad shown next carries these.
+        /// Every knob moves together, so a placement never ends up with one
+        /// rule from an old plan and one from a new one.
+        /// </summary>
+        public void SetClose(in CloseSettings controls) {
             lock (nativeAdStateLock) {
                 if (releasedManaged) return;
 
-                client?.SetCountdownSec(countdownSec);
+                client?.SetClose(controls);
             }
         }
 
@@ -203,18 +202,16 @@ namespace RiseOn.NativeAdMob {
             int showId
           , string errorMessage
           , bool adConsumed) {
-            GoogleMobileAds.Common.MobileAdsEventExecutor.ExecuteInUpdate(() => {
-                if (!TryTakeShow(showId)) return;
+            if (!TryTakeShow(showId)) return;
 
-                // Listeners must fully return before the consumed ad starts
-                // its automatic replacement load.
-                if (string.IsNullOrEmpty(errorMessage)) {
-                    InvokeSafely(OnAdHidden);
-                } else {
-                    RaiseDisplayFailed(SHOW_REJECTED_CODE, errorMessage);
-                }
-                if (adConsumed) Load();
-            });
+            // Listeners must fully return before the consumed ad starts its
+            // automatic replacement load.
+            if (string.IsNullOrEmpty(errorMessage)) {
+                InvokeSafely(OnAdHidden);
+            } else {
+                RaiseDisplayFailed(SHOW_REJECTED_CODE, errorMessage);
+            }
+            if (adConsumed) Load();
         }
 
         // Readiness is never guessed here. The native side publishes it -

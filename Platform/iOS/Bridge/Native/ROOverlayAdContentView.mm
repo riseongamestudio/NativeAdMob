@@ -154,7 +154,7 @@ static void ROCentreUnderIcon(UIView *view) {
     int64_t _countDownRemainingMs;
     BOOL _closeOnLeft;
     BOOL _fakeCloseAutoDismiss;
-    BOOL _numberOpposite;
+    BOOL _timerOnLeft;
     BOOL _fullscreen;
     float _backgroundAlpha;
     dispatch_block_t _onClose;
@@ -224,7 +224,7 @@ static void ROCentreUnderIcon(UIView *view) {
 - (instancetype)initWithNativeAd:(GADNativeAd *)nativeAd
              countDownRemainingMs:(int64_t)countDownRemainingMs
                       closeOnLeft:(BOOL)closeOnLeft
-                   numberOpposite:(BOOL)numberOpposite
+                   timerOnLeft:(BOOL)timerOnLeft
                        fullscreen:(BOOL)fullscreen
                   backgroundAlpha:(float)backgroundAlpha
              fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss
@@ -236,7 +236,7 @@ static void ROCentreUnderIcon(UIView *view) {
     _nativeAd = nativeAd;
     _countDownRemainingMs = MAX(0, countDownRemainingMs);
     _closeOnLeft = closeOnLeft;
-    _numberOpposite = numberOpposite;
+    _timerOnLeft = timerOnLeft;
     _fullscreen = fullscreen;
     _backgroundAlpha = backgroundAlpha;
     _fakeCloseAutoDismiss = fakeCloseAutoDismiss;
@@ -1424,7 +1424,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
         controlY = cutoutInset;
     }
     BOOL closeLeft = _closeOnLeft;
-    BOOL numberLeft = _numberOpposite ? !closeLeft : closeLeft;
+    BOOL numberLeft = _timerOnLeft ? !closeLeft : closeLeft;
     _close.frame = CGRectMake(
             closeLeft
                     ? leftControlInset
@@ -1522,7 +1522,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
 
     // Both corner controls share one spot until the countdown ends, so a
     // side is an obstacle when either of them lives there.
-    BOOL numberLeft = _numberOpposite ? !_closeOnLeft : _closeOnLeft;
+    BOOL numberLeft = _timerOnLeft ? !_closeOnLeft : _closeOnLeft;
     BOOL leftOccupied = _closeOnLeft || numberLeft;
     BOOL rightOccupied = !_closeOnLeft || !numberLeft;
     // The media's field: its sides NEVER pass the panel's side padding -

@@ -93,15 +93,19 @@ namespace RiseOn.NativeAdMob.iOS {
         internal static extern void ROOverlayAd_Configure(
             IntPtr handle
           , [MarshalAs(UnmanagedType.I1)] bool fullscreen
-          , int countdownSec
-          , [MarshalAs(UnmanagedType.I1)] bool xRandomSide
-          , [MarshalAs(UnmanagedType.I1)] bool numberOppositeSide
           , float heightRatio
           , float backgroundAlpha
-          , [MarshalAs(UnmanagedType.I1)] bool fakeCloseAutoDismiss);
+          , int cooldown
+          , int closeSide
+          , int timerSide
+          , [MarshalAs(UnmanagedType.I1)] bool redirectOnClose);
         [DllImport("__Internal")]
-        internal static extern void ROOverlayAd_SetCountdownSec(
-            IntPtr handle, int countdownSec);
+        internal static extern void ROOverlayAd_SetClose(
+            IntPtr handle
+          , int cooldown
+          , int closeSide
+          , int timerSide
+          , [MarshalAs(UnmanagedType.I1)] bool redirectOnClose);
         [DllImport("__Internal")]
         internal static extern void ROOverlayAd_Load(IntPtr handle);
         [DllImport("__Internal")]

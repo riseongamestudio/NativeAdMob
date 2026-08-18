@@ -52,12 +52,21 @@ namespace RiseOn.NativeAdMob.Editor {
         // had - and only on text: the media bleeds edge to edge.
         private const int CONTENT_HORIZONTAL_PADDING_DP     = 8;
         private const int CONTENT_SPACING_DP                = 4;
-        private const int CONTROL_SIZE_DP                   = 34;
+        // The device's control strip: CONTROL_STRIP_HEIGHT_DP on Android,
+        // kROControlStripHeight on iOS. Both are 30.
+        private const int CONTROL_SIZE_DP                   = 30;
         private const int CONTROL_BADGE_SPACING_DP          = 2;
-        private const int AD_CHOICES_SIZE_DP                = 18;
-        private const int CONTROL_RIGHT_INSET_DP =
-                AD_CHOICES_SIZE_DP
-              + CONTROL_BADGE_SPACING_DP;
+        // The mark Google draws in the corner. The Java side only reserves
+        // room for it and never paints, so this is the preview's own
+        // assumption: the AdChoices asset is a 15dp glyph, while the 24dp
+        // square and 76px width the reserve asks for are the overlay's touch
+        // area, not the drawing.
+        private const int AD_CHOICES_SIZE_DP                = 15;
+        // The device keeps close and timer this far from the right edge, as
+        // a flat number: RIGHT_CONTROL_INSET_DP on Android. Deriving it from
+        // the AdChoices size would push the controls further out every time
+        // that assumption changed.
+        private const int CONTROL_RIGHT_INSET_DP            = 18;
         private const int ATTRIBUTION_WIDTH_DP              = 24;
         private const int CONTROL_LEFT_INSET_DP =
                 ATTRIBUTION_WIDTH_DP
@@ -111,6 +120,11 @@ namespace RiseOn.NativeAdMob.Editor {
         private const float IN_FEED_BADGE_SHORT_SIDE_RATIO  = 0.10f;
         private const float IN_FEED_ATTRIBUTION_ASPECT_RATIO = 4f / 3f;
         private const float IN_FEED_CTA_FONT_HEIGHT_RATIO   = 0.5f;
+        // The scrim block's own inset from the cell's edges - a hair on a
+        // small cell, a few points on a large one.
+        private const float IN_FEED_SCRIM_PADDING_RATIO     = 0.015f;
+        private const int   IN_FEED_SCRIM_PADDING_MIN_DP    = 1;
+        private const int   IN_FEED_SCRIM_PADDING_MAX_DP    = 4;
         // Text is sized by the box it sits in. The same preview draws a 96dp
         // feed cell and a full screen, so one point size cannot serve both:
         // it looks lost in the roomy box and cramped in the tight one. These
@@ -804,8 +818,17 @@ namespace RiseOn.NativeAdMob.Editor {
             content.sizeDelta = new(0f, 0f);
 
             var stack = contentObject.GetComponent<VerticalLayoutGroup>();
-            var pad = Mathf.Max(gap, 2);
-            stack.padding = new(pad, pad, gap, gap);
+            // The device spends nothing here: PaddingForTier returns 0 and
+            // the comment says why - the slot is already bounded by the card
+            // it sits in, so an inset buys nothing. Only the scrim template
+            // insets its block, because there the text sits over the media.
+            var pad = scrimTemplate
+                    ? Mathf.Clamp(
+                        Mathf.RoundToInt(shortSide * IN_FEED_SCRIM_PADDING_RATIO)
+                      , IN_FEED_SCRIM_PADDING_MIN_DP
+                      , IN_FEED_SCRIM_PADDING_MAX_DP)
+                    : 0;
+            stack.padding = new(pad, pad, pad, pad);
             stack.spacing = gap;
             stack.childAlignment = TextAnchor.LowerLeft;
             stack.childControlWidth = true;
@@ -1067,12 +1090,7 @@ namespace RiseOn.NativeAdMob.Editor {
             adChoicesObject.transform.SetParent(panel, false);
             var adChoicesRect =
                     adChoicesObject.GetComponent<RectTransform>();
-            SetTopRightRect(
-                adChoicesRect
-              , Vector2.zero
-              , new(
-                    AD_CHOICES_SIZE_DP
-                  , AD_CHOICES_SIZE_DP));
+            PlaceAdChoices(adChoicesRect, safeTopInset: 0f);
             var graphic =
                     adChoicesObject
                             .GetComponent<EditorAdChoicesGraphic>();
@@ -1091,8 +1109,13 @@ namespace RiseOn.NativeAdMob.Editor {
           , EditorAdConfig config) {
             if (config.Mode == EditorAdMode.InFeed) return;
 
-            var closeOnLeft =
-                    config.RandomCloseSide && UnityEngine.Random.value < 0.5f;
+            // Random is resolved once per presentation, the way the device
+            // does it; the relative timer modes then read that answer.
+            var closeOnLeft = config.Close.CloseSide switch {
+                CloseSide.Left  => true
+              , CloseSide.Right => false
+              , _                  => UnityEngine.Random.value < 0.5f
+            };
             closeControlOnLeft = closeOnLeft;
             closeButton = CreateControlButton(
                 panel
@@ -1101,26 +1124,29 @@ namespace RiseOn.NativeAdMob.Editor {
               , CLOSE_FONT_SIZE
               , closeOnLeft);
             closeButton.onClick.AddListener(() => {
-                if (config.FakeCloseAutoDismiss) {
+                if (config.Close.RedirectOnClose) {
                     TryOpenUrl(TEST_AD_CLICK_URL, CLICK_LOG_TEXT);
                 }
                 Dismiss();
             });
 
-            countdownControlOnLeft =
-                    config.NumberOpposite
-                            ? !closeOnLeft
-                            : closeOnLeft;
+            countdownControlOnLeft = config.Close.TimerSide switch {
+                TimerSide.Left            => true
+              , TimerSide.Right           => false
+              , TimerSide.SameAsClose     => closeOnLeft
+              , TimerSide.OppositeOfClose => !closeOnLeft
+              , _                         => UnityEngine.Random.value < 0.5f
+            };
             countdownControl = CreateControlText(
                 panel
               , COUNTDOWN_OBJECT_NAME
-              , config.CountdownSec.ToString()
+              , config.Close.Cooldown.ToString()
               , COUNTDOWN_FONT_SIZE
               , countdownControlOnLeft
               , out countdownText);
-            countdownRemaining = config.CountdownSec;
+            countdownRemaining = config.Close.Cooldown;
 
-            var countdownFinished = config.CountdownSec <= 0;
+            var countdownFinished = config.Close.Cooldown <= 0;
             closeButton.gameObject.SetActive(countdownFinished);
             countdownControl.SetActive(!countdownFinished);
         }
@@ -1344,6 +1370,20 @@ namespace RiseOn.NativeAdMob.Editor {
             rect.sizeDelta = size;
         }
 
+        // The mark hugs the corner, the way the SDK draws it. Both the build
+        // and the safe-inset pass come through here, so neither can undo the
+        // other.
+        private static void PlaceAdChoices(
+            RectTransform adChoices
+          , float safeTopInset) {
+            if (adChoices == null) return;
+
+            SetTopRightRect(
+                adChoices
+              , new(0f, -safeTopInset)
+              , new(AD_CHOICES_SIZE_DP, AD_CHOICES_SIZE_DP));
+        }
+
         private static void SetTopRightRect(
             RectTransform rect
           , Vector2 position
@@ -1532,14 +1572,7 @@ namespace RiseOn.NativeAdMob.Editor {
                         ATTRIBUTION_WIDTH_DP
                       , ATTRIBUTION_HEIGHT_DP));
             }
-            if (adChoicesRect != null) {
-                SetTopRightRect(
-                    adChoicesRect
-                  , new(0f, -safeTopInset)
-                  , new(
-                        AD_CHOICES_SIZE_DP
-                      , AD_CHOICES_SIZE_DP));
-            }
+            PlaceAdChoices(adChoicesRect, safeTopInset);
         }
 
         private float ResolveInFeedBadgeSize(float uiScale) {

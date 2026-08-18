@@ -18,6 +18,10 @@ namespace RiseOn.NativeAdMob {
         private protected bool releasedManaged;
 
         /// <summary>Supply-side events of the ad unit.</summary>
+        // Declared in the order an ad lives them: it loads, it goes up,
+        // it earns, it goes away. Every list about an ad follows this - the
+        // events here, the subscriptions, the handlers - so the order is
+        // learned once.
         public event Action OnAdLoaded;
         public event Action<AdError> OnAdLoadFailed;
         public event Action<AdImpression> OnAdPaid;
@@ -40,15 +44,15 @@ namespace RiseOn.NativeAdMob {
         }
 
 
-        // Native calls back on its own thread; hop to Unity's update loop
-        // and re-check the release gate there.
+        // Native calls back on its own thread and this pack leaves it
+        // there, the way the AdMob SDK does: a listener that needs Unity's
+        // thread says so itself. Marshalling here would push every caller a
+        // frame late whether they needed it or not.
         private protected void DispatchFromNative(Action callback) {
-            GoogleMobileAds.Common.MobileAdsEventExecutor.ExecuteInUpdate(() => {
-                lock (nativeAdStateLock) {
-                    if (releasedManaged) return;
-                }
-                InvokeSafely(callback);
-            });
+            lock (nativeAdStateLock) {
+                if (releasedManaged) return;
+            }
+            InvokeSafely(callback);
         }
 
         // The native side reports one completion carrying a code. The two

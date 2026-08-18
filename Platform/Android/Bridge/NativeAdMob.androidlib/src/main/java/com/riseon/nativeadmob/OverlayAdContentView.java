@@ -212,7 +212,7 @@ final class OverlayAdContentView extends FrameLayout {
     private int avoidancePanelHeight;
     private final boolean closeOnLeft;
     private final boolean fakeCloseAutoDismiss;
-    private final boolean numberOpposite;
+    private final boolean timerOnLeft;
     private final boolean fullscreen;
     private final float backgroundAlpha;
     private final Runnable onClose;
@@ -230,7 +230,7 @@ final class OverlayAdContentView extends FrameLayout {
           , NativeAd nativeAd
           , int countDownSec
           , boolean xRandom
-          , boolean numberOpposite
+          , boolean timerOnLeft
           , boolean fullscreen
           , float backgroundAlpha
           , boolean fakeCloseAutoDismiss
@@ -241,7 +241,7 @@ final class OverlayAdContentView extends FrameLayout {
               , nativeAd
               , Math.max(0, countDownSec) * MILLIS_PER_SECOND
               , xRandom && Math.random() < 0.5d
-              , numberOpposite
+              , timerOnLeft
               , fullscreen
               , backgroundAlpha
               , fakeCloseAutoDismiss
@@ -254,7 +254,7 @@ final class OverlayAdContentView extends FrameLayout {
           , NativeAd nativeAd
           , long countDownRemainingMs
           , boolean closeOnLeft
-          , boolean numberOpposite
+          , boolean timerOnLeft
           , boolean fullscreen
           , float backgroundAlpha
           , boolean fakeCloseAutoDismiss
@@ -264,7 +264,7 @@ final class OverlayAdContentView extends FrameLayout {
         this.nativeAd = nativeAd;
         this.countDownRemainingMs = Math.max(0L, countDownRemainingMs);
         this.closeOnLeft = closeOnLeft;
-        this.numberOpposite = numberOpposite;
+        this.timerOnLeft = timerOnLeft;
         this.fullscreen = fullscreen;
         this.backgroundAlpha = backgroundAlpha;
         this.fakeCloseAutoDismiss = fakeCloseAutoDismiss;
@@ -904,10 +904,8 @@ final class OverlayAdContentView extends FrameLayout {
 
         int closeGravity = Gravity.TOP
                 | (closeOnLeft ? Gravity.START : Gravity.END);
-        int numberGravity = numberOpposite
-                ? Gravity.TOP
-                    | (closeOnLeft ? Gravity.END : Gravity.START)
-                : closeGravity;
+        int numberGravity = Gravity.TOP
+                | (timerOnLeft ? Gravity.START : Gravity.END);
         int controlSize = (int) (CONTROL_STRIP_HEIGHT_DP * density);
         int controlGap = Math.max(
                 1
@@ -1891,7 +1889,7 @@ final class OverlayAdContentView extends FrameLayout {
 
         // Both corner controls share one spot until the countdown ends, so
         // a side is an obstacle when either of them lives there.
-        boolean numberLeft = numberOpposite ? !closeOnLeft : closeOnLeft;
+        boolean numberLeft = timerOnLeft ? !closeOnLeft : closeOnLeft;
         boolean leftOccupied = closeOnLeft || numberLeft;
         boolean rightOccupied = !closeOnLeft || !numberLeft;
         // The media's field: its sides NEVER pass the panel's side padding -

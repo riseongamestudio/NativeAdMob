@@ -22,16 +22,13 @@ namespace RiseOn.NativeAdMob.Editor {
             config = EditorAdConfig.CreateFullScreen(
                 settings.AdUnitId
               , settings.CoversFullScreen
-              , settings.CountdownSec
-              , settings.XRandomSide
-              , settings.NumberOppositeSide
               , settings.HeightRatio
               , settings.BackgroundAlpha
-              , settings.FakeCloseAutoDismiss);
+              , settings.Close);
         }
 
-        public void SetCountdownSec(int countdownSec) {
-            config?.SetCountdownSec(countdownSec);
+        public void SetClose(in CloseSettings controls) {
+            config?.SetClose(controls);
         }
 
         public void Load() {

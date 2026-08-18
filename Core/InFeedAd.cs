@@ -15,6 +15,7 @@ namespace RiseOn.NativeAdMob {
         private const int MAX_SLOT_COUNT = 8;
         private const AdFormat IN_FEED_FORMAT = AdFormat.NATIVE_IN_FEED;
 
+        [Serializable]
         public struct Settings {
             public string AdUnitId;
             public int SlotCount;
