@@ -1528,18 +1528,20 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
             [self ro_measureLowerContentWithPanelWidth:panelWidth];
     CGFloat availableHeight = MAX(0, panelHeight - lowerContentHeight);
 
-    // Both corner controls share one spot until the countdown ends, so a
-    // side is an obstacle when either of them lives there.
-    BOOL numberLeft = _timerOnLeft ? !_closeOnLeft : _closeOnLeft;
-    BOOL leftOccupied = _closeOnLeft || numberLeft;
-    BOOL rightOccupied = !_closeOnLeft || !numberLeft;
+    // Close and timer are a pair, and the caller may put both on the same
+    // side. The media still has to clear the side it was not put on: a field
+    // that depended on the draw would move the picture whenever the draw
+    // changed. So both sides are walls, always.
+    BOOL leftOccupied = YES;
+    BOOL rightOccupied = YES;
     // The media's field: its sides NEVER pass the panel's side padding -
     // the same 8pt every element below wears - its ceiling is the panel's
     // top edge, and rising into the control band adds the two control
-    // columns as walls. Intervals run from wall to wall with no buffer:
-    // touching without overlapping is the goal. Both control POSITIONS
-    // count as walls whatever is currently visible, so the media never
-    // re-anchors when the timer hands over to the close.
+    // columns as walls. The walls stand on both sides whatever is currently
+    // visible there, so the media never re-anchors when the timer hands over
+    // to the close, or when the caller moves the pair. The picture then grows
+    // on the panel's centre line until it touches the nearer wall or the
+    // band's ceiling - touching without overlapping is the goal.
     CGFloat syncLeft = kROHorizontalPadding;
     CGFloat syncRight = panelWidth - kROHorizontalPadding;
     CGFloat topRowIntervalLeft = MAX(
@@ -1600,7 +1602,13 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
         CGFloat top = candidateTops[index];
         CGFloat intervalLeft = MAX(0, candidateLefts[index]);
         CGFloat intervalRight = MIN(panelWidth, candidateRights[index]);
-        CGFloat intervalWidth = intervalRight - intervalLeft;
+        // The picture stays on the panel's centre line, so what a candidate
+        // really offers is twice its narrower half: growing past that would
+        // push the media off centre, not make it bigger.
+        CGFloat panelCentre = panelWidth / 2;
+        CGFloat intervalWidth = 2 * MIN(
+                panelCentre - intervalLeft
+              , intervalRight - panelCentre);
         if (intervalWidth < _minimumMediaSize) continue;
 
         CGFloat bandHeight = availableHeight - top - kROMediaLowerSeam;
@@ -1686,13 +1694,14 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     _mediaView.ro_layoutWidth = bestBoxWidth;
     _mediaView.ro_layoutHeight = bestBoxHeight;
     _mediaView.ro_layoutWeight = 0;
-    // Centred within the free interval. The margin is measured from the
+    // Centred on the panel, never on the gap between the controls: the eye
+    // measures the picture against the panel's edges, and a box centred in an
+    // off-centre interval reads as a mistake. The margin is measured from the
     // panel edge, so the column's own left padding is subtracted - negative
     // means the media bleeds through it, as it may.
     _mediaView.ro_layoutGravity = HBGravityLeft;
     UIEdgeInsets mediaMargins = UIEdgeInsetsZero;
-    mediaMargins.left = bestIntervalLeft
-            + (bestIntervalWidth - bestBoxWidth) / 2
+    mediaMargins.left = (panelWidth - bestBoxWidth) / 2
             - _contentColumn.ro_padding.left;
     mediaMargins.bottom = kROMediaLowerSeam;
     _mediaView.ro_layoutMargins = mediaMargins;
