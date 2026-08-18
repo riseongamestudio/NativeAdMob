@@ -111,6 +111,26 @@ namespace RiseOn.NativeAdMob.Editor {
         private const float IN_FEED_BADGE_SHORT_SIDE_RATIO  = 0.10f;
         private const float IN_FEED_ATTRIBUTION_ASPECT_RATIO = 4f / 3f;
         private const float IN_FEED_CTA_FONT_HEIGHT_RATIO   = 0.5f;
+        // Text is sized by the box it sits in. The same preview draws a 96dp
+        // feed cell and a full screen, so one point size cannot serve both:
+        // it looks lost in the roomy box and cramped in the tight one. These
+        // are the share of the box a label's cap height should take, with a
+        // floor so it stays legible and a ceiling so it never shouts.
+        private const float ICON_TEXT_BOX_RATIO             = 0.26f;
+        private const int   ICON_TEXT_MIN_SIZE              = 5;
+        private const int   ICON_TEXT_MAX_SIZE              = 16;
+        private const float CALL_TO_ACTION_TEXT_BOX_RATIO   = 0.40f;
+        private const int   CALL_TO_ACTION_TEXT_MIN_SIZE    = 7;
+        private const int   CALL_TO_ACTION_TEXT_MAX_SIZE    = 18;
+        private const float MEDIA_LABEL_BOX_RATIO           = 0.085f;
+        private const int   MEDIA_LABEL_MIN_SIZE            = 6;
+        private const int   MEDIA_LABEL_MAX_SIZE            = 18;
+        private const float ATTRIBUTION_TEXT_BOX_RATIO      = 0.62f;
+        private const int   ATTRIBUTION_TEXT_MIN_SIZE       = 4;
+        private const int   ATTRIBUTION_TEXT_MAX_SIZE       = 12;
+        private const float CONTROL_GLYPH_BOX_RATIO         = 0.52f;
+        private const int   CONTROL_GLYPH_MIN_SIZE          = 8;
+        private const int   CONTROL_GLYPH_MAX_SIZE          = 24;
         private static readonly Vector2 ReferenceResolution =
                 new(360f, 800f);
         private static readonly Color FullScreenPanelColor =
@@ -551,6 +571,14 @@ namespace RiseOn.NativeAdMob.Editor {
               , TextAnchor.MiddleCenter
               , Color.white);
             Stretch(label.rectTransform);
+            label.horizontalOverflow = HorizontalWrapMode.Overflow;
+            ScaleToBox(
+                label
+              , label.rectTransform
+              , ICON_TEXT_BOX_RATIO
+              , ICON_TEXT_MIN_SIZE
+              , ICON_TEXT_MAX_SIZE
+              , followsShortSide: true);
             return layout;
         }
 
@@ -591,6 +619,13 @@ namespace RiseOn.NativeAdMob.Editor {
               , TextAnchor.MiddleCenter
               , Color.white);
             Stretch(label.rectTransform);
+            ScaleToBox(
+                label
+              , label.rectTransform
+              , MEDIA_LABEL_BOX_RATIO
+              , MEDIA_LABEL_MIN_SIZE
+              , MEDIA_LABEL_MAX_SIZE
+              , followsShortSide: true);
             return layout;
         }
 
@@ -630,6 +665,12 @@ namespace RiseOn.NativeAdMob.Editor {
               , TextAnchor.MiddleCenter
               , Color.white);
             Stretch(label.rectTransform);
+            ScaleToBox(
+                label
+              , label.rectTransform
+              , CALL_TO_ACTION_TEXT_BOX_RATIO
+              , CALL_TO_ACTION_TEXT_MIN_SIZE
+              , CALL_TO_ACTION_TEXT_MAX_SIZE);
             return layout;
         }
 
@@ -694,10 +735,14 @@ namespace RiseOn.NativeAdMob.Editor {
               , MEDIA_LABEL_FONT_SIZE
               , TextAnchor.MiddleCenter
               , Color.white);
-            mediaLabel.resizeTextForBestFit = true;
-            mediaLabel.resizeTextMinSize = IN_FEED_ATTRIBUTION_MIN_FONT_SIZE;
-            mediaLabel.resizeTextMaxSize = IN_FEED_SECONDARY_FONT_SIZE;
             Stretch(mediaLabel.rectTransform);
+            ScaleToBox(
+                mediaLabel
+              , mediaLabel.rectTransform
+              , MEDIA_LABEL_BOX_RATIO
+              , MEDIA_LABEL_MIN_SIZE
+              , MEDIA_LABEL_MAX_SIZE
+              , followsShortSide: true);
 
             if (scrimTemplate) {
                 Stretch(mediaRect);
@@ -1004,11 +1049,14 @@ namespace RiseOn.NativeAdMob.Editor {
               , ATTRIBUTION_FONT_SIZE
               , TextAnchor.MiddleCenter
               , Color.black);
-            attributionText.resizeTextForBestFit = true;
-            attributionText.resizeTextMinSize =
-                    IN_FEED_ATTRIBUTION_MIN_FONT_SIZE;
-            attributionText.resizeTextMaxSize = ATTRIBUTION_FONT_SIZE;
             Stretch(attributionText.rectTransform);
+            attributionText.horizontalOverflow = HorizontalWrapMode.Overflow;
+            ScaleToBox(
+                attributionText
+              , attributionText.rectTransform
+              , ATTRIBUTION_TEXT_BOX_RATIO
+              , ATTRIBUTION_TEXT_MIN_SIZE
+              , ATTRIBUTION_TEXT_MAX_SIZE);
 
             var adChoicesObject = new GameObject(
                 AD_CHOICES_TEXT
@@ -1101,6 +1149,14 @@ namespace RiseOn.NativeAdMob.Editor {
               , TextAnchor.MiddleCenter
               , Color.white);
             Stretch(label.rectTransform);
+            label.horizontalOverflow = HorizontalWrapMode.Overflow;
+            ScaleToBox(
+                label
+              , label.rectTransform
+              , CONTROL_GLYPH_BOX_RATIO
+              , CONTROL_GLYPH_MIN_SIZE
+              , CONTROL_GLYPH_MAX_SIZE
+              , followsShortSide: true);
             return button;
         }
 
@@ -1128,6 +1184,14 @@ namespace RiseOn.NativeAdMob.Editor {
               , TextAnchor.MiddleCenter
               , Color.white);
             Stretch(label.rectTransform);
+            label.horizontalOverflow = HorizontalWrapMode.Overflow;
+            ScaleToBox(
+                label
+              , label.rectTransform
+              , CONTROL_GLYPH_BOX_RATIO
+              , CONTROL_GLYPH_MIN_SIZE
+              , CONTROL_GLYPH_MAX_SIZE
+              , followsShortSide: true);
             return controlObject;
         }
 
@@ -1165,6 +1229,25 @@ namespace RiseOn.NativeAdMob.Editor {
             layout.minHeight = fontSize * heightMultiplier;
             layout.preferredHeight = layout.minHeight;
             return label;
+        }
+
+        // Every label that lives inside a box of its own gets its size from
+        // that box rather than from a constant.
+        private static void ScaleToBox(
+            Text label
+          , RectTransform box
+          , float ratio
+          , int minimumSize
+          , int maximumSize
+          , bool followsShortSide = false) {
+            label.gameObject
+                    .AddComponent<EditorScaledText>()
+                    .Configure(
+                        box
+                      , ratio
+                      , minimumSize
+                      , maximumSize
+                      , followsShortSide);
         }
 
         private static Text CreateOverlayText(
