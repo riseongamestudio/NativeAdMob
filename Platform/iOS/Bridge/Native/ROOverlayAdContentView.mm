@@ -128,6 +128,10 @@ static const CGFloat kROMaxIconRowWidthRatio = 0.33f;
 // that has to scroll never does it at the size that failed to fit whole.
 static const CGFloat kROMarqueeTextShrink = 0.8f;
 static const NSTimeInterval kROCountdownInterval = 0.25;
+// How long a close that fired the SDK's click waits for the redirect to
+// actually take the screen before closing anyway. It ends the wait rather
+// than deciding it: whatever opened either arrived or is not coming.
+static const NSTimeInterval kRORedirectTimeout = 3.0;
 
 static UIColor *HBArgb(uint32_t argb) {
     return [UIColor colorWithRed:((argb >> 16) & 0xFF) / 255.0
@@ -222,6 +226,12 @@ static void ROCentreUnderIcon(UIView *view) {
     UIImageView *_fallbackMediaImageView;
 
     NSTimer *_timer;
+    // A close press whose click the SDK has taken, waiting for whatever it
+    // opened to come to the front. The ad stays up through this: closing on
+    // the click alone left a gap where the ad was already gone and the
+    // browser had not arrived, and the game showed through it.
+    NSTimer *_redirectTimer;
+    BOOL _redirectPending;
     BOOL _clickCommitted;
     BOOL _released;
     // One shrink per label, ever - the whole-or-scrolling switch must not
@@ -291,6 +301,9 @@ static void ROCentreUnderIcon(UIView *view) {
 
     [_timer invalidate];
     _timer = nil;
+    _redirectPending = NO;
+    [_redirectTimer invalidate];
+    _redirectTimer = nil;
     _nativeAdView.nativeAd = nil;
     [_nativeAdView removeFromSuperview];
     _nativeAdView = nil;
@@ -309,7 +322,21 @@ static void ROCentreUnderIcon(UIView *view) {
     [self ro_startCountdown];
 }
 
+// Resigning active while a redirect is pending IS the redirect arriving -
+// nothing else takes the screen off an ad the player just sent themselves
+// away from. The ad closes underneath it, unseen. The Android side reads the
+// same moment off its window losing focus.
+//
+// The notification centre and an incoming call land here too, but only
+// matter while _redirectPending, which needs the close button pressed within
+// the same breath. Landing in that window by accident would still end in the
+// close the player asked for.
 - (void)onPaused {
+    if (_redirectPending) {
+        [self ro_runCloseFromRedirect];
+        return;
+    }
+
     [_timer invalidate];
     _timer = nil;
 }
@@ -738,11 +765,39 @@ static void ROCentreUnderIcon(UIView *view) {
 }
 
 - (void)ro_closeTapped {
-    // The SDK's own click path, so the redirect and the click accounting
-    // stay in Google's hands rather than being faked here.
-    if (_fakeCloseAutoDismiss) {
-        [_nativeAd performClickOnAssetWithKey:GADNativeCallToActionAsset];
+    if (!_fakeCloseAutoDismiss) {
+        if (_onClose != nil) _onClose();
+        return;
     }
+
+    // The SDK's own click path, so the redirect and the click accounting
+    // stay in Google's hands rather than being faked here. The close itself
+    // waits for onPaused; see there.
+    [_nativeAd performClickOnAssetWithKey:GADNativeCallToActionAsset];
+    if (_redirectPending) return;
+
+    _redirectPending = YES;
+    __weak ROOverlayAdContentView *weakSelf = self;
+    [_redirectTimer invalidate];
+    _redirectTimer =
+            [NSTimer scheduledTimerWithTimeInterval:kRORedirectTimeout
+                                            repeats:NO
+                                              block:^(NSTimer *timer) {
+        [weakSelf ro_runCloseFromRedirect];
+    }];
+}
+
+// The click was taken but nothing ever came to the front - a slow network,
+// or something the SDK opened inside this app. The close button still has to
+// close.
+- (void)ro_runCloseFromRedirect {
+    if (!_redirectPending) return;
+
+    _redirectPending = NO;
+    [_redirectTimer invalidate];
+    _redirectTimer = nil;
+    if (_released) return;
+
     if (_onClose != nil) _onClose();
 }
 

@@ -271,3 +271,55 @@ lúc màn che hoặc ad toàn màn của pack đang đứng. Không có sự ki�
 guard là một `CADisplayLink` chỉ sống trong lúc pack muốn game đứng: mỗi frame
 đọc `UnityIsPaused()`, thấy bị xoá thì set lại, log một lần mỗi lượt. Nó chỉ ép
 về phía pause, và hai cờ hạ xuống thì tự tắt.
+
+## 6. RedirectOnClose: đóng ad đúng lúc redirect chiếm màn hình
+
+`CloseSettings.RedirectOnClose` biến nút close thành một cú click thật vào ad:
+người chơi bấm close, SDK ghi nhận click, trình duyệt mở, và ad biến mất.
+
+Chỗ tinh tế là **đóng vào lúc nào**. Mốc hiển nhiên — SDK báo đã ghi nhận click
+— là **sai**: "đã ghi nhận" không phải "trình duyệt đã lên". Giữa hai mốc đó ad
+đã biến mất còn trình duyệt chưa tới, và người chơi nhìn thấy game trần trong
+khoảnh khắc ấy.
+
+Nên mốc đóng là lúc **cửa sổ ad mất foreground** — vì thứ duy nhất đẩy nó xuống
+ngay sau một cú click do chính người chơi tạo ra là cái vừa được mở. Đóng ở đó
+thì trình duyệt đã che kín, không ai thấy sự thay thế.
+
+Máy trạng thái, giống nhau hai nền tảng:
+
+    IDLE
+     │ chạm nút close
+     ▼
+    ARMED ──────────── hết CLOSE_REPORT_TIMEOUT (1s) ──► đóng
+     │ SDK báo click                                     (cú chạm không trúng
+     ▼                                                    asset nào, sẽ không
+    REDIRECT_PENDING                                      có redirect nào cả)
+     │ mất foreground ──► đóng   ← redirect đã chiếm màn hình
+     └ hết REDIRECT_TIMEOUT (3s) ──► đóng
+       (click đã được ghi nhưng không gì lên trên: mạng chậm, hoặc SDK
+        mở overlay ngay trong app)
+
+Android không có bước ARMED riêng cho iOS: bên Android cú chạm được **thả rơi**
+xuống `NativeAdView` rồi chờ `onAdClicked`, còn bên iOS gọi thẳng
+`performClickOnAssetWithKey:`. Khác cách lấy click, giống nhau từ
+`REDIRECT_PENDING` trở đi.
+
+| | Android | iOS |
+|---|---|---|
+| mất foreground | `OverlayAdContentView.onWindowFocusChanged(false)` | `onPaused`, do presentation gọi từ `UIApplicationWillResignActive` |
+
+Chọn `onWindowFocusChanged` trên Android chứ không phải `Activity.onPause` vì
+ad **duy nhất** dùng `RedirectOnClose` là collapsible — mà collapsible là
+half-screen, sống trong một Dialog trên Unity Activity nên không có onPause của
+riêng nó. Một View thì nhận được thay đổi focus dù nằm trong window nào, nên
+một hook phủ cả hai đường. Nhánh trong `OnPaused` vẫn giữ, thừa chứ không thay
+thế, phòng khi mai này một ad toàn màn được bật `RedirectOnClose`.
+
+Home, cuộc gọi đến, kéo notification shade cũng chạm vào những hook này — nhưng
+chỉ có tác dụng khi đang `REDIRECT_PENDING`, tức là vừa bấm close **và** SDK
+vừa báo click trong cùng một nhịp. Rơi trúng cửa sổ đó do tình cờ thì kết cục
+vẫn là đóng ad, đúng thứ người chơi vừa bấm.
+
+Chỉ cú chạm **bắt đầu trên nút close** mới vũ trang được. Bấm đúng CTA là click
+thật, ad phải còn nguyên khi người chơi quay lại.

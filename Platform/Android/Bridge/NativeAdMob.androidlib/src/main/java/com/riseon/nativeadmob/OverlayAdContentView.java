@@ -97,6 +97,11 @@ final class OverlayAdContentView extends FrameLayout {
     // before closing anyway. A close button that does not close is the one
     // outcome worse than a redirect that does not fire.
     private static final long CLOSE_REPORT_TIMEOUT_MS = 1000L;
+    // And how long a REPORTED click then waits for the redirect to actually
+    // take the screen. Longer than the first, because by this point a click
+    // is certain and only the browser is late. It ends the wait rather than
+    // deciding it: whatever opened either arrived or is not coming.
+    private static final long REDIRECT_TIMEOUT_MS = 3000L;
     private static final int MIN_BADGE_SIZE_PX = 15;
     private static final int ATTRIBUTION_WIDTH_DP = 24;
     private static final int ATTRIBUTION_HEIGHT_DP = 18;
@@ -235,7 +240,14 @@ final class OverlayAdContentView extends FrameLayout {
     // A press on the close button that has been let through to the ad view
     // and is waiting for the SDK to say it counted.
     private boolean closePressPending;
+    // The SDK has counted that press and something is opening on top of us.
+    // The ad stays up through this: closing on the click report alone left a
+    // gap where the ad was already gone and the browser had not arrived, and
+    // the game showed through it. Closing when the redirect actually takes
+    // the screen means nobody ever sees the swap.
+    private boolean redirectPending;
     private final Runnable closeFallbackRunnable = this::RunCloseFromPress;
+    private final Runnable redirectFallbackRunnable = this::RunCloseFromRedirect;
 
     // One constructor only, and it takes milliseconds. A seconds-taking
     // twin used to sit here and roll the close button's side itself; an
@@ -308,7 +320,11 @@ final class OverlayAdContentView extends FrameLayout {
         released = true;
 
         closePressPending = false;
-        if (close != null) close.removeCallbacks(closeFallbackRunnable);
+        redirectPending = false;
+        if (close != null) {
+            close.removeCallbacks(closeFallbackRunnable);
+            close.removeCallbacks(redirectFallbackRunnable);
+        }
 
         if (timer != null) {
             timer.cancel();
@@ -341,7 +357,36 @@ final class OverlayAdContentView extends FrameLayout {
         StartCountdown();
     }
 
+    // Losing the window's focus while a redirect is pending IS the redirect
+    // arriving - nothing else takes the screen off an ad the player just
+    // sent themselves away from. The ad closes underneath it, unseen.
+    //
+    // This is the hook that matters, because the only ad that asks for
+    // RedirectOnClose is the half-screen collapsible, and that one lives in
+    // a Dialog on the Unity Activity - it never sees an Activity onPause of
+    // its own. A view gets window focus changes whichever window it sits in,
+    // so this one covers the Activity path and the Dialog path alike.
+    //
+    // Home, a call or the notification shade land here too, but only matter
+    // while redirectPending, which needs the close button pressed AND the
+    // SDK's click report within the same breath. Landing in that window by
+    // accident would still end in the close the player asked for.
+    @Override
+    public void onWindowFocusChanged(boolean hasWindowFocus) {
+        super.onWindowFocusChanged(hasWindowFocus);
+        if (!hasWindowFocus && redirectPending) RunCloseFromRedirect();
+    }
+
+    // The Activity path's own signal. Redundant with the focus change above
+    // rather than alternative to it - RunCloseFromRedirect is idempotent -
+    // and it stays because a full-screen ad could be given RedirectOnClose
+    // tomorrow without anyone rechecking which hook fires.
     void OnPaused() {
+        if (redirectPending) {
+            RunCloseFromRedirect();
+            return;
+        }
+
         if (timer == null) return;
         timer.cancel();
         timer = null;
@@ -354,7 +399,22 @@ final class OverlayAdContentView extends FrameLayout {
         // Only a click that began on the close button closes the ad. A
         // genuine tap on the call to action leaves the flag false, so the
         // player who meant to follow the ad comes back to it still open.
-        if (closePressPending) RunCloseFromPress();
+        if (!closePressPending) return;
+
+        closePressPending = false;
+        if (close != null) close.removeCallbacks(closeFallbackRunnable);
+
+        // With no button left to post on there is no way to bound the wait,
+        // so close now rather than arm a state nothing can clear.
+        if (released || close == null) {
+            if (!released && onClose != null) onClose.run();
+            return;
+        }
+
+        // Reported, not yet arrived: hand the wait over to the window losing
+        // focus, with a bound in case nothing ever comes to the front.
+        redirectPending = true;
+        close.postDelayed(redirectFallbackRunnable, REDIRECT_TIMEOUT_MS);
     }
 
     private void ArmCloseFromPress() {
@@ -369,6 +429,19 @@ final class OverlayAdContentView extends FrameLayout {
 
         closePressPending = false;
         if (close != null) close.removeCallbacks(closeFallbackRunnable);
+        if (released) return;
+
+        if (onClose != null) onClose.run();
+    }
+
+    // The click was counted but nothing ever came to the front - a slow
+    // network, or something the SDK opened inside this app. The close button
+    // still has to close.
+    private void RunCloseFromRedirect() {
+        if (!redirectPending) return;
+
+        redirectPending = false;
+        if (close != null) close.removeCallbacks(redirectFallbackRunnable);
         if (released) return;
 
         if (onClose != null) onClose.run();
