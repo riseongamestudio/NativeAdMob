@@ -82,11 +82,6 @@ final class OverlayAdContentView extends FrameLayout {
     // whole band and renders inside it as it pleases.
     private static final float DEFAULT_MEDIA_ASPECT_RATIO = 1f;
     private static final float DEFAULT_HEIGHT_RATIO = 0.5f;
-    private static final float MAX_COLOR_CHANNEL = 255f;
-    private static final float FULL_SCREEN_DEFAULT_ALPHA = 0.80f;
-    private static final float COLLAPSIBLE_DEFAULT_ALPHA = 0.95f;
-    private static final int FULL_SCREEN_BACKGROUND_RGB = 0x000000;
-    private static final int COLLAPSIBLE_BACKGROUND_RGB = 0x1B2029;
     // 20dp a side spent 40dp of every screen on nothing the ad needed.
     // Five rather than eight because the side layout with content below
     // wears this padding three times across - one panel edge, the media's
@@ -98,6 +93,10 @@ final class OverlayAdContentView extends FrameLayout {
     private static final int CONTROL_STRIP_HEIGHT_DP = 30;
     private static final int CONTROL_GAP_DP = 2;
     private static final int RIGHT_CONTROL_INSET_DP = 18;
+    // How long a let-through close press waits for the SDK's click report
+    // before closing anyway. A close button that does not close is the one
+    // outcome worse than a redirect that does not fire.
+    private static final long CLOSE_REPORT_TIMEOUT_MS = 1000L;
     private static final int MIN_BADGE_SIZE_PX = 15;
     private static final int ATTRIBUTION_WIDTH_DP = 24;
     private static final int ATTRIBUTION_HEIGHT_DP = 18;
@@ -223,7 +222,7 @@ final class OverlayAdContentView extends FrameLayout {
     private final boolean fakeCloseAutoDismiss;
     private final boolean timerOnLeft;
     private final boolean fullscreen;
-    private final float backgroundAlpha;
+    private final int backgroundColor;
     private final Runnable onClose;
     private int resolvedPanelHeight;
     private CountDownTimer timer;
@@ -233,6 +232,10 @@ final class OverlayAdContentView extends FrameLayout {
     private TextView close;
     private Button callToActionView;
     private boolean released;
+    // A press on the close button that has been let through to the ad view
+    // and is waiting for the SDK to say it counted.
+    private boolean closePressPending;
+    private final Runnable closeFallbackRunnable = this::RunCloseFromPress;
 
     // One constructor only, and it takes milliseconds. A seconds-taking
     // twin used to sit here and roll the close button's side itself; an
@@ -247,7 +250,7 @@ final class OverlayAdContentView extends FrameLayout {
           , boolean closeOnLeft
           , boolean timerOnLeft
           , boolean fullscreen
-          , float backgroundAlpha
+          , int backgroundColor
           , boolean fakeCloseAutoDismiss
           , int requestedPanelHeight
           , Runnable onClose) {
@@ -257,7 +260,7 @@ final class OverlayAdContentView extends FrameLayout {
         this.closeOnLeft = closeOnLeft;
         this.timerOnLeft = timerOnLeft;
         this.fullscreen = fullscreen;
-        this.backgroundAlpha = backgroundAlpha;
+        this.backgroundColor = backgroundColor;
         this.fakeCloseAutoDismiss = fakeCloseAutoDismiss;
         this.onClose = onClose;
         Build(requestedPanelHeight);
@@ -304,6 +307,9 @@ final class OverlayAdContentView extends FrameLayout {
         if (released) return;
         released = true;
 
+        closePressPending = false;
+        if (close != null) close.removeCallbacks(closeFallbackRunnable);
+
         if (timer != null) {
             timer.cancel();
             timer = null;
@@ -345,6 +351,27 @@ final class OverlayAdContentView extends FrameLayout {
         if (nativeAdContainer != null) {
             nativeAdContainer.CommitAdClick();
         }
+        // Only a click that began on the close button closes the ad. A
+        // genuine tap on the call to action leaves the flag false, so the
+        // player who meant to follow the ad comes back to it still open.
+        if (closePressPending) RunCloseFromPress();
+    }
+
+    private void ArmCloseFromPress() {
+        if (released || closePressPending) return;
+
+        closePressPending = true;
+        close.postDelayed(closeFallbackRunnable, CLOSE_REPORT_TIMEOUT_MS);
+    }
+
+    private void RunCloseFromPress() {
+        if (!closePressPending) return;
+
+        closePressPending = false;
+        if (close != null) close.removeCallbacks(closeFallbackRunnable);
+        if (released) return;
+
+        if (onClose != null) onClose.run();
     }
 
     private void Build(int requestedPanelHeight) {
@@ -983,15 +1010,32 @@ final class OverlayAdContentView extends FrameLayout {
               , rightControlInset
               , 0);
         close.setLayoutParams(closeLayoutParams);
-        close.setOnClickListener(view -> {
-            // The button the SDK registered is the only honest way to follow
-            // an ad: performing its click keeps the redirect and the click
-            // accounting in Google's hands rather than faking either.
-            if (fakeCloseAutoDismiss && callToActionView != null) {
-                callToActionView.performClick();
-            }
-            if (onClose != null) onClose.run();
-        });
+        if (fakeCloseAutoDismiss) {
+            // The press is LET THROUGH rather than performed. A touch
+            // listener sees the DOWN and returns false, so the view never
+            // becomes the touch target and the whole gesture continues down
+            // to the NativeAdView underneath - which fills this panel and is
+            // the SDK's own clickable surface. Google therefore sees a real
+            // finger on a real ad view and does its own accounting and its
+            // own redirect; nothing here fakes either.
+            //
+            // performClick() used to sit here and did nothing at all: it
+            // fires an OnClickListener without ever producing a MotionEvent,
+            // and the SDK counts touches, not calls. On iOS the supported
+            // performClickOnAssetWithKey: exists and is still used - the two
+            // platforms take different roads because only one of them has a
+            // road.
+            close.setOnTouchListener((view, event) -> {
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                    ArmCloseFromPress();
+                }
+                return false;
+            });
+        } else {
+            close.setOnClickListener(view -> {
+                if (onClose != null) onClose.run();
+            });
+        }
 
         addView(countdown);
         addView(close);
@@ -2191,35 +2235,11 @@ final class OverlayAdContentView extends FrameLayout {
         }
     }
 
+    // The caller names the colour outright, alpha included. Nothing is
+    // derived from the mode any more: a half-screen panel and a full-screen
+    // one both wear exactly what they were handed, which is why two of them
+    // in a row no longer flash a different shade between shows.
     private void ConfigureBackground() {
-        int backgroundRgb = fullscreen
-                ? FULL_SCREEN_BACKGROUND_RGB
-                : COLLAPSIBLE_BACKGROUND_RGB;
-        float defaultAlpha = fullscreen
-                ? FULL_SCREEN_DEFAULT_ALPHA
-                : COLLAPSIBLE_DEFAULT_ALPHA;
-        float alpha = backgroundAlpha;
-        if (Float.isNaN(alpha) || Float.isInfinite(alpha)) {
-            Log.w(
-                    TAG
-                  , "backgroundAlpha is not finite; using the mode default");
-            alpha = defaultAlpha;
-        } else if (alpha < 0f) {
-            alpha = defaultAlpha;
-        } else {
-            float clampedAlpha = Math.max(0f, Math.min(1f, alpha));
-            if (clampedAlpha != alpha) {
-                Log.w(
-                        TAG
-                      , "backgroundAlpha must be within [0,1]; clamping it");
-            }
-            alpha = clampedAlpha;
-        }
-        int backgroundColor = Color.argb(
-                Math.round(alpha * MAX_COLOR_CHANNEL)
-              , backgroundRgb >> 16 & 0xFF
-              , backgroundRgb >> 8 & 0xFF
-              , backgroundRgb & 0xFF);
         GradientDrawable background = new GradientDrawable();
         background.setShape(GradientDrawable.RECTANGLE);
         background.setColor(backgroundColor);

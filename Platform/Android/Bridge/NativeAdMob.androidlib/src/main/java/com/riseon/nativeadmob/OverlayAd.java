@@ -18,6 +18,11 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 public final class OverlayAd extends BaseAd {
+    // BaseAd's tag is the base class's name, which files every line this
+    // class logs under the wrong heading - OverlayAdActivity and
+    // OverlayAdContentView already use this one, and so does the iOS port.
+    private static final String TAG = "OverlayAd";
+
 
     // The ceiling the in-feed unit already keeps: past a handful, warm ads
     // expire unseen and the impressions are simply burnt.
@@ -41,7 +46,7 @@ public final class OverlayAd extends BaseAd {
         final int closeSide;
         final int timerSide;
         final float heightRatio;
-        final float backgroundAlpha;
+        final int backgroundColor;
         // The close button commits the ad's click on its way out.
         final boolean fakeCloseAutoDismiss;
 
@@ -51,14 +56,14 @@ public final class OverlayAd extends BaseAd {
               , int closeSide
               , int timerSide
               , float heightRatio
-              , float backgroundAlpha
+              , int backgroundColor
               , boolean fakeCloseAutoDismiss) {
             this.fullscreen = fullscreen;
             this.cooldown = Math.max(0, cooldown);
             this.closeSide = closeSide;
             this.timerSide = timerSide;
             this.heightRatio = heightRatio;
-            this.backgroundAlpha = backgroundAlpha;
+            this.backgroundColor = backgroundColor;
             this.fakeCloseAutoDismiss = fakeCloseAutoDismiss;
         }
 
@@ -73,7 +78,7 @@ public final class OverlayAd extends BaseAd {
                   , newCloseSide
                   , newTimerSide
                   , heightRatio
-                  , backgroundAlpha
+                  , backgroundColor
                   , newRedirectOnClose);
         }
 
@@ -312,7 +317,7 @@ public final class OverlayAd extends BaseAd {
     public synchronized void Configure(
             boolean fullscreen
           , float heightRatio
-          , float backgroundAlpha
+          , int backgroundColor
           , int newCacheSize
           , int cooldown
           , int closeSide
@@ -341,7 +346,7 @@ public final class OverlayAd extends BaseAd {
               , closeSide
               , timerSide
               , heightRatio
-              , backgroundAlpha
+              , backgroundColor
               , redirectOnClose);
         configured = true;
     }
@@ -698,6 +703,10 @@ public final class OverlayAd extends BaseAd {
         cachedAds.addLast(
                 new CachedAd(ad, SystemClock.elapsedRealtime()));
         cachedCount = cachedAds.size();
+        // Printed at the moment the ad joins the cache, so the number is what
+        // the cache holds AFTER this load - read it against the target to see
+        // whether the chain is going to ask for another one.
+        Log.i(TAG, "Loaded: cache " + cachedCount + "/" + cacheSize);
         ScheduleCacheExpiry();
     }
 
@@ -838,7 +847,7 @@ public final class OverlayAd extends BaseAd {
               , style.ResolveTimerOnLeft(closeOnLeftForPresentation)
               , style.fullscreen
               , style.heightRatio
-              , style.backgroundAlpha
+              , style.backgroundColor
               , style.fakeCloseAutoDismiss);
         createdPresentation.setOnShowListener(ignored -> {
             if (!released && activeNativeAd == ad) NotifyDisplayed();
@@ -1000,7 +1009,7 @@ public final class OverlayAd extends BaseAd {
                           , closeOnLeft
                           , style.ResolveTimerOnLeft(closeOnLeft)
                           , true
-                          , style.backgroundAlpha
+                          , style.backgroundColor
                           , style.fakeCloseAutoDismiss
                           , requestedPanelHeight
                           , closeRelay);

@@ -23,7 +23,7 @@ namespace RiseOn.NativeAdMob.Editor {
                 settings.AdUnitId
               , settings.CoversFullScreen
               , settings.HeightRatio
-              , settings.BackgroundAlpha
+              , AdColor.Unpack(settings.BackgroundColor)
               , settings.Close);
         }
 

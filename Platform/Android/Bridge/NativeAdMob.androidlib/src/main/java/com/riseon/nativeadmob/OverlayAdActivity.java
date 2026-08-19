@@ -225,7 +225,7 @@ public final class OverlayAdActivity extends Activity {
                       , session.closeOnLeft
                       , session.style.ResolveTimerOnLeft(session.closeOnLeft)
                       , true
-                      , session.style.backgroundAlpha
+                      , session.style.backgroundColor
                       , session.style.fakeCloseAutoDismiss
                       , requestedPanelHeight
                       , () -> CompletePresentation(""));

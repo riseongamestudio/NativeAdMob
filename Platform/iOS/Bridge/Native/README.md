@@ -1,27 +1,35 @@
 # Native ad – iOS port
 
-Port 1:1 của `Assets/Plugins/Android/NativeAdMob.androidlib` (`com.riseon.nativeadmob`)
-sang Objective-C++, hành vi đồng nhất với bản Android: cùng máy trạng thái,
-cùng layout engine, cùng ngưỡng chính sách, cùng format dòng log.
+Port 1:1 của `../../../Android/Bridge/NativeAdMob.androidlib`
+(`com.riseon.nativeadmob`) sang Objective-C++, hành vi đồng nhất với bản
+Android: cùng máy trạng thái, cùng layout engine, cùng ngưỡng chính sách,
+cùng format dòng log.
 
 ## Bản đồ file (Java → Obj-C++)
 
-| Android | iOS | Trạng thái |
-|---|---|---|
-| (bề mặt AndroidJavaObject) | `RONativeAdBridge.h/.mm` | ✅ |
-| (C# wrapper) | `NativeAdMobIOSBridge.cs` + nhánh `#if UNITY_IOS` trong NativeAdMob/InFeed/Overlay.cs | ✅ |
-| `NativeAdMob.java` | `RONativeAd.h/.mm` | ✅ |
-| (View/LinearLayout/FrameLayout measure model) | `ROMeasureLayout.h/.mm` | ✅ |
-| (TextView + ApplyTextMode + marquee) | `ROAdTextLabel.h/.mm` | ✅ |
-| `NativeAdMobStarRatingView.java` | `RONativeAdStarRatingView.h/.mm` | ✅ |
-| `InFeed.java` | `ROInFeedAd.h/.mm` | ✅ |
-| `NativeAdMobInFeedPresentation.java` | `ROInFeedAdPresentation.h/.mm` | ✅ |
-| `NativeAdMobInFeedLayoutEngine.java` | `ROInFeedAdLayoutEngine.h/.mm` | ✅ |
-| `NativeAdMobInFeedLayoutValidator.java` | `ROInFeedAdLayoutValidator.h/.mm` | ✅ |
-| `NativeAdMobInFeedViewFactory.java` | `ROInFeedAdViewFactory.h/.mm` | ✅ |
-| `Overlay.java` | `ROOverlayAd.h/.mm` | ✅ |
-| `NativeAdMobOverlayContentView.java` | `ROOverlayAdContentView.h/.mm` | ✅ |
-| `NativeAdMobOverlayActivity/Presentation` | gộp vào presentation (UIViewController) | chưa |
+| Android | iOS |
+|---|---|
+| (bề mặt AndroidJavaObject) | `RONativeAdBridge.h/.mm` |
+| (C# wrapper) | `../NativeAdBridge.cs`, assembly `RiseOn.NativeAdMob.iOS` |
+| `BaseAd.java` | `ROBaseAd.h/.mm` |
+| `NativeAdPresentation.java` | (giao thức trong `ROBaseAd.h`) |
+| `NativeAdStarRatingView.java` | `RONativeAdStarRatingView.h/.mm` |
+| (View/LinearLayout/FrameLayout measure model) | `ROMeasureLayout.h/.mm` |
+| (TextView + ApplyTextMode + marquee) | `ROAdTextLabel.h/.mm` |
+| `InFeedAd.java` | `ROInFeedAd.h/.mm` |
+| `InFeedAdSlot.java` | `ROInFeedAdSlot.h/.mm` |
+| `InFeedAdPresentation.java` | `ROInFeedAdPresentation.h/.mm` |
+| `InFeedAdLayoutEngine.java` | `ROInFeedAdLayoutEngine.h/.mm` |
+| `InFeedAdLayoutValidator.java` | `ROInFeedAdLayoutValidator.h/.mm` |
+| `InFeedAdViewFactory.java` | `ROInFeedAdViewFactory.h/.mm` |
+| `OverlayAd.java` | `ROOverlayAd.h/.mm` |
+| `OverlayAdContentView.java` | `ROOverlayAdContentView.h/.mm` |
+| `OverlayAdActivity.java` + `OverlayAdPresentation.java` | `ROOverlayAdPresentation.h/.mm` |
+| `NativeOverlay.java` + `NativeOverlayActivity.java` | `RONativeOverlay.h/.mm` (+ `../NativeOverlayBridge.cs`) |
+
+Hai file cuối là **màn che** (`FullScreenOverlay`, `HalfScreenOverlay`) — không
+có quảng cáo nào trong đó, chỉ một mảng màu. Chúng ở chung pack vì phải xếp
+lớp cùng một chỗ với ad; xem mục "Xếp lớp" trong README của pack.
 
 ## Quy ước chuyển đổi
 
@@ -32,9 +40,12 @@ cùng layout engine, cùng ngưỡng chính sách, cùng format dòng log.
 - **Thread**: `Handler main` → `dispatch_get_main_queue()`;
   `Choreographer.postFrameCallback` (hoãn swap sau frame ẩn) →
   `CATransaction` completion / `dispatch_async` sau commit.
-- **Cửa sổ**: dialog panel in-feed → UIView con của
-  `UnityGetGLViewController().view` đặt frame theo slot; Activity full-screen
-  → `UIViewController` present không animation; collapsible → view ghim đáy.
+- **Cửa sổ**: iOS không có Activity, cũng không có window type. Ba tầng
+  Android (panel → sub-panel → Activity) đổi thành thứ tự trong mảng
+  `subviews` của `UnityGetGLViewController().view`: in-feed vào index 0,
+  half-screen chèn trên in-feed, màn che full-screen vào cuối mảng. Riêng ad
+  full-screen thì `present` từ chính VC đó, nên tự động nằm trên cả ba. Xem
+  mục "Xếp lớp" và "Pause" trong README của pack.
 - **Measure**: toàn bộ engine viết theo mô hình measure-spec của Android —
   `ROMeasureLayout` tái tạo đúng mô hình đó (kể cả quy tắc weight+height-0
   trong UNSPECIFIED bị đổi thành WRAP_CONTENT mà icon filler phụ thuộc).

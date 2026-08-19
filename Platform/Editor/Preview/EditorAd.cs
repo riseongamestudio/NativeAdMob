@@ -147,10 +147,6 @@ namespace RiseOn.NativeAdMob.Editor {
         private const int   CONTROL_GLYPH_MAX_SIZE          = 24;
         private static readonly Vector2 ReferenceResolution =
                 new(360f, 800f);
-        private static readonly Color FullScreenPanelColor =
-                Color.black;
-        private static readonly Color CompactPanelColor =
-                new(27f / 255f, 32f / 255f, 41f / 255f, 1f);
         private static readonly Color SecondaryTextColor =
                 new(1f, 1f, 1f, 0.8f);
         private static readonly Color ControlColor =
@@ -296,15 +292,12 @@ namespace RiseOn.NativeAdMob.Editor {
               , 0f);
 
             panelGraphic = panelObject.GetComponent<Image>();
-            var panelColor =
-                    config.Mode == EditorAdMode.FullScreen
-                            ? FullScreenPanelColor
-                            : CompactPanelColor;
-            panelGraphic.color = new(
-                panelColor.r
-              , panelColor.g
-              , panelColor.b
-              , config.BackgroundAlpha);
+            // The device paints exactly the colour the caller named, so the
+            // preview does too - INCLUDING a fully transparent one. Reading
+            // alpha 0 as "nothing was set" and substituting a house colour
+            // made the preview disagree with both device sides on the one
+            // case a caller has to be able to ask for: no backdrop at all.
+            panelGraphic.color = config.BackgroundColor;
             var backgroundIsClickable =
                     config.Mode != EditorAdMode.InFeed;
             panelGraphic.raycastTarget = backgroundIsClickable;

@@ -19,10 +19,36 @@ import com.google.android.gms.ads.nativead.NativeAd;
 public final class OverlayAdPresentation
         extends Dialog
         implements NativeAdPresentation {
+    // One layer above the half-screen cover, which is SUB_PANEL (1002).
+    //
+    // Android orders windows by TYPE first and by the order they were added
+    // second; there is no z-order API and no insert-at-index, so the type is
+    // the only way to state a ladder. The pack's is:
+    //
+    //     1000  TYPE_APPLICATION_PANEL             in-feed
+    //     1002  TYPE_APPLICATION_SUB_PANEL         half-screen cover
+    //     1003  TYPE_APPLICATION_ATTACHED_DIALOG   half-screen ad  <- here
+    //
+    // which is the subview order the iOS side keeps, and unlike a caller
+    // contract it holds whichever surface was raised first.
+    //
+    // READ THIS BEFORE TRUSTING IT. That the ladder follows the numbers is
+    // NOT a documented guarantee. The type-to-layer mapping lives in
+    // WindowManagerService: it is not in android.jar, and the stub sources
+    // ship with the javadoc stripped, so nothing in the SDK states it. The
+    // framework also carries a separate hidden type at 1005 named
+    // APPLICATION_ABOVE_SUB_PANEL, which is a reason to doubt that a larger
+    // number simply means higher. The constant itself is ordinary public API
+    // in the same sub-window band as 1002 - same token, not deprecated - so
+    // there is no risk in USING it; the risk is only in the ordering it is
+    // being relied on for, and that has to be confirmed on a device.
     private static final int NON_FULLSCREEN_WINDOW_TYPE =
-            WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL;
+            WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG;
+    // The fullscreen branch below is unreachable - a full-screen ad goes
+    // through OverlayAdActivity - but if it is ever revived it belongs on the
+    // same rung as its half-screen sibling, above the cover.
     private static final int FULLSCREEN_WINDOW_TYPE =
-            WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL;
+            WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG;
 
     private final Activity hostActivity;
     private final NativeAd nativeAd;
@@ -32,7 +58,7 @@ public final class OverlayAdPresentation
     private final boolean fakeCloseAutoDismiss;
     private final boolean fullscreen;
     private final float heightRatio;
-    private final float backgroundAlpha;
+    private final int backgroundColor;
     private OverlayAdContentView contentView;
 
     public OverlayAdPresentation(
@@ -43,7 +69,7 @@ public final class OverlayAdPresentation
           , boolean timerOnLeft
           , boolean fullscreen
           , float heightRatio
-          , float backgroundAlpha
+          , int backgroundColor
           , boolean fakeCloseAutoDismiss) {
         super(
                 context
@@ -59,7 +85,7 @@ public final class OverlayAdPresentation
         this.fakeCloseAutoDismiss = fakeCloseAutoDismiss;
         this.fullscreen = fullscreen;
         this.heightRatio = heightRatio;
-        this.backgroundAlpha = backgroundAlpha;
+        this.backgroundColor = backgroundColor;
     }
 
     @Override
@@ -87,7 +113,7 @@ public final class OverlayAdPresentation
               , closeOnLeft
               , timerOnLeft
               , fullscreen
-              , backgroundAlpha
+              , backgroundColor
               , fakeCloseAutoDismiss
               , requestedPanelHeight
               , this::dismiss);

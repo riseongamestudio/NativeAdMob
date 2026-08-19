@@ -32,11 +32,6 @@ final class InFeedAdPresentation extends FrameLayout
     private static final long ROOT_READY_RECHECK_DELAY_MS = 50L;
     private static final long MAX_ROOT_WAIT_MS = 10_000L;
 
-    private static final float MAX_COLOR_CHANNEL = 255f;
-    private static final float DEFAULT_BACKGROUND_ALPHA = 1f;
-    private static final int BACKGROUND_RED = 0x1B;
-    private static final int BACKGROUND_GREEN = 0x20;
-    private static final int BACKGROUND_BLUE = 0x29;
 
     private final Activity activity;
     private final NativeAd nativeAd;
@@ -44,7 +39,7 @@ final class InFeedAdPresentation extends FrameLayout
     private int requestedY;
     private final int requestedWidth;
     private final int requestedHeight;
-    private final float backgroundAlpha;
+    private final int backgroundColor;
     private final NativeAdPresentation.Listener listener;
     private final InFeedAdViewFactory viewFactory;
     private final InFeedAdLayoutValidator validator;
@@ -94,7 +89,7 @@ final class InFeedAdPresentation extends FrameLayout
           , int yPx
           , int widthPx
           , int heightPx
-          , float backgroundAlpha
+          , int backgroundColor
           , NativeAdPresentation.Listener listener) {
         super(activity);
         this.activity = activity;
@@ -103,7 +98,7 @@ final class InFeedAdPresentation extends FrameLayout
         this.requestedY = yPx;
         this.requestedWidth = widthPx;
         this.requestedHeight = heightPx;
-        this.backgroundAlpha = ResolveBackgroundAlpha(backgroundAlpha);
+        this.backgroundColor = backgroundColor;
         this.listener = listener;
 
         float density =
@@ -923,13 +918,11 @@ final class InFeedAdPresentation extends FrameLayout
         return UpdateHostLayoutForActivePlan();
     }
 
+    // The colour arrives whole from the caller. A fully transparent one is
+    // a real answer here, not an unset value - a feed cell that wants no
+    // backdrop of its own asks for exactly that.
     private void ConfigureBackground() {
-        setBackgroundColor(
-                Color.argb(
-                        Math.round(backgroundAlpha * MAX_COLOR_CHANNEL)
-                      , BACKGROUND_RED
-                      , BACKGROUND_GREEN
-                      , BACKGROUND_BLUE));
+        setBackgroundColor(backgroundColor);
     }
 
     private void LogAdjustmentIfNeeded(
@@ -1006,22 +999,6 @@ final class InFeedAdPresentation extends FrameLayout
                         : plan.marqueeSecondary ? "sec" : "none");
     }
 
-    private static float ResolveBackgroundAlpha(float value) {
-        if (Float.isNaN(value) || Float.isInfinite(value)) {
-            Log.w(
-                    TAG
-                  , "In-feed backgroundAlpha is not finite; using 1");
-            return DEFAULT_BACKGROUND_ALPHA;
-        }
-        float clamped = Math.max(0f, Math.min(1f, value));
-        if (clamped != value) {
-            Log.w(
-                    TAG
-                  , "In-feed backgroundAlpha must be within [0,1]; "
-                            + "clamped " + value + " to " + clamped);
-        }
-        return clamped;
-    }
 
     private static final class ViewParentCompat {
         static void RemoveFromParent(View view) {

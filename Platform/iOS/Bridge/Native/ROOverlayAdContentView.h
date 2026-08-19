@@ -18,7 +18,7 @@ NS_ASSUME_NONNULL_BEGIN
                       closeOnLeft:(BOOL)closeOnLeft
                    timerOnLeft:(BOOL)timerOnLeft
                        fullscreen:(BOOL)fullscreen
-                  backgroundAlpha:(float)backgroundAlpha
+                  backgroundColor:(int32_t)backgroundColor
              fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss
              requestedPanelHeight:(CGFloat)requestedPanelHeight
                           onClose:(dispatch_block_t)onClose;

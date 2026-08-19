@@ -1,5 +1,8 @@
 #import "ROOverlayAdPresentation.h"
 
+#import "ROInFeedAdPresentation.h"
+#import "RONativeOverlay.h"
+
 #import "ROOverlayAdContentView.h"
 
 static NSString *const kROTag = @"Overlay";
@@ -42,14 +45,16 @@ static NSString *const kROTag = @"Overlay";
     BOOL _closeOnLeft;
     BOOL _timerOnLeft;
     BOOL _fullscreen;
+    BOOL _fakeCloseAutoDismiss;
     float _heightRatio;
-    float _backgroundAlpha;
+    int32_t _backgroundColor;
 
     ROOverlayAdContentView *_contentView;
     ROOverlayAdViewController *_presentedController;
     BOOL _showing;
     BOOL _dismissed;
     BOOL _observingLifecycle;
+    BOOL _askedForPause;
 }
 
 - (instancetype)initWithViewController:(UIViewController *)viewController
@@ -59,7 +64,7 @@ static NSString *const kROTag = @"Overlay";
                            timerOnLeft:(BOOL)timerOnLeft
                             fullscreen:(BOOL)fullscreen
                            heightRatio:(float)heightRatio
-                       backgroundAlpha:(float)backgroundAlpha
+                       backgroundColor:(int32_t)backgroundColor
                   fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss {
     self = [super init];
     if (self == nil) return nil;
@@ -71,7 +76,7 @@ static NSString *const kROTag = @"Overlay";
     _timerOnLeft = timerOnLeft;
     _fullscreen = fullscreen;
     _heightRatio = heightRatio;
-    _backgroundAlpha = backgroundAlpha;
+    _backgroundColor = backgroundColor;
     _fakeCloseAutoDismiss = fakeCloseAutoDismiss;
     return self;
 }
@@ -96,7 +101,7 @@ static NSString *const kROTag = @"Overlay";
                  closeOnLeft:_closeOnLeft
                  timerOnLeft:_timerOnLeft
                   fullscreen:_fullscreen
-             backgroundAlpha:_backgroundAlpha
+             backgroundColor:_backgroundColor
         fakeCloseAutoDismiss:_fakeCloseAutoDismiss
         requestedPanelHeight:requestedPanelHeight
                      onClose:^{ [weakSelf dismiss]; }];
@@ -121,13 +126,20 @@ static NSString *const kROTag = @"Overlay";
                 UIModalPresentationOverFullScreen;
         _presentedController.modalTransitionStyle =
                 UIModalTransitionStyleCrossDissolve;
-        UIViewController *presenter = host;
-        while (presenter.presentedViewController != nil) {
-            presenter = presenter.presentedViewController;
-        }
-        [presenter presentViewController:_presentedController
-                                animated:NO
-                              completion:nil];
+        // Straight to the Unity controller, the way the Google SDK presents
+        // its own full-screen ads - never a blind walk to the end of the
+        // presented chain, which would stack this ad on whatever some other
+        // SDK happened to be showing. The covers are subviews, so they are
+        // already underneath this without anyone arranging it.
+        //
+        // A cover that is up has already stopped the game; asking again
+        // changes nothing, and asking is still right, because an ad
+        // outliving its cover must not leave the game running behind it.
+        _askedForPause = YES;
+        RONativeOverlay_SetAdWantsPause(YES);
+        [host presentViewController:_presentedController
+                           animated:NO
+                         completion:nil];
     } else {
         UIView *hostView = host.view;
         CGFloat panelHeight = _contentView.resolvedPanelHeight;
@@ -139,7 +151,20 @@ static NSString *const kROTag = @"Overlay";
         _contentView.autoresizingMask =
                 UIViewAutoresizingFlexibleWidth
                         | UIViewAutoresizingFlexibleTopMargin;
-        [hostView addSubview:_contentView];
+        // Above the half-screen cover when one is up - the same rule the
+        // full-screen pair follows, ad on top of cover - and otherwise
+        // directly above the highest in-feed, so those two layers keep their
+        // order no matter which was shown first. With neither up, index 0
+        // leaves room for an in-feed to slide in underneath later.
+        UIView *anchor = RONativeOverlay_HalfScreenView();
+        if (anchor == nil) {
+            anchor = [ROInFeedAdPresentation ro_frontmostInFeedView];
+        }
+        if (anchor != nil && anchor.superview == hostView) {
+            [hostView insertSubview:_contentView aboveSubview:anchor];
+        } else {
+            [hostView insertSubview:_contentView atIndex:0];
+        }
     }
 
     _showing = YES;
@@ -178,6 +203,14 @@ static NSString *const kROTag = @"Overlay";
 
     ROOverlayAdViewController *presented = _presentedController;
     _presentedController = nil;
+    // Only the presentation that asked may withdraw. The flag is one per
+    // pack, because only one full-screen ad is ever up - but a HALF-screen ad
+    // closing runs this same teardown, and it must not answer for a
+    // full-screen one still on the glass.
+    if (_askedForPause) {
+        _askedForPause = NO;
+        RONativeOverlay_SetAdWantsPause(NO);
+    }
     if (presented != nil && presented.presentingViewController != nil) {
         [presented dismissViewControllerAnimated:NO completion:nil];
     }

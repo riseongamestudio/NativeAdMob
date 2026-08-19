@@ -4,7 +4,7 @@ namespace RiseOn.NativeAdMob {
         public bool          CoversFullScreen;
         public float         HeightRatio;
         public int           CacheSize;
-        public float         BackgroundAlpha;
+        public int           BackgroundColor;
         public CloseSettings Close;
     }
 }

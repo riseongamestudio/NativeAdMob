@@ -15,10 +15,6 @@ static const CGFloat kROMinImageMediaSize = 48;
 // whole band and renders inside it as it pleases.
 static const CGFloat kRODefaultMediaAspectRatio = 1;
 static const float kRODefaultHeightRatio = 0.5f;
-static const float kROOverlayDefaultAlpha = 0.80f;
-static const float kROCollapsibleDefaultAlpha = 0.95f;
-static const uint32_t kROOverlayBackgroundRgb = 0x000000;
-static const uint32_t kROCollapsibleBackgroundRgb = 0x1B2029;
 // 20pt a side spent 40pt of every screen on nothing the ad needed. Five
 // rather than eight because the side layout with content below wears this
 // padding three times across - one panel edge, the media's left, the other
@@ -178,7 +174,7 @@ static void ROCentreUnderIcon(UIView *view) {
     BOOL _fakeCloseAutoDismiss;
     BOOL _timerOnLeft;
     BOOL _fullscreen;
-    float _backgroundAlpha;
+    int32_t _backgroundColor;
     dispatch_block_t _onClose;
     CGFloat _resolvedPanelHeight;
 
@@ -255,7 +251,7 @@ static void ROCentreUnderIcon(UIView *view) {
                       closeOnLeft:(BOOL)closeOnLeft
                    timerOnLeft:(BOOL)timerOnLeft
                        fullscreen:(BOOL)fullscreen
-                  backgroundAlpha:(float)backgroundAlpha
+                  backgroundColor:(int32_t)backgroundColor
              fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss
              requestedPanelHeight:(CGFloat)requestedPanelHeight
                           onClose:(dispatch_block_t)onClose {
@@ -267,7 +263,7 @@ static void ROCentreUnderIcon(UIView *view) {
     _closeOnLeft = closeOnLeft;
     _timerOnLeft = timerOnLeft;
     _fullscreen = fullscreen;
-    _backgroundAlpha = backgroundAlpha;
+    _backgroundColor = backgroundColor;
     _fakeCloseAutoDismiss = fakeCloseAutoDismiss;
     _onClose = [onClose copy];
     _shrunkTexts = [NSMutableSet set];
@@ -750,30 +746,12 @@ static void ROCentreUnderIcon(UIView *view) {
     if (_onClose != nil) _onClose();
 }
 
+// The caller names the colour outright, alpha included. Nothing is derived
+// from the mode any more: a half-screen panel and a full-screen one both
+// wear exactly what they were handed, which is why two of them in a row no
+// longer flash a different shade between shows.
 - (void)ro_configureBackground {
-    uint32_t backgroundRgb = _fullscreen
-            ? kROOverlayBackgroundRgb
-            : kROCollapsibleBackgroundRgb;
-    float defaultAlpha = _fullscreen
-            ? kROOverlayDefaultAlpha
-            : kROCollapsibleDefaultAlpha;
-    float alpha = _backgroundAlpha;
-    if (isnan(alpha) || isinf(alpha)) {
-        NSLog(@"%@: backgroundAlpha is not finite; using the mode default"
-              , kROTag);
-        alpha = defaultAlpha;
-    } else if (alpha < 0) {
-        alpha = defaultAlpha;
-    } else {
-        float clamped = MAX(0.0f, MIN(1.0f, alpha));
-        if (clamped != alpha) {
-            NSLog(@"%@: backgroundAlpha must be within [0,1]; clamping it"
-                  , kROTag);
-        }
-        alpha = clamped;
-    }
-    self.backgroundColor = [HBArgb(0xFF000000 | backgroundRgb)
-            colorWithAlphaComponent:alpha];
+    self.backgroundColor = HBArgb((uint32_t)_backgroundColor);
 }
 
 - (HBPaddedLabel *)ro_createAttributionLabel {
@@ -791,6 +769,13 @@ static void ROCentreUnderIcon(UIView *view) {
     return attribution;
 }
 
+// The alpha here belongs to the CONTROL, not to the panel: the timer sits
+// at Android's #66000000 and the close at #AA000000, deliberately heavier so
+// the exit reads first. It is spelled backgroundAlpha rather than
+// backgroundColor because it once carried the latter name, collided with the
+// panel colour of the same name, and was silently dropped in favour of the
+// ivar - which painted both chips at the panel's own opacity and erased the
+// difference between them.
 - (HBPaddedLabel *)ro_createControlLabelWithText:(NSString *)text
                                         textSize:(CGFloat)textSize
                                  backgroundAlpha:(CGFloat)backgroundAlpha

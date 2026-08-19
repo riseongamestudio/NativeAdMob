@@ -20,7 +20,11 @@ namespace RiseOn.NativeAdMob {
             public int SlotCount;
             /// <summary>Raw ads kept warm per unit; 0 means SlotCount + 1.</summary>
             public int CacheSize;
-            public float BackgroundAlpha;
+            /// <summary>
+            /// The cell's own backdrop, alpha included. Transparent is a real
+            /// answer here: a feed cell that wants no backdrop asks for it.
+            /// </summary>
+            public Color BackgroundColor;
         }
 
         /// <summary>

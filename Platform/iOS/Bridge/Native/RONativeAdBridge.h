@@ -87,7 +87,7 @@ void* ROInFeedAd_Create(
         const char* adUnitId
       , int32_t slotCount
       , int32_t cacheSize
-      , float backgroundAlpha
+      , int32_t backgroundColor
       , int32_t instanceId);
 void ROInFeedAd_SetListener(
         void* handle
@@ -130,7 +130,7 @@ void ROOverlayAd_Configure(
         void* handle
       , bool fullscreen
       , float heightRatio
-      , float backgroundAlpha
+      , int32_t backgroundColor
       , int32_t cacheSize
       , int32_t cooldown
       , int32_t closeSide

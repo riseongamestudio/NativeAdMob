@@ -27,7 +27,7 @@ typedef struct {
 - (instancetype)initWithAdUnitId:(NSString *)adUnitId
                        slotCount:(NSInteger)slotCount
                        cacheSize:(NSInteger)cacheSize
-                 backgroundAlpha:(float)backgroundAlpha
+                 backgroundColor:(int32_t)backgroundColor
                       instanceId:(int32_t)instanceId;
 
 - (void)setInFeedListenerCallbacks:

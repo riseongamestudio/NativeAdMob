@@ -37,7 +37,7 @@ static NSTimeInterval RONow(void) {
 @property (nonatomic, readonly) int32_t closeSide;
 @property (nonatomic, readonly) int32_t timerSide;
 @property (nonatomic, readonly) float heightRatio;
-@property (nonatomic, readonly) float backgroundAlpha;
+@property (nonatomic, readonly) int32_t backgroundColor;
 // The close button commits the ad's click on its way out.
 @property (nonatomic, readonly) BOOL fakeCloseAutoDismiss;
 @end
@@ -49,7 +49,7 @@ static NSTimeInterval RONow(void) {
                          closeSide:(int32_t)closeSide
                          timerSide:(int32_t)timerSide
                        heightRatio:(float)heightRatio
-                   backgroundAlpha:(float)backgroundAlpha
+                   backgroundColor:(int32_t)backgroundColor
               fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss {
     self = [super init];
     if (self == nil) return nil;
@@ -58,7 +58,7 @@ static NSTimeInterval RONow(void) {
     _closeSide = closeSide;
     _timerSide = timerSide;
     _heightRatio = heightRatio;
-    _backgroundAlpha = backgroundAlpha;
+    _backgroundColor = backgroundColor;
     _fakeCloseAutoDismiss = fakeCloseAutoDismiss;
     return self;
 }
@@ -73,7 +73,7 @@ static NSTimeInterval RONow(void) {
                      closeSide:closeSide
                      timerSide:timerSide
                    heightRatio:self.heightRatio
-               backgroundAlpha:self.backgroundAlpha
+               backgroundColor:self.backgroundColor
           fakeCloseAutoDismiss:redirectOnClose];
 }
 
@@ -164,7 +164,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 
 - (void)configureWithFullscreen:(BOOL)fullscreen
                     heightRatio:(float)heightRatio
-                backgroundAlpha:(float)backgroundAlpha
+                backgroundColor:(int32_t)backgroundColor
                       cacheSize:(int32_t)cacheSize
                        cooldown:(int32_t)cooldown
                       closeSide:(int32_t)closeSide
@@ -190,7 +190,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
                          closeSide:closeSide
                          timerSide:timerSide
                        heightRatio:heightRatio
-                   backgroundAlpha:backgroundAlpha
+                   backgroundColor:backgroundColor
               fakeCloseAutoDismiss:redirectOnClose];
         self->_configured = YES;
     }];
@@ -287,6 +287,13 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
         cached.ad = nativeAd;
         cached.loadedAt = RONow();
         [self->_cachedAds addObject:cached];
+        // Printed at the moment the ad joins the cache, so the number is what
+        // the cache holds AFTER this load - read it against the target to see
+        // whether the chain is going to ask for another one.
+        NSLog(@"%@: Loaded: cache %ld/%ld"
+              , kROTag
+              , (long)self->_cachedAds.count
+              , (long)self->_cacheSize);
         [self ro_scheduleCacheExpiry];
         nativeAd.delegate = self;
         __weak ROOverlayAd *weakSelf = self;
@@ -480,7 +487,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
                                             closeOnLeftForPresentation]
                                 fullscreen:style.fullscreen
                                heightRatio:style.heightRatio
-                           backgroundAlpha:style.backgroundAlpha
+                           backgroundColor:style.backgroundColor
                       fakeCloseAutoDismiss:style.fakeCloseAutoDismiss];
     __weak ROOverlayAd *weakSelf = self;
     __weak GADNativeAd *weakAd = ad;

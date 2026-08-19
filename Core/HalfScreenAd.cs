@@ -21,7 +21,12 @@ namespace RiseOn.NativeAdMob {
             /// </summary>
             public int CacheSize;
 
-            public float BackgroundAlpha;
+            /// <summary>
+            /// The panel's own colour, alpha included. Passed through whole -
+            /// there is no "unset": a fully transparent colour means exactly
+            /// that, and black is what every placement here asks for.
+            /// </summary>
+            public Color BackgroundColor;
 
             [SerializeField] private string format;
 
@@ -50,7 +55,7 @@ namespace RiseOn.NativeAdMob {
               , coversFullScreen: false
               , settings.HeightRatio
               , settings.CacheSize
-              , settings.BackgroundAlpha
+              , settings.BackgroundColor
               , settings.Close) {}
     }
 }

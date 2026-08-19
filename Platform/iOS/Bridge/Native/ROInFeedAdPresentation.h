@@ -18,13 +18,19 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface ROInFeedAdPresentation : UIView
 
+// The in-feed view standing nearest the top of the host's subviews, or nil
+// when no in-feed is up. Every in-feed goes in at index 0, so the OLDEST one
+// still alive is the highest of them - and the half-screen ad inserts just
+// above it to land in its own layer without walking the array.
++ (UIView *)ro_frontmostInFeedView;
+
 - (instancetype)initWithHostViewController:(UIViewController *)hostViewController
                                   nativeAd:(GADNativeAd *)nativeAd
                                          x:(CGFloat)xPt
                                          y:(CGFloat)yPt
                                      width:(CGFloat)widthPt
                                     height:(CGFloat)heightPt
-                           backgroundAlpha:(float)backgroundAlpha
+                           backgroundColor:(int32_t)backgroundColor
                                   listener:(id<ROInFeedPresentationListener>)listener;
 
 - (BOOL)show;

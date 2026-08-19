@@ -49,7 +49,7 @@ public final class InFeedAd extends BaseAd {
 
     private final String adUnitId;
     private final int cacheSize;
-    private final float backgroundAlpha;
+    private final int backgroundColor;
     private final InFeedAdSlot[] slots;
     private Activity activity;
     private final ArrayDeque<CachedAd> cachedAds = new ArrayDeque<>();
@@ -69,7 +69,7 @@ public final class InFeedAd extends BaseAd {
           , String adUnitId
           , int slotCount
           , int cacheSize
-          , float backgroundAlpha) {
+          , int backgroundColor) {
         if (adUnitId == null || adUnitId.trim().isEmpty()) {
             throw new IllegalArgumentException(
                     "InFeedAd requires a non-empty adUnitId");
@@ -83,7 +83,7 @@ public final class InFeedAd extends BaseAd {
         this.cacheSize = Math.min(
                 MAX_CACHE_SIZE
               , cacheSize < 1 ? slotCount + 1 : cacheSize);
-        this.backgroundAlpha = ResolveBackgroundAlpha(backgroundAlpha);
+        this.backgroundColor = backgroundColor;
         this.activity = currentActivity;
         InFeedAdSlot[] createdSlots = new InFeedAdSlot[slotCount];
         for (int i = 0; i < slotCount; ++i) {
@@ -304,6 +304,10 @@ public final class InFeedAd extends BaseAd {
         ownedAds.add(ad);
         cachedAds.addLast(
                 new CachedAd(ad, SystemClock.elapsedRealtime()));
+        // Printed at the moment the ad joins the cache, so the number is what
+        // the cache holds AFTER this load - read it against the target to see
+        // whether the chain is going to ask for another one.
+        Log.i(TAG, "Loaded: cache " + cachedAds.size() + "/" + cacheSize);
         ScheduleCacheExpiry();
         BindPaidEvent(
                 ad
@@ -454,8 +458,8 @@ public final class InFeedAd extends BaseAd {
         return activity;
     }
 
-    float BackgroundAlpha() {
-        return backgroundAlpha;
+    int BackgroundColor() {
+        return backgroundColor;
     }
 
     String AdUnitId() {
@@ -466,13 +470,6 @@ public final class InFeedAd extends BaseAd {
         return noFillStreak;
     }
 
-    private static float ResolveBackgroundAlpha(float value) {
-        if (Float.isNaN(value) || Float.isInfinite(value)) {
-            Log.w(TAG, "backgroundAlpha is not finite; using 1");
-            return 1f;
-        }
-        return Math.max(0f, Math.min(1f, value));
-    }
 
     private String BuildFailureMessage(
             String reason

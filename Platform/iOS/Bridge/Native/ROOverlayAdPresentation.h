@@ -22,7 +22,7 @@ NS_ASSUME_NONNULL_BEGIN
                            timerOnLeft:(BOOL)timerOnLeft
                             fullscreen:(BOOL)fullscreen
                            heightRatio:(float)heightRatio
-                       backgroundAlpha:(float)backgroundAlpha
+                       backgroundColor:(int32_t)backgroundColor
                   fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss;
 
 @property (nonatomic, copy, nullable) dispatch_block_t onShow;

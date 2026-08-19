@@ -4,9 +4,6 @@ using UnityEngine.UI;
 
 namespace RiseOn.NativeAdMob.Editor {
     internal sealed class EditorAdConfig {
-        private const float FULL_SCREEN_DEFAULT_ALPHA = 0.8f;
-        private const float COLLAPSIBLE_DEFAULT_ALPHA = 0.95f;
-        private const float IN_FEED_DEFAULT_ALPHA     = 1f;
         private const float DEFAULT_HEIGHT_RATIO      = 0.5f;
 
         internal string                    AdUnitId          { get; }
@@ -14,7 +11,7 @@ namespace RiseOn.NativeAdMob.Editor {
         internal bool                      PausesGame        { get; }
         internal CloseSettings             Close             { get; private set; }
         internal float                     HeightRatio       { get; }
-        internal float                     BackgroundAlpha   { get; }
+        internal Color                     BackgroundColor   { get; }
         internal Vector2Int                PositionPx        { get; private set; }
         internal Vector2Int                SizePx            { get; }
         internal bool                      AllowsVideo       { get; }
@@ -25,7 +22,7 @@ namespace RiseOn.NativeAdMob.Editor {
           , bool pausesGame
           , in CloseSettings controls
           , float heightRatio
-          , float backgroundAlpha
+          , Color backgroundColor
           , Vector2Int positionPx
           , Vector2Int sizePx
           , bool allowsVideo) {
@@ -34,7 +31,7 @@ namespace RiseOn.NativeAdMob.Editor {
             PausesGame      = pausesGame;
             Close = controls;
             HeightRatio     = heightRatio;
-            BackgroundAlpha = backgroundAlpha;
+            BackgroundColor = backgroundColor;
             PositionPx      = positionPx;
             SizePx          = sizePx;
             AllowsVideo     = allowsVideo;
@@ -44,7 +41,7 @@ namespace RiseOn.NativeAdMob.Editor {
             string adUnitId
           , bool fullscreen
           , float heightRatio
-          , float backgroundAlpha
+          , Color backgroundColor
           , in CloseSettings controls) {
             return new(
                 adUnitId
@@ -54,11 +51,7 @@ namespace RiseOn.NativeAdMob.Editor {
               , fullscreen
               , controls
               , ResolveRatio(heightRatio, DEFAULT_HEIGHT_RATIO)
-              , ResolveAlpha(
-                    backgroundAlpha
-                  , fullscreen
-                        ? FULL_SCREEN_DEFAULT_ALPHA
-                        : COLLAPSIBLE_DEFAULT_ALPHA)
+              , backgroundColor
               , default
               , default
               , true);
@@ -68,14 +61,14 @@ namespace RiseOn.NativeAdMob.Editor {
             string adUnitId
           , Vector2Int positionPx
           , Vector2Int sizePx
-          , float backgroundAlpha) {
+          , Color backgroundColor) {
             return new(
                 adUnitId
               , EditorAdMode.InFeed
               , false
               , default
               , default
-              , ResolveInFeedAlpha(backgroundAlpha)
+              , backgroundColor
               , positionPx
               , sizePx
               , true);
@@ -96,7 +89,7 @@ namespace RiseOn.NativeAdMob.Editor {
               , PausesGame
               , Close
               , HeightRatio
-              , BackgroundAlpha
+              , BackgroundColor
               , PositionPx
               , SizePx
               , AllowsVideo);
@@ -105,12 +98,6 @@ namespace RiseOn.NativeAdMob.Editor {
         private static float ResolveAlpha(float value, float defaultValue) {
             if (!float.IsFinite(value) || value < 0f) return defaultValue;
             return Mathf.Clamp01(value);
-        }
-
-        private static float ResolveInFeedAlpha(float value) {
-            return float.IsFinite(value)
-                    ? Mathf.Clamp01(value)
-                    : IN_FEED_DEFAULT_ALPHA;
         }
 
         private static float ResolveRatio(float value, float defaultValue) {

@@ -13,7 +13,6 @@ static const NSTimeInterval kROMinFinalLayoutObservation = 0.08;
 static const NSTimeInterval kROMaxFinalLayoutObservation = 0.5;
 static const NSTimeInterval kRORootReadyRecheckDelay = 0.05;
 static const NSTimeInterval kROMaxRootWait = 10.0;
-static const uint32_t kROBackgroundRgb = 0x1B2029;
 
 // Elapsed time is measured on the clock that only goes forward, never on
 // NSDate: a wall clock is a statement about what time it is, not about how
@@ -26,6 +25,13 @@ static NSTimeInterval RONow(void) {
     return [NSProcessInfo processInfo].systemUptime;
 }
 
+// Live in-feed views in the order they were created, oldest first. Weak, so
+// a view that goes away drops out on its own rather than being kept alive by
+// the bookkeeping meant to order it.
+static NSPointerArray *ROLiveInFeedViews = nil;
+
+static void *kRORootBoundsContext = &kRORootBoundsContext;
+
 
 @implementation ROInFeedAdPresentation {
     __weak UIViewController *_hostViewController;
@@ -34,7 +40,7 @@ static NSTimeInterval RONow(void) {
     CGFloat _requestedY;
     CGFloat _requestedWidth;
     CGFloat _requestedHeight;
-    float _backgroundAlpha;
+    int32_t _backgroundColor;
     __weak id<ROInFeedPresentationListener> _listener;
 
     ROInFeedAdViewFactory *_viewFactory;
@@ -50,6 +56,9 @@ static NSTimeInterval RONow(void) {
     NSString *_lastLayoutFailure;
 
     CADisplayLink *_observationLink;
+    __weak CALayer *_observedRootLayer;
+    CGSize _observedRootSize;
+    BOOL _appActive;
     NSTimeInterval _finalObservationStartedAt;
     NSTimeInterval _candidateObservationStartedAt;
     NSInteger _stablePasses;
@@ -71,13 +80,24 @@ static NSTimeInterval RONow(void) {
     NSString *_failureMessage;
 }
 
+// The array only ever grows by one per in-feed shown, and shrinks as they
+// are dismissed, so the walk is over a handful of entries. Entries emptied
+// by ARC are stepped over rather than trusted to -compact, which does
+// nothing on an array that has not been mutated since.
++ (UIView *)ro_frontmostInFeedView {
+    for (id view in ROLiveInFeedViews) {
+        if (view != nil) return (UIView *)view;
+    }
+    return nil;
+}
+
 - (instancetype)initWithHostViewController:(UIViewController *)hostViewController
                                   nativeAd:(GADNativeAd *)nativeAd
                                          x:(CGFloat)xPt
                                          y:(CGFloat)yPt
                                      width:(CGFloat)widthPt
                                     height:(CGFloat)heightPt
-                           backgroundAlpha:(float)backgroundAlpha
+                           backgroundColor:(int32_t)backgroundColor
                                   listener:(id<ROInFeedPresentationListener>)listener {
     self = [super initWithFrame:CGRectZero];
     if (self == nil) return nil;
@@ -88,8 +108,7 @@ static NSTimeInterval RONow(void) {
     _requestedY = yPt;
     _requestedWidth = MAX(1, widthPt);
     _requestedHeight = MAX(1, heightPt);
-    _backgroundAlpha = [ROInFeedAdPresentation
-            ro_resolveBackgroundAlpha:backgroundAlpha];
+    _backgroundColor = backgroundColor;
     _listener = listener;
     _visibleRequested = YES;
     _layoutPlans = [NSMutableArray array];
@@ -109,25 +128,46 @@ static NSTimeInterval RONow(void) {
                  viewFactory:_viewFactory
                    validator:_validator];
 
-    self.backgroundColor = [[UIColor
-            colorWithRed:((kROBackgroundRgb >> 16) & 0xFF) / 255.0
-                   green:((kROBackgroundRgb >> 8) & 0xFF) / 255.0
-                    blue:(kROBackgroundRgb & 0xFF) / 255.0
-                   alpha:1]
-            colorWithAlphaComponent:_backgroundAlpha];
+    // Whole from the caller. A fully transparent colour is a real answer
+    // here, not an unset value - a feed cell that wants no backdrop of its
+    // own asks for exactly that.
+    self.backgroundColor = [UIColor
+            colorWithRed:(((uint32_t)_backgroundColor >> 16) & 0xFF) / 255.0
+                   green:(((uint32_t)_backgroundColor >> 8) & 0xFF) / 255.0
+                    blue:((uint32_t)_backgroundColor & 0xFF) / 255.0
+                   alpha:(((uint32_t)_backgroundColor >> 24) & 0xFF) / 255.0];
     self.clipsToBounds = YES;
 
+    // Read once rather than assumed: a slot built while the app is coming
+    // back from the background would otherwise start out believing it is on
+    // screen, and start charging dwell for it.
+    _appActive = UIApplication.sharedApplication.applicationState
+            == UIApplicationStateActive;
     [NSNotificationCenter.defaultCenter
             addObserver:self
                selector:@selector(ro_applicationDidBecomeActive)
                    name:UIApplicationDidBecomeActiveNotification
                  object:nil];
+    [NSNotificationCenter.defaultCenter
+            addObserver:self
+               selector:@selector(ro_applicationWillResignActive)
+                   name:UIApplicationWillResignActiveNotification
+                 object:nil];
     return self;
+}
+
+- (void)ro_leaveLiveRegister {
+    for (NSUInteger index = ROLiveInFeedViews.count; index > 0; index--) {
+        id view = (__bridge id)[ROLiveInFeedViews pointerAtIndex:index - 1];
+        if (view == nil || view == self) {
+            [ROLiveInFeedViews removePointerAtIndex:index - 1];
+        }
+    }
 }
 
 - (void)dealloc {
     [NSNotificationCenter.defaultCenter removeObserver:self];
-    [_observationLink invalidate];
+    [self ro_stopObservingRootBounds];
 }
 
 - (NSString *)failureMessage {
@@ -142,6 +182,16 @@ static NSTimeInterval RONow(void) {
     // The Android latch released on window visibility because the panel
     // never takes focus; here the overlay the click opened has gone away.
     _clickCommitted = NO;
+    _appActive = YES;
+    [self ro_notifyActualVisibilityIfChanged];
+}
+
+// The counterpart of the Activity losing window focus on Android. Read from
+// the notification rather than from applicationState, because at the moment
+// this fires the application is still reported as active.
+- (void)ro_applicationWillResignActive {
+    _appActive = NO;
+    [self ro_notifyActualVisibilityIfChanged];
 }
 
 // The same latch the full-screen container uses: once a click is committed
@@ -182,6 +232,12 @@ static NSTimeInterval RONow(void) {
     }
     if (_nativeAd == nil) {
         return [self ro_fail:@"In-feed Show rejected because nativeAd is nil"];
+    }
+    // The counterpart of Activity.isFinishing: the reference is weak, so a
+    // host that has gone reads as nil and there is nothing left to show into.
+    if (_hostViewController == nil) {
+        return [self ro_fail:@"In-feed Show rejected because the host "
+                              "controller is gone"];
     }
     if (_waitingForRoot) return YES;
 
@@ -237,7 +293,14 @@ static NSTimeInterval RONow(void) {
     }
 
     self.hidden = YES;
-    [contentRoot addSubview:self];
+    // Index 0: still above the game, because the game is this view's
+    // PARENT (rootVC.view is UnityView itself), never a sibling. Below every
+    // other layer the pack adds, which is exactly where in-feed belongs.
+    [contentRoot insertSubview:self atIndex:0];
+    if (ROLiveInFeedViews == nil) {
+        ROLiveInFeedViews = [NSPointerArray weakObjectsPointerArray];
+    }
+    [ROLiveInFeedViews addPointer:(__bridge void *)self];
     if (![self ro_fitHostInsideContentRoot]) {
         return [self ro_fail:@"In-feed could not place its presentation view"];
     }
@@ -264,6 +327,15 @@ static NSTimeInterval RONow(void) {
 
 - (void)ro_checkContentRootReady {
     if (_dismissed || !_waitingForRoot) return;
+    // A host that has been torn down is never going to become ready, so it
+    // ends here rather than after the full wait - the ten seconds are for a
+    // root that is slow, not for one that no longer exists.
+    if (_hostViewController == nil) {
+        [self ro_recordFailure:@"In-feed content root never became ready "
+                                "because the host controller is gone"];
+        [self ro_dismissWithNotify:YES removeFromParent:YES];
+        return;
+    }
     if (![self ro_isContentRootReady]) {
         // Bounded so a root that never settles ends as a normal dismissal
         // instead of parking the slot and blocking every later load.
@@ -386,6 +458,77 @@ static NSTimeInterval RONow(void) {
                            forMode:NSRunLoopCommonModes];
 }
 
+// Rotation, split-screen and a resized game view all change the root out
+// from under a layout that was validated against the old size, and the
+// display link above has already stopped by then - it only runs while a plan
+// is being judged. Android watches the same thing for the whole life of the
+// presentation with addOnLayoutChangeListener; this is that listener.
+//
+// The observation is on the LAYER, not on the view. CALayer documents its
+// properties as KVC and KVO compliant; UIView promises nothing of the sort
+// for its own frame and bounds, and the layer changes on exactly the same
+// occasions.
+- (void)ro_startObservingRootBounds {
+    if (_observedRootLayer != nil) return;
+
+    UIView *contentRoot = [self ro_contentRoot];
+    if (contentRoot == nil) return;
+
+    _observedRootSize = contentRoot.bounds.size;
+    _observedRootLayer = contentRoot.layer;
+    [contentRoot.layer addObserver:self
+                        forKeyPath:@"bounds"
+                           options:0
+                           context:kRORootBoundsContext];
+}
+
+- (void)ro_stopObservingRootBounds {
+    CALayer *observed = _observedRootLayer;
+    _observedRootLayer = nil;
+    if (observed == nil) return;
+
+    [observed removeObserver:self
+                  forKeyPath:@"bounds"
+                     context:kRORootBoundsContext];
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath
+                      ofObject:(id)object
+                        change:(NSDictionary *)change
+                       context:(void *)context {
+    if (context != kRORootBoundsContext) {
+        [super observeValueForKeyPath:keyPath
+                             ofObject:object
+                               change:change
+                              context:context];
+        return;
+    }
+    [self ro_handleRootBoundsChanged];
+}
+
+// A rotation animates, so this arrives several times for one turn. Only a
+// size that actually differs from the one the layout was judged against is
+// worth a re-fit, which leaves the intermediate frames costing a comparison.
+- (void)ro_handleRootBoundsChanged {
+    if (_dismissed || !_layoutReady) return;
+
+    UIView *contentRoot = [self ro_contentRoot];
+    if (contentRoot == nil) return;
+
+    CGSize size = contentRoot.bounds.size;
+    if (size.width <= 0 || size.height <= 0) return;
+    if (CGSizeEqualToSize(size, _observedRootSize)) return;
+
+    _observedRootSize = size;
+    if ([self ro_fitHostInsideContentRoot]) return;
+
+    [self ro_recordFailure:[NSString stringWithFormat:
+            @"In-feed active layout no longer fits after content surface "
+             "resize; %@"
+          , [self ro_describeRequestedRect]]];
+    [self ro_dismissWithNotify:YES removeFromParent:YES];
+}
+
 - (void)ro_stopObserving {
     [_observationLink invalidate];
     _observationLink = nil;
@@ -474,6 +617,7 @@ static NSTimeInterval RONow(void) {
 
     [self ro_stopObserving];
     _layoutReady = YES;
+    [self ro_startObservingRootBounds];
     NSLog(@"%@: In-feed layout ready %@ for %@"
           , kROTag
           , ROInFeedDescribePlan(_activePlan)
@@ -546,10 +690,22 @@ static NSTimeInterval RONow(void) {
     });
 }
 
+// Being in a window is not the same as being looked at. Backgrounded, or
+// under the share sheet a click opened, the view is still in its window and
+// still unhidden - and without this term the dwell clock would keep running
+// through it and rotate the creative where nobody could see either one.
+//
+// Not an exact twin of the Android test, which reads getWindowVisibility and
+// isShown on the panel: those go false when the Activity STOPS, so Android
+// keeps counting through a notification shade or a Control Center pull where
+// this stops. The case both cover is the one this was written for - the app
+// actually in the background - and erring towards not charging dwell for
+// time the player did not spend looking is the safe direction.
 - (BOOL)ro_isActuallyVisible {
     return !_dismissed
             && _layoutReady
             && _visibleRequested
+            && _appActive
             && self.superview != nil
             && self.window != nil
             && !self.hidden;
@@ -619,8 +775,17 @@ static NSTimeInterval RONow(void) {
     _visibleRequested = NO;
     _displayNotificationPending = NO;
     [self ro_stopObserving];
+    [self ro_stopObservingRootBounds];
 
     if (removeFromParent) [self removeFromSuperview];
+    // Outside the branch above on purpose. Two dismissal paths pass NO here -
+    // the observation tick that finds the superview gone, and didMoveToWindow
+    // - and a presentation left in the register after either of those still
+    // answers ro_frontmostInFeedView. It is the OLDEST entry, so it answers
+    // first, and its superview is nil, so both half-screen callers fail the
+    // `anchor.superview == hostView` test and fall back to index 0 - putting
+    // the half-screen layer UNDER the in-feed ads it must sit above.
+    [self ro_leaveLiveRegister];
     [self ro_destroyNativeAdView];
     [_layoutPlans removeAllObjects];
     [_layoutEngine clear];
@@ -672,17 +837,5 @@ static NSTimeInterval RONow(void) {
           , ROInFeedMediaName(_activePlan));
 }
 
-+ (float)ro_resolveBackgroundAlpha:(float)value {
-    if (isnan(value) || isinf(value)) {
-        NSLog(@"%@: In-feed backgroundAlpha is not finite; using 1", kROTag);
-        return 1;
-    }
-    float clamped = MAX(0.0f, MIN(1.0f, value));
-    if (clamped != value) {
-        NSLog(@"%@: In-feed backgroundAlpha must be within [0,1]; "
-               "clamped %g to %g", kROTag, value, clamped);
-    }
-    return clamped;
-}
 
 @end

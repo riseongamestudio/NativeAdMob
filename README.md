@@ -137,3 +137,167 @@ vì đồng hồ hẹn giờ đứng yên trong lúc máy ngủ còn tuổi củ
 Con số **4 giờ** hay được nhắc là của format `AppOpenAd` thật, **không áp cho
 pack này**: "native app open" ở đây là native ad mặc áo app-open, nên luật 1
 giờ mới là luật của nó.
+
+
+## 4. Xếp lớp: ai đứng trên ai
+
+Pack có ba tầng vẽ đè lên game, và thứ tự giữa chúng là cố định:
+
+    in-feed  →  half-screen  →  full-screen
+
+Hai tầng sau mỗi tầng có hai cư dân: một ad thật và một màn che trơn cùng
+kích thước (`HalfScreenOverlay`, `FullScreenOverlay`).
+
+Màn che (`FullScreenOverlay`, `HalfScreenOverlay`) nằm chung pack chính vì
+điều này: chúng phải chen vào đúng thang đó, không thể xếp lớp từ một pack
+đứng ngoài.
+
+**Android** có sẵn thang: in-feed là window `TYPE_APPLICATION_PANEL` (1000),
+half-screen là `TYPE_APPLICATION_SUB_PANEL` (1002), full-screen là Activity —
+mà Activity thì luôn lên trên cùng. Hệ điều hành lo, không phải mình lo.
+
+Window không có index như subview — `WindowManager` không có API đổi z-order.
+Chỉ hai đòn bẩy: **type**, và thứ tự `addView` trong cùng type. Đòn bẩy thứ hai
+vô dụng ở đây vì muốn leo lên phải gỡ window ra thêm lại (flicker, mà cũng chỉ
+tới được *đỉnh* của type chứ không chèn xuống dưới được). Nên thang được viết
+bằng type:
+
+| | | |
+|---|---|---|
+| 1000 | `TYPE_APPLICATION_PANEL` | in-feed |
+| 1002 | `TYPE_APPLICATION_SUB_PANEL` | màn che half |
+| 1003 | `TYPE_APPLICATION_ATTACHED_DIALOG` | ad half |
+| — | Activity | full-screen (ad và màn che) |
+
+Đúng bằng thứ tự subview bên iOS, và khác hợp đồng gọi hàm ở chỗ nó đúng bất kể
+cái nào được bật trước.
+
+**Chỗ này chưa được bảo đảm bởi tài liệu.** Bản thân hằng số 1003 là public API
+bình thường, không deprecated, cùng dải sub-window (1000–1999) với 1002 nên cùng
+cơ chế token — dùng nó không có rủi ro gì. Rủi ro nằm ở giả định "số lớn hơn thì
+nằm trên": ánh xạ type → layer nằm trong `WindowManagerService`, không có trong
+`android.jar`, và `android-stubs-src.jar` đã bị lột javadoc nên không file nào
+trong SDK nói ra điều đó. Framework còn giữ riêng một type `@hide` ở **1005**
+tên `APPLICATION_ABOVE_SUB_PANEL`, là một lý do để nghi ngờ quy tắc theo số.
+
+Phải xác nhận trên máy thật, và phải kiểm **hai** quan hệ chứ không phải một:
+
+1. ad half vẫn nằm **trên** in-feed (1003 so với 1000) — quan hệ này trước đây
+   đúng ở 1002 và đã chạy thật, đổi type là đem nó ra đặt cược lại;
+2. ad half nằm **trên** màn che half (1003 so với 1002) — thứ vừa mua được.
+
+Sai ở (1) thì đổi ngược `NON_FULLSCREEN_WINDOW_TYPE` về
+`TYPE_APPLICATION_SUB_PANEL` là xong, và quay lại hợp đồng "bật màn che trước,
+mở ad sau".
+
+**iOS** không có khái niệm đó. Không Activity, không window type; `UIWindow`
+chỉ có `windowLevel`, và `zPosition` thì đổi thứ tự vẽ nhưng **không** đổi thứ
+tự nhận chạm (`hitTest:` duyệt `subviews` từ cuối về đầu), nên hai thứ sẽ lệch
+nhau. Thứ duy nhất vừa đúng khi vẽ vừa đúng khi chạm là **vị trí trong mảng
+`subviews`** — cuối mảng là trên cùng.
+
+Ba trong bốn bề mặt là **subview** của `rootVC.view` (chính là `UnityView`;
+game nằm ở lớp *cha*, không phải anh em, nên index 0 vẫn nằm trên game). Luật,
+từ dưới lên:
+
+- **In-feed** luôn `insertSubview:atIndex:0` — đáy của phần pack thêm vào.
+- **Half-screen** (cả ad lẫn màn che) chèn `aboveSubview:` cái in-feed cao
+  nhất, hoặc index 0 nếu không có in-feed nào. Ad chèn trên màn che nếu màn
+  che đang đứng.
+- **Màn che full-screen** `addSubview:` — cuối mảng, tức trên tất cả những
+  thứ trên.
+
+"Cái in-feed cao nhất" là cái **già nhất** còn sống: mỗi cái mới vào index 0 sẽ
+đẩy các cái cũ lên. Pack giữ một `NSPointerArray` weak theo thứ tự tạo, phần tử
+đầu tiên còn khác `nil` chính là nó — không phải dò `indexOfObject:` (O(n) và
+so sánh từng phần tử), và không phải quét `subviews`.
+
+Bề mặt thứ tư, **ad full-screen**, là thứ duy nhất pack `present`, và present
+thẳng từ Unity root VC — đúng cách GMA present ad toàn màn của họ. Một VC được
+present thì luôn vẽ trên **toàn bộ** subview của VC present nó, nên nó tự động
+đứng trên cả ba tầng kia mà không ai phải sắp.
+
+### Vì sao màn che không phải window, cũng không phải present
+
+Bản đầu cho mỗi màn che một `UIWindow` với `windowLevel` riêng. Xếp lớp tuyệt
+đối thật, nhưng là tuyệt đối trên **mọi thứ**, kể cả ad mà SDK mediation
+present, và biến màn che thành một bề mặt Unity không có quan hệ gì.
+
+Bản thứ hai cho màn che full-screen present từ Unity VC. Tệ hơn: **một VC chỉ
+present được đúng một thứ**. Màn che thường được bật lên trong suốt thời gian
+một quảng cáo chạy — mà đó đúng là lúc SDK mediation cần cái slot present đó,
+nên nó sẽ không mở được ad. Không cứu được bằng cách tắt màn che sớm hơn: mốc
+sớm nhất là callback "ad đã hiện", mà callback đó chỉ bắn sau khi present
+thành công rồi.
+
+Làm subview thì không lấy của ai cái gì, và vẫn được đúng thứ tự cần.
+## 5. Pause: ai tắt game, và tắt đúng một lần
+
+Trên Editor cả hai màn che là **no-op có tiếng**: `Platform/Editor` vẫn đăng ký
+platform như Android và iOS, nhưng phần cover của nó chỉ in một warning
+"không vẽ trong preview" (một lần cho cả session) rồi thôi. Preview không có
+mối nối nào để che, và cũng không có Activity lẫn `UnityPause` để dừng game —
+vẽ một hình chữ nhật trông có vẻ đúng thì cũng không kiểm chứng được gì.
+
+Vì vậy `OverlayTransport.Platform` trả null **không** còn nghĩa là "nền tảng
+này không hỗ trợ" nữa. Cả ba nền tảng đều đăng ký, nên null chỉ xảy ra khi
+build hỏng: hoặc không bootstrap nào chạy (thì ad cũng chết theo), hoặc một
+assembly nền tảng quên implement `INativeOverlayPlatform`. Cả hai đều
+`Debug.LogError`, không phải warning.
+
+| | Gắn vào đâu | Pause |
+|---|---|---|
+| Full-screen **overlay** | subview, cuối mảng | có |
+| Full-screen **ad** | present từ Unity root VC | chỉ khi không có overlay |
+| Half-screen overlay / ad | subview, trên tầng in-feed | không bao giờ |
+
+Tại một thời điểm chỉ có đúng **một** present toàn màn của pack, và trong pack
+chỉ có đúng **một** chỗ gọi lệnh pause.
+
+### Kẻ thứ ba xoá cờ của mình
+
+Hai cờ trên chỉ lo được phần trong pack. `UnityPause` là một **cờ**, không phải
+bộ đếm, ai ghi cũng được — và SDK mediation có ghi: pause khi ad của họ mở,
+**resume khi ad của họ đóng**.
+
+Luồng thật của game là: bật màn che → mở ad mediation → ad đóng → *rồi mới* tắt
+màn che. Nên cái resume của SDK rơi vào **giữa**, để lại một màn che kín mít với
+game chạy, kêu, tính toán phía sau nó.
+
+Không có sự kiện nào báo cho pack biết chuyện đó, nên cách duy nhất giữ được bất
+biến là **nhìn**. `ROPauseGuard` là một `CADisplayLink` chỉ sống trong lúc pack
+muốn game đứng: mỗi frame đọc `UnityIsPaused()`, thấy bị xoá thì set lại 1, và
+log đúng một lần cho mỗi lượt che. Nó chỉ ép về phía *pause*, và cả hai cờ hạ
+xuống thì nó tự tắt — nên không có đường nào kẹt game ở trạng thái pause.
+
+Ngoài ra `Show` gọi lần thứ hai lúc màn che đang đứng cũng set lại cờ chứ không
+chỉ đổi màu rồi thôi: gọi `Show` là người dùng đang nói "tôi muốn game đứng".
+
+Android không cần gì trong mục này. Màn che ở đó là Activity, nên khi Activity
+ad của SDK finish thì hệ thống quay về màn che — vẫn nằm trên Unity, vẫn pause,
+và không có cờ nào cho ai xoá.
+
+Một trường hợp còn hở, cố ý không xử lý: nếu game gọi `Hide` trong lúc ad
+mediation *vẫn đang chạy*, pack hạ cờ và game chạy sau lưng ad của họ. Pack
+không có cách nào biết SDK còn muốn pause hay không, mà đoán thì tệ hơn — và
+triệu chứng chỉ là tốn pin, không sai hình.
+
+**Android** không phải làm gì: full-screen overlay là `NativeOverlayActivity`,
+full-screen ad là `OverlayAdActivity`, mà Activity đè lên nhau thì hệ điều hành
+tự pause Activity bên dưới. Không dòng nào trong pack gọi `UnityPlayer.pause()`.
+
+**iOS** không có Activity nên phải tự gọi `UnityPause`. Đúng một hàm
+`ROApplyPause()` trong `RONativeOverlay.mm` gọi nó, lái bằng đúng hai cờ — một
+của overlay, một của ad — rồi OR lại:
+
+    UnityPause(coverWantsPause || adWantsPause ? 1 : 0);
+
+Viết bằng hai cờ có tên chứ không phải bộ đếm là để nói đúng một điều: chỉ hai
+thằng này, không ai khác. Ad bật cờ vô điều kiện, nên khi đã có overlay thì cờ
+của ad không đổi gì — đúng nghĩa "ad chỉ pause khi không có overlay" — nhưng
+nếu overlay tắt trước lúc ad đóng thì game vẫn đứng yên, thay vì chạy tiếp sau
+lưng một ad toàn màn.
+
+Không còn trường hợp ngoài thang nào phải xử lý: màn che là subview nên không
+đụng tới slot present, và tắt màn che chỉ là `removeFromSuperview` nên không
+kéo theo ad nào cả.

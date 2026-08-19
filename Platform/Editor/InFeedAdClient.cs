@@ -8,7 +8,7 @@ namespace RiseOn.NativeAdMob.Editor {
 
         private readonly IInFeedAdCallbacks callbacks;
         private readonly string adUnitId;
-        private readonly float backgroundAlpha;
+        private readonly Color backgroundColor;
         private readonly EditorAdConfig[] configs;
         private readonly EditorAd[] previews;
 
@@ -17,7 +17,7 @@ namespace RiseOn.NativeAdMob.Editor {
           , IInFeedAdCallbacks callbacks) {
             this.callbacks  = callbacks;
             adUnitId        = settings.AdUnitId;
-            backgroundAlpha = settings.BackgroundAlpha;
+            backgroundColor = settings.BackgroundColor;
             configs         = new EditorAdConfig[settings.SlotCount];
             previews        = new EditorAd[settings.SlotCount];
         }
@@ -34,7 +34,7 @@ namespace RiseOn.NativeAdMob.Editor {
                 adUnitId
               , positionPx
               , sizePx
-              , backgroundAlpha);
+              , backgroundColor);
         }
 
         public void ShowSlot(int slotIndex) {

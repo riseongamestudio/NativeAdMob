@@ -44,7 +44,7 @@ void* ROInFeedAd_Create(
         const char* adUnitId
       , int32_t slotCount
       , int32_t cacheSize
-      , float backgroundAlpha
+      , int32_t backgroundColor
       , int32_t instanceId) {
     NSString *unit = HBStringFromUtf8(adUnitId);
     if (unit.length == 0) return NULL;
@@ -52,7 +52,7 @@ void* ROInFeedAd_Create(
             [[ROInFeedAd alloc] initWithAdUnitId:unit
                                                 slotCount:slotCount
                                                 cacheSize:cacheSize
-                                          backgroundAlpha:backgroundAlpha
+                                          backgroundColor:backgroundColor
                                                instanceId:instanceId];
     return (void *)CFBridgingRetain(ad);
 }
@@ -159,7 +159,7 @@ void ROOverlayAd_Configure(
         void* handle
       , bool fullscreen
       , float heightRatio
-      , float backgroundAlpha
+      , int32_t backgroundColor
       , int32_t cacheSize
       , int32_t cooldown
       , int32_t closeSide
@@ -169,7 +169,7 @@ void ROOverlayAd_Configure(
     [(__bridge ROOverlayAd *)handle
             configureWithFullscreen:fullscreen
                         heightRatio:heightRatio
-                    backgroundAlpha:backgroundAlpha
+                    backgroundColor:backgroundColor
                           cacheSize:cacheSize
                            cooldown:cooldown
                           closeSide:closeSide

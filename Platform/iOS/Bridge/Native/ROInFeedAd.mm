@@ -22,7 +22,6 @@ NSTimeInterval ROInFeedBackoffDelay(
 @implementation ROInFeedCachedAd
 @end
 
-static float ROResolveBackgroundAlpha(float value);
 
 @interface ROInFeedAd () <GADNativeAdLoaderDelegate
                               , GADNativeAdDelegate>
@@ -31,7 +30,7 @@ static float ROResolveBackgroundAlpha(float value);
 @implementation ROInFeedAd {
     NSString *_adUnitId;
     NSInteger _cacheSize;
-    float _backgroundAlpha;
+    int32_t _backgroundColor;
     NSArray<ROInFeedAdSlot *> *_slots;
     NSMutableArray<ROInFeedCachedAd *> *_cachedAds;
     // OwnsAd runs inside the SDK's paid-event callback, off whatever thread
@@ -58,7 +57,7 @@ static NSTimeInterval RONow(void) {
 - (instancetype)initWithAdUnitId:(NSString *)adUnitId
                        slotCount:(NSInteger)slotCount
                        cacheSize:(NSInteger)cacheSize
-                 backgroundAlpha:(float)backgroundAlpha
+                 backgroundColor:(int32_t)backgroundColor
                       instanceId:(int32_t)instanceId {
     self = [super initWithInstanceId:instanceId];
     if (self == nil) return nil;
@@ -68,7 +67,7 @@ static NSTimeInterval RONow(void) {
     _cacheSize = MIN(
             kROMaxCacheSize
           , cacheSize < 1 ? boundedSlotCount + 1 : cacheSize);
-    _backgroundAlpha = ROResolveBackgroundAlpha(backgroundAlpha);
+    _backgroundColor = backgroundColor;
     _cachedAds = [NSMutableArray array];
     _ownedAds = [NSHashTable weakObjectsHashTable];
     _inFeedCallbacksLock = [NSObject new];
@@ -91,13 +90,6 @@ static NSTimeInterval RONow(void) {
     return self;
 }
 
-static float ROResolveBackgroundAlpha(float value) {
-    if (isnan(value) || isinf(value)) {
-        NSLog(@"%@: backgroundAlpha is not finite; using 1", kROTag);
-        return 1;
-    }
-    return MAX(0.f, MIN(1.f, value));
-}
 
 - (void)setInFeedListenerCallbacks:
         (ROInFeedAdListenerCallbacks)callbacks {
@@ -264,6 +256,13 @@ static float ROResolveBackgroundAlpha(float value) {
         cached.ad = nativeAd;
         cached.loadedAt = RONow();
         [self->_cachedAds addObject:cached];
+        // Printed at the moment the ad joins the cache, so the number is what
+        // the cache holds AFTER this load - read it against the target to see
+        // whether the chain is going to ask for another one.
+        NSLog(@"%@: Loaded: cache %ld/%ld"
+              , kROTag
+              , (long)self->_cachedAds.count
+              , (long)self->_cacheSize);
         [self ro_scheduleCacheExpiry];
         __weak ROInFeedAd *weakSelf = self;
         __weak GADNativeAd *weakAd = nativeAd;
@@ -437,8 +436,8 @@ static float ROResolveBackgroundAlpha(float value) {
 // Slot-facing accessors and notifications
 // ---------------------------------------------------------------------------
 
-- (float)slotBackgroundAlpha {
-    return _backgroundAlpha;
+- (float)slotBackgroundColor {
+    return _backgroundColor;
 }
 
 - (NSString *)unitAdUnitId {

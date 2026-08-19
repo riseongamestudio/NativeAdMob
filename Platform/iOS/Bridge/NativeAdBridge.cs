@@ -45,7 +45,7 @@ namespace RiseOn.NativeAdMob.iOS {
             string adUnitId
           , int slotCount
           , int cacheSize
-          , float backgroundAlpha
+          , int backgroundColor
           , int instanceId);
         [DllImport("__Internal")]
         internal static extern void ROInFeedAd_SetListener(
@@ -94,7 +94,7 @@ namespace RiseOn.NativeAdMob.iOS {
             IntPtr handle
           , [MarshalAs(UnmanagedType.I1)] bool fullscreen
           , float heightRatio
-          , float backgroundAlpha
+          , int backgroundColor
           , int cacheSize
           , int cooldown
           , int closeSide

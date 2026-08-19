@@ -33,7 +33,7 @@ namespace RiseOn.NativeAdMob {
           , bool coversFullScreen
           , float heightRatio
           , int cacheSize
-          , float backgroundAlpha
+          , Color backgroundColor
           , in CloseSettings controls)
             : base(adUnitId, format) {
             var platform = AdPlatformRegistry.Installed;
@@ -49,7 +49,7 @@ namespace RiseOn.NativeAdMob {
                   , CoversFullScreen = coversFullScreen
                   , HeightRatio      = heightRatio
                   , CacheSize        = cacheSize
-                  , BackgroundAlpha  = backgroundAlpha
+                  , BackgroundColor  = AdColor.Pack(backgroundColor)
                   , Close         = controls
                 }
               , this);
