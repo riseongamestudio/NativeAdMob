@@ -13,82 +13,81 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 
-public final class NativeOverlay {
+// Two covers, two mechanisms, and the difference is what they stop.
+//
+// The full-screen cover is an ACTIVITY (NativeCoverActivity), so the system
+// pauses Unity behind it. That is the point of it - and the reason it is
+// dangerous: a paused Unity runs no C#, so whatever takes the cover down must
+// reach Hide from a thread that is still moving. See NativeCoverActivity for
+// the rule that pays for it.
+//
+// The half-screen cover is a WINDOW on the Unity Activity. It changes nothing
+// about the Activity's lifecycle, so the game keeps running behind it - which
+// is what a cover over half the screen has to do anyway - and Hide is always
+// reachable.
+public final class NativeCover {
     private static final Handler MAIN =
             new Handler(Looper.getMainLooper());
 
-    private static OverlayDialog overlayDialog;
-    private static int overlayColor = Color.BLACK;
-    // The share of the screen the cover claims, measured from the bottom
-    // edge. 1 is the whole screen; below that the window itself is short, so
-    // the strip above it is not merely transparent but absent, and touches
-    // there reach the game as if no cover existed.
-    private static float overlayHeightRatio = 1f;
+    // Only the half-screen cover keeps state here; the full-screen one lives
+    // as an Activity and holds its own.
+    private static final Cover HALF_SCREEN = new Cover();
 
-    private NativeOverlay() {}
+    private NativeCover() {}
 
-    // The full-screen cover: an Activity, so the system pauses Unity behind
-    // it. Nothing to size and nothing to keep - Android offers no way to hold
-    // an Activity and toggle it, so every show starts one and every hide
-    // finishes it.
     public static void ShowFullScreen(Activity currentActivity, int color) {
         RunOnMainThread(() -> {
             if (!IsActivityUsable(currentActivity)) return;
 
-            NativeOverlayActivity.Start(currentActivity, color);
+            NativeCoverActivity.Start(currentActivity, color);
         });
     }
 
     public static void HideFullScreen() {
-        RunOnMainThread(NativeOverlayActivity::Finish);
-    }
-
-    public static void SetFullScreenColor(int color) {
-        RunOnMainThread(() -> NativeOverlayActivity.SetColor(color));
+        RunOnMainThread(NativeCoverActivity::Finish);
     }
 
     public static void ShowHalfScreen(
             Activity currentActivity
           , int color
           , float heightRatio) {
-        float resolvedRatio = ResolveHeightRatio(heightRatio);
-        RunOnMainThread(() -> {
-            overlayColor = color;
-            // A cover already up at this height only needs repainting. Tearing
-            // the window down and building another is a visible flicker, in
-            // the one surface whose whole job is to hide those - and the iOS
-            // side has always updated in place here.
-            if (overlayDialog != null && overlayHeightRatio == resolvedRatio) {
-                overlayDialog.SetColor(color);
-                return;
-            }
-
-            overlayHeightRatio = resolvedRatio;
-            DismissOverlay();
-            if (!IsActivityUsable(currentActivity)) return;
-
-            OverlayDialog createdDialog = new OverlayDialog(
-                    currentActivity
-                  , overlayColor
-                  , overlayHeightRatio);
-            overlayDialog = createdDialog;
-            try {
-                createdDialog.show();
-            } catch (RuntimeException ignored) {
-                if (overlayDialog == createdDialog) DismissOverlay();
-            }
-        });
+        Show(HALF_SCREEN, currentActivity, color, heightRatio);
     }
 
     public static void HideHalfScreen() {
-        RunOnMainThread(NativeOverlay::DismissOverlay);
+        RunOnMainThread(HALF_SCREEN::Dismiss);
     }
 
-    public static void SetHalfScreenColor(int color) {
+    private static void Show(
+            Cover cover
+          , Activity currentActivity
+          , int color
+          , float heightRatio) {
+        float resolvedRatio = ResolveHeightRatio(heightRatio);
         RunOnMainThread(() -> {
-            overlayColor = color;
-            OverlayDialog currentDialog = overlayDialog;
-            if (currentDialog != null) currentDialog.SetColor(color);
+            cover.color = color;
+            // A cover already up at this height only needs repainting.
+            // Tearing the window down and building another is a visible
+            // flicker, in the one surface whose whole job is to hide those.
+            if (cover.dialog != null && cover.heightRatio == resolvedRatio) {
+                cover.dialog.SetColor(color);
+                return;
+            }
+
+            cover.heightRatio = resolvedRatio;
+            cover.Dismiss();
+            if (!IsActivityUsable(currentActivity)) return;
+
+            CoverDialog createdDialog = new CoverDialog(
+                    currentActivity
+                  , cover.color
+                  , cover.heightRatio);
+            cover.dialog = createdDialog;
+            try {
+                createdDialog.show();
+            } catch (RuntimeException ignored) {
+                if (cover.dialog == createdDialog) cover.Dismiss();
+            }
         });
     }
 
@@ -97,17 +96,6 @@ public final class NativeOverlay {
     private static float ResolveHeightRatio(float value) {
         if (Float.isNaN(value) || value <= 0f || value >= 1f) return 1f;
         return value;
-    }
-
-    private static void DismissOverlay() {
-        OverlayDialog currentDialog = overlayDialog;
-        overlayDialog = null;
-        if (currentDialog == null) return;
-
-        try {
-            currentDialog.dismiss();
-        } catch (RuntimeException ignored) {
-        }
     }
 
     // One hop for the whole class, and it does not need an Activity to make
@@ -132,13 +120,30 @@ public final class NativeOverlay {
                 && !activity.isDestroyed();
     }
 
-    private static final class OverlayDialog extends Dialog {
+    private static final class Cover {
+        private CoverDialog dialog;
+        private int color = Color.BLACK;
+        private float heightRatio = 1f;
+
+        private void Dismiss() {
+            CoverDialog currentDialog = dialog;
+            dialog = null;
+            if (currentDialog == null) return;
+
+            try {
+                currentDialog.dismiss();
+            } catch (RuntimeException ignored) {
+            }
+        }
+    }
+
+    private static final class CoverDialog extends Dialog {
         private final Activity hostActivity;
         private final int initialColor;
         private final float heightRatio;
         private FrameLayout overlayView;
 
-        OverlayDialog(Activity activity, int color, float ratio) {
+        CoverDialog(Activity activity, int color, float ratio) {
             super(
                     activity
                   , android.R.style.Theme_Translucent_NoTitleBar_Fullscreen);

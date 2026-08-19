@@ -146,9 +146,9 @@ Pack có ba tầng vẽ đè lên game, và thứ tự giữa chúng là cố đ
     in-feed  →  half-screen  →  full-screen
 
 Hai tầng sau mỗi tầng có hai cư dân: một ad thật và một màn che trơn cùng
-kích thước (`HalfScreenOverlay`, `FullScreenOverlay`).
+kích thước (`HalfScreenCover`, `FullScreenCover`).
 
-Màn che (`FullScreenOverlay`, `HalfScreenOverlay`) nằm chung pack chính vì
+Màn che (`FullScreenCover`, `HalfScreenCover`) nằm chung pack chính vì
 điều này: chúng phải chen vào đúng thang đó, không thể xếp lớp từ một pack
 đứng ngoài.
 
@@ -226,73 +226,48 @@ sớm nhất là callback "ad đã hiện", mà callback đó chỉ bắn sau kh
 thành công rồi.
 
 Làm subview thì không lấy của ai cái gì, và vẫn được đúng thứ tự cần.
-## 5. Pause: ai tắt game, và tắt đúng một lần
-
-Trên Editor cả hai màn che là **no-op có tiếng**: `Platform/Editor` vẫn đăng ký
-platform như Android và iOS, nhưng phần cover của nó chỉ in một warning
-"không vẽ trong preview" (một lần cho cả session) rồi thôi. Preview không có
-mối nối nào để che, và cũng không có Activity lẫn `UnityPause` để dừng game —
-vẽ một hình chữ nhật trông có vẻ đúng thì cũng không kiểm chứng được gì.
-
-Vì vậy `OverlayTransport.Platform` trả null **không** còn nghĩa là "nền tảng
-này không hỗ trợ" nữa. Cả ba nền tảng đều đăng ký, nên null chỉ xảy ra khi
-build hỏng: hoặc không bootstrap nào chạy (thì ad cũng chết theo), hoặc một
-assembly nền tảng quên implement `INativeOverlayPlatform`. Cả hai đều
-`Debug.LogError`, không phải warning.
+## 5. Pause: ai tắt game, và luật phải trả cho nó
 
 | | Gắn vào đâu | Pause |
 |---|---|---|
-| Full-screen **overlay** | subview, cuối mảng | có |
-| Full-screen **ad** | present từ Unity root VC | chỉ khi không có overlay |
-| Half-screen overlay / ad | subview, trên tầng in-feed | không bao giờ |
+| Màn che full | **Activity** / subview cuối mảng | **có** |
+| Màn che half | window `SUB_PANEL` / subview trên tầng in-feed | không |
+| **Ad** full-screen | Activity / present từ Unity root VC | có |
+| Ad half | window `SUB_PANEL` / subview | không |
 
-Tại một thời điểm chỉ có đúng **một** present toàn màn của pack, và trong pack
-chỉ có đúng **một** chỗ gọi lệnh pause.
+**Android** không phải gọi gì: cả hai thứ pause đều là Activity, hệ điều hành
+tự dừng Activity bên dưới. Không dòng nào trong pack gọi `UnityPlayer.pause()`.
 
-### Kẻ thứ ba xoá cờ của mình
+**iOS** không có Activity nên tự gọi `UnityPause`. Đúng một hàm
+`ROApplyPause()` trong `RONativeCover.mm` gọi nó, lái bằng hai cờ có tên — một
+của màn che, một của ad — rồi OR lại.
 
-Hai cờ trên chỉ lo được phần trong pack. `UnityPause` là một **cờ**, không phải
-bộ đếm, ai ghi cũng được — và SDK mediation có ghi: pause khi ad của họ mở,
-**resume khi ad của họ đóng**.
+### Luật phải trả cho cái pause đó
 
-Luồng thật của game là: bật màn che → mở ad mediation → ad đóng → *rồi mới* tắt
-màn che. Nên cái resume của SDK rơi vào **giữa**, để lại một màn che kín mít với
-game chạy, kêu, tính toán phía sau nó.
+Unity dừng thì **C# không chạy**, mà `Hide()` là một lời gọi C#. Nên:
 
-Không có sự kiện nào báo cho pack biết chuyện đó, nên cách duy nhất giữ được bất
-biến là **nhìn**. `ROPauseGuard` là một `CADisplayLink` chỉ sống trong lúc pack
-muốn game đứng: mỗi frame đọc `UnityIsPaused()`, thấy bị xoá thì set lại 1, và
-log đúng một lần cho mỗi lượt che. Nó chỉ ép về phía *pause*, và cả hai cờ hạ
-xuống thì nó tự tắt — nên không có đường nào kẹt game ở trạng thái pause.
+> Thứ gỡ màn che full **không được** xếp lịch qua player loop của Unity.
 
-Ngoài ra `Show` gọi lần thứ hai lúc màn che đang đứng cũng set lại cờ chứ không
-chỉ đổi màu rồi thôi: gọi `Show` là người dùng đang nói "tôi muốn game đứng".
+Bản thân lời gọi thì thread nào cũng được — nó là JNI/DllImport, rồi post sang
+main looper của Android; cả hai đều còn sống khi Unity dừng. Cái chết là **chỗ
+xếp lịch**: `Update`, coroutine, `UniTask.Post`, hay callback SDK đã bị marshal
+về main thread — tất cả đều nằm sau player loop.
 
-Android không cần gì trong mục này. Màn che ở đó là Activity, nên khi Activity
-ad của SDK finish thì hệ thống quay về màn che — vẫn nằm trên Unity, vẫn pause,
-và không có cờ nào cho ai xoá.
+Trong game này đường sống là `onCompletedAnyThread` của `AdMaxProvider`: nó bắn
+trên chính luồng SDK, ngoài `UniTask.Post`. **Mọi** đường kết thúc một lượt show
+phải mang nó, kể cả nhánh `FailedToDisplay` — nhánh đó từng thiếu và hậu quả là
+màn che không bao giờ được gỡ.
 
-Một trường hợp còn hở, cố ý không xử lý: nếu game gọi `Hide` trong lúc ad
-mediation *vẫn đang chạy*, pack hạ cờ và game chạy sau lưng ad của họ. Pack
-không có cách nào biết SDK còn muốn pause hay không, mà đoán thì tệ hơn — và
-triệu chứng chỉ là tốn pin, không sai hình.
+Đã trả giá một lần rồi: khi màn che full là Activity còn `Hide` đi qua callback
+đã marshal về main thread, đo được `mResumedActivity` là màn che,
+`UnityPlayerActivity` `state=STOPPED`, log Unity im hẳn — màn đen vĩnh viễn,
+back bị nuốt có chủ ý, chỉ force-stop mới thoát.
 
-**Android** không phải làm gì: full-screen overlay là `NativeOverlayActivity`,
-full-screen ad là `OverlayAdActivity`, mà Activity đè lên nhau thì hệ điều hành
-tự pause Activity bên dưới. Không dòng nào trong pack gọi `UnityPlayer.pause()`.
+### `ROPauseGuard`
 
-**iOS** không có Activity nên phải tự gọi `UnityPause`. Đúng một hàm
-`ROApplyPause()` trong `RONativeOverlay.mm` gọi nó, lái bằng đúng hai cờ — một
-của overlay, một của ad — rồi OR lại:
-
-    UnityPause(coverWantsPause || adWantsPause ? 1 : 0);
-
-Viết bằng hai cờ có tên chứ không phải bộ đếm là để nói đúng một điều: chỉ hai
-thằng này, không ai khác. Ad bật cờ vô điều kiện, nên khi đã có overlay thì cờ
-của ad không đổi gì — đúng nghĩa "ad chỉ pause khi không có overlay" — nhưng
-nếu overlay tắt trước lúc ad đóng thì game vẫn đứng yên, thay vì chạy tiếp sau
-lưng một ad toàn màn.
-
-Không còn trường hợp ngoài thang nào phải xử lý: màn che là subview nên không
-đụng tới slot present, và tắt màn che chỉ là `removeFromSuperview` nên không
-kéo theo ad nào cả.
+`UnityPause` là **cờ**, không phải bộ đếm, và SDK mediation cũng ghi nó — pause
+khi ad của họ mở, **resume khi ad của họ đóng**. Cú resume đó có thể rơi vào
+lúc màn che hoặc ad toàn màn của pack đang đứng. Không có sự kiện nào báo, nên
+guard là một `CADisplayLink` chỉ sống trong lúc pack muốn game đứng: mỗi frame
+đọc `UnityIsPaused()`, thấy bị xoá thì set lại, log một lần mỗi lượt. Nó chỉ ép
+về phía pause, và hai cờ hạ xuống thì tự tắt.

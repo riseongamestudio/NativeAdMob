@@ -21,7 +21,7 @@
              moment it is covering the seam it was raised for, and be gone
              when the ad closes. Finish() owns the lifetime instead. -->
         <activity
-            android:name="com.riseon.nativeadmob.NativeOverlayActivity"
+            android:name="com.riseon.nativeadmob.NativeCoverActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
             android:enableOnBackInvokedCallback="true"
             android:excludeFromRecents="true"

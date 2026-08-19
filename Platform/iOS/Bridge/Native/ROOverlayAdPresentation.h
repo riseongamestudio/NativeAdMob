@@ -1,5 +1,5 @@
-// Port of NativeAdMobOverlayPresentation and the presenting half of
-// NativeAdMobOverlayActivity in one object: fullscreen rides a translucent
+// Port of OverlayAdPresentation and the presenting half of
+// OverlayAdActivity in one object: fullscreen rides a translucent
 // view controller presented over Unity (the Activity's role), collapsible
 // pins the content view to the bottom of Unity's view (the panel dialog's
 // role). iOS never tears a presented controller down behind the app's back,

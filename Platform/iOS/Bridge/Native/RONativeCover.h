@@ -5,8 +5,8 @@
 // The half-screen cover's container view, or nil when none is up. A
 // half-screen ad inserts directly above this when it is non-nil, so the pair
 // keeps its order whichever of the two was shown first.
-UIView *RONativeOverlay_HalfScreenView(void);
+UIView *RONativeCover_HalfScreenView(void);
 
 // Told by the full-screen ad whether it needs the game stopped. One place in
 // the pack calls UnityPause, and this is how the ad reaches it.
-void RONativeOverlay_SetAdWantsPause(BOOL wantsPause);
+void RONativeCover_SetAdWantsPause(BOOL wantsPause);

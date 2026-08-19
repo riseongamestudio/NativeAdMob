@@ -1,7 +1,7 @@
 using UnityEngine;
 
 namespace RiseOn.NativeAdMob.Editor {
-    internal sealed class AdPlatform : IAdPlatform, INativeOverlayPlatform {
+    internal sealed class AdPlatform : IAdPlatform, INativeCoverPlatform {
         public IInFeedAdClient CreateInFeed(
             InFeedAd.Settings settings
           , IInFeedAdCallbacks callbacks) {
@@ -21,15 +21,11 @@ namespace RiseOn.NativeAdMob.Editor {
 
         public void HideFullScreen() => cover.HideFullScreen();
 
-        public void SetFullScreenColor(int argb) => cover.SetFullScreenColor(argb);
-
         public void ShowHalfScreen(int argb, float heightRatio)
             => cover.ShowHalfScreen(argb, heightRatio);
 
         public void HideHalfScreen() => cover.HideHalfScreen();
 
-        public void SetHalfScreenColor(int argb) => cover.SetHalfScreenColor(argb);
-
-        private readonly NativeOverlayPlatform cover = new();
+        private readonly NativeCoverPlatform cover = new();
     }
 }

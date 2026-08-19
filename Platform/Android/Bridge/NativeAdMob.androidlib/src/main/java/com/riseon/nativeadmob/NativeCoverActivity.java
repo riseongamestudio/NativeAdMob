@@ -13,25 +13,35 @@ import android.window.OnBackInvokedDispatcher;
 
 // The full-screen cover, and the reason it is an Activity rather than a
 // window: an Activity on top pauses the one below, so Unity stops rendering
-// and stops its audio without the game asking. The window-backed cover in
-// NativeOverlay does not and cannot - same process, same Activity, nothing
-// for the system to pause.
+// and stops its audio without the game asking. The half-screen cover in
+// NativeCover does not and cannot - same process, same Activity, nothing for
+// the system to pause.
 //
-// The cost is that Android gives no way to hold one of these and toggle it.
-// There is no setActive, no show, no hide: start puts it on top, finish takes
-// it away, and every appearance is a task transition. That is the trade the
-// caller is making when it asks for the full-screen cover.
-public final class NativeOverlayActivity extends Activity {
+// THE PRICE, AND THE RULE THAT PAYS IT. Stopping Unity stops C#, so whatever
+// takes this cover down must not need C# on Unity's player loop to run. Hide
+// is reachable from any thread - it is a JNI call that posts to the Android
+// main looper, both of which are alive while Unity is stopped - but the CALL
+// has to come from somewhere still running. In this game that is
+// AdMaxProvider's onCompletedAnyThread callbacks, which fire on the SDK's own
+// thread rather than through UniTask.Post. Route a hide through the player
+// loop instead and the screen stays black forever: the cover stops the loop
+// that was going to take the cover away. Every path that ends a show has to
+// carry the any-thread hide, the display-FAILED ones included.
+//
+// The other cost is that Android gives no way to hold one of these and toggle
+// it. There is no setActive, no show, no hide: start puts it on top, finish
+// takes it away, and every appearance is a task transition.
+public final class NativeCoverActivity extends Activity {
     private static final String EXTRA_COLOR =
-            "com.riseon.nativeadmob.OVERLAY_COLOR";
+            "com.riseon.nativeadmob.COVER_COLOR";
 
-    private static NativeOverlayActivity current;
+    private static NativeCoverActivity current;
 
     private FrameLayout coverView;
     private Object backCallback;
 
     static void Start(Activity host, int color) {
-        NativeOverlayActivity showing = current;
+        NativeCoverActivity showing = current;
         if (showing != null) {
             // Already up: repaint rather than stack a second one.
             showing.ApplyColor(color);
@@ -39,7 +49,7 @@ public final class NativeOverlayActivity extends Activity {
         }
 
         android.content.Intent intent =
-                new android.content.Intent(host, NativeOverlayActivity.class);
+                new android.content.Intent(host, NativeCoverActivity.class);
         intent.putExtra(EXTRA_COLOR, color);
         // No animation either way: the cover exists to hide a seam, and a
         // fade of its own would be one more seam to hide.
@@ -49,16 +59,11 @@ public final class NativeOverlayActivity extends Activity {
     }
 
     static void Finish() {
-        NativeOverlayActivity showing = current;
+        NativeCoverActivity showing = current;
         if (showing == null) return;
 
         showing.finish();
         showing.overridePendingTransition(0, 0);
-    }
-
-    static void SetColor(int color) {
-        NativeOverlayActivity showing = current;
-        if (showing != null) showing.ApplyColor(color);
     }
 
     @Override

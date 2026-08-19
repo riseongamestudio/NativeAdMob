@@ -2,8 +2,8 @@ using UnityEngine;
 using UnityEngine.Android;
 
 namespace RiseOn.NativeAdMob.Android {
-    internal sealed class NativeOverlayPlatform : INativeOverlayPlatform {
-        private const string JAVA_CLASS_NAME = "com.riseon.nativeadmob.NativeOverlay";
+    internal sealed class NativeCoverPlatform : INativeCoverPlatform {
+        private const string JAVA_CLASS_NAME = "com.riseon.nativeadmob.NativeCover";
 
         private readonly object javaStateLock = new();
 
@@ -18,8 +18,6 @@ namespace RiseOn.NativeAdMob.Android {
 
         public void HideFullScreen() => Call("HideFullScreen");
 
-        public void SetFullScreenColor(int argb) => Call("SetFullScreenColor", argb);
-
         public void ShowHalfScreen(int argb, float heightRatio) {
             Call(
                 "ShowHalfScreen"
@@ -29,9 +27,6 @@ namespace RiseOn.NativeAdMob.Android {
         }
 
         public void HideHalfScreen() => Call("HideHalfScreen");
-
-        public void SetHalfScreenColor(int argb)
-            => Call("SetHalfScreenColor", argb);
 
         private void Call(string methodName, params object[] parameters) {
             lock (javaStateLock) {

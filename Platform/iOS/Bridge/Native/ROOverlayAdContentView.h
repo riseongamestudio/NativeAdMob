@@ -1,4 +1,4 @@
-// Port of com.riseon.nativeadmob.NativeAdMobOverlayContentView: the full-screen and
+// Port of com.riseon.nativeadmob.OverlayAdContentView: the full-screen and
 // collapsible ad face - media, identity row, body, call to action, the Ad
 // badge with an AdChoices reserve, countdown and close controls, the
 // responsive collapsible ladder, and the whole-or-scrolling text rule.

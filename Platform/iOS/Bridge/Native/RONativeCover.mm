@@ -1,4 +1,4 @@
-#import "RONativeOverlay.h"
+#import "RONativeCover.h"
 
 #import "ROInFeedAdPresentation.h"
 
@@ -27,10 +27,20 @@ static NSString *const kROTag = @"Cover";
 // full-screen ad - the pack's own, the SDK's - lands above these covers
 // without being told to, which is the order that was wanted anyway.
 //
-// What differs between the two is only what they cover and what they stop:
-// the full-screen cover spans the host and pauses the game; the half-screen
-// cover takes a bottom slice and pauses nothing, because the game is still
-// visible above it.
+// The full-screen cover pauses the game; the half-screen one never does,
+// because the game is still visible above it.
+//
+// The pause is the whole point of the full-screen cover, and it is also what
+// makes it sharp: a paused Unity runs no C#, and Hide IS a C# call. Whatever
+// ends a show has to reach Hide from a thread that is still moving - in this
+// game, AdMaxProvider's onCompletedAnyThread callbacks, which fire on the
+// SDK's own thread instead of going through the player loop. Route a hide
+// through the player loop while this cover is up and the screen stays black
+// for good. The Android side carries the same rule and the same warning.
+//
+// Where they sit is separate from what they stop: the half-screen cover goes
+// in under the half-screen ad, the full-screen one is appended last so it
+// lands above every layer the pack owns.
 
 #pragma mark - Pause
 
@@ -61,9 +71,9 @@ static BOOL ROWantsPause(void) {
 // and it can strand nothing: with both flags down it asserts nothing and
 // stops running.
 //
-// Android needs none of this. There the cover is an Activity, so when the
-// SDK's ad Activity finishes the system returns to the cover - still above
-// Unity, still paused, and no flag for anyone to clear.
+// Android needs none of this: its full-screen ad is an Activity, and the
+// system decides what a stacked Activity does to the one below - there is no
+// flag for anyone to clear.
 @interface ROPauseGuard : NSObject
 @end
 
@@ -75,7 +85,7 @@ static BOOL ROPauseCorrectionLogged;
 - (void)ro_tick {
     if (!ROWantsPause() || UnityIsPaused() != 0) return;
 
-    // Once per cover, not once per frame: the correction repeats every frame
+    // Once per ad, not once per frame: the correction repeats every frame
     // until whoever cleared the flag stops doing so.
     if (!ROPauseCorrectionLogged) {
         ROPauseCorrectionLogged = YES;
@@ -112,7 +122,7 @@ static void ROApplyPause(void) {
     ROSetPauseGuardRunning(wantsPause);
 }
 
-void RONativeOverlay_SetAdWantsPause(BOOL wantsPause) {
+void RONativeCover_SetAdWantsPause(BOOL wantsPause) {
     if (ROAdWantsPause == wantsPause) return;
 
     ROAdWantsPause = wantsPause;
@@ -184,12 +194,6 @@ static void ROHideFullScreen(void) {
     [cover removeFromSuperview];
 }
 
-static void ROSetFullScreenColor(int32_t color) {
-    if (ROFullScreenCover == nil) return;
-
-    ROFullScreenCover.backgroundColor = ROColorFromArgb(color);
-}
-
 #pragma mark - Half-screen cover
 
 @interface ROHalfScreenCoverView : UIView
@@ -242,7 +246,7 @@ static void ROSetFullScreenColor(int32_t color) {
 
 static ROHalfScreenCoverView *ROHalfScreenCover = nil;
 
-UIView *RONativeOverlay_HalfScreenView(void) {
+UIView *RONativeCover_HalfScreenView(void) {
     return ROHalfScreenCover;
 }
 
@@ -284,44 +288,26 @@ static void ROHideHalfScreen(void) {
     [cover removeFromSuperview];
 }
 
-static void ROSetHalfScreenColor(int32_t color) {
-    if (ROHalfScreenCover == nil) return;
-
-    ROHalfScreenCover.cover.backgroundColor = ROColorFromArgb(color);
-}
-
 #pragma mark - C surface
 
 extern "C" {
 
-void RONativeOverlay_ShowFull(int32_t color) {
+void RONativeCover_ShowFull(int32_t color) {
     dispatch_async(dispatch_get_main_queue(), ^{ ROShowFullScreen(color); });
 }
 
-void RONativeOverlay_HideFull(void) {
+void RONativeCover_HideFull(void) {
     dispatch_async(dispatch_get_main_queue(), ^{ ROHideFullScreen(); });
 }
 
-void RONativeOverlay_SetFullColor(int32_t color) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        ROSetFullScreenColor(color);
-    });
-}
-
-void RONativeOverlay_ShowHalf(int32_t color, float heightRatio) {
+void RONativeCover_ShowHalf(int32_t color, float heightRatio) {
     dispatch_async(dispatch_get_main_queue(), ^{
         ROShowHalfScreen(color, heightRatio);
     });
 }
 
-void RONativeOverlay_HideHalf(void) {
+void RONativeCover_HideHalf(void) {
     dispatch_async(dispatch_get_main_queue(), ^{ ROHideHalfScreen(); });
-}
-
-void RONativeOverlay_SetHalfColor(int32_t color) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        ROSetHalfScreenColor(color);
-    });
 }
 
 }

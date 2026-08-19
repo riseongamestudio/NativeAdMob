@@ -5,7 +5,7 @@ namespace RiseOn.NativeAdMob {
     // there is exactly one full-screen cover and exactly one half-screen
     // cover in a game, so both are static and neither has an instance to
     // inherit anything.
-    internal static class OverlayTransport {
+    internal static class CoverTransport {
         private static bool missingPlatformLogged;
 
         // One registry for the whole pack: every platform assembly - Android,
@@ -14,10 +14,10 @@ namespace RiseOn.NativeAdMob {
         // something is wrong with the build, never because a target simply
         // has no covers: a target that does not draw them says so itself and
         // is still installed.
-        internal static INativeOverlayPlatform Platform {
+        internal static INativeCoverPlatform Platform {
             get {
                 var installed = AdPlatformRegistry.Installed;
-                if (installed is INativeOverlayPlatform cover) return cover;
+                if (installed is INativeCoverPlatform cover) return cover;
 
                 LogMissingPlatform(installed);
                 return null;
@@ -40,7 +40,7 @@ namespace RiseOn.NativeAdMob {
                       + "nothing. The platform assembly's bootstrap did not "
                       + "run."
                     : $"{installed.GetType().Name} does not implement "
-                      + $"{nameof(INativeOverlayPlatform)}; covers do nothing "
+                      + $"{nameof(INativeCoverPlatform)}; covers do nothing "
                       + $"on {Application.platform}.");
         }
     }
