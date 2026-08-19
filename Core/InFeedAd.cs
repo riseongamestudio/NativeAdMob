@@ -1,6 +1,5 @@
 using System;
 using System.Runtime.CompilerServices;
-using RiseOn.Analytics;
 using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
@@ -13,7 +12,7 @@ namespace RiseOn.NativeAdMob {
     /// </summary>
     public sealed class InFeedAd : BaseAd, IInFeedAdCallbacks {
         private const int MAX_SLOT_COUNT = 8;
-        private const AdFormat IN_FEED_FORMAT = AdFormat.NATIVE_IN_FEED;
+        private const string FORMAT = "NATIVE_IN_FEED";
 
         [Serializable]
         public struct Settings {
@@ -78,10 +77,7 @@ namespace RiseOn.NativeAdMob {
             }
         }
 
-        public InFeedAd(in Settings settings)
-            : base(
-                settings.AdUnitId
-              , IN_FEED_FORMAT) {
+        public InFeedAd(in Settings settings) : base(settings.AdUnitId, FORMAT) {
             if (settings.SlotCount < 1 || settings.SlotCount > MAX_SLOT_COUNT) {
                 throw new ArgumentOutOfRangeException(
                     nameof(settings)

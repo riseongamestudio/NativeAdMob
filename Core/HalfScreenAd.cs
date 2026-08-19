@@ -1,5 +1,4 @@
 using System;
-using RiseOn.Analytics;
 using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
@@ -8,6 +7,8 @@ namespace RiseOn.NativeAdMob {
     /// collapsible placement. HeightRatio is the covered fraction.
     /// </summary>
     public sealed class HalfScreenAd : OverlayAd {
+        private const string DEFAULT_FORMAT = "NATIVE_HALF_SCREEN";
+        
         [Serializable]
         public struct Settings {
             public string AdUnitId;
@@ -22,18 +23,16 @@ namespace RiseOn.NativeAdMob {
 
             public float BackgroundAlpha;
 
-            [SerializeField] private AdFormat format;
+            [SerializeField] private string format;
 
             /// <summary>
             /// Where the game puts this placement. Unset means
             /// NATIVE_COLLAPSIBLE.
             /// </summary>
-            public AdFormat Format {
+            public string Format {
                 // A struct cannot initialise a field, so the default lives in
                 // the reading of it rather than in an assignment.
-                readonly get => format is AdFormat.UNKNOWN
-                        ? AdFormat.NATIVE_COLLAPSIBLE
-                        : format;
+                readonly get => string.IsNullOrEmpty(format) ? DEFAULT_FORMAT : format;
                 set => format = value;
             }
 

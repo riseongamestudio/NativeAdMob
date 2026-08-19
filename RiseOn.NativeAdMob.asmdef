@@ -1,10 +1,7 @@
 {
     "name": "RiseOn.NativeAdMob",
     "rootNamespace": "RiseOn.NativeAdMob",
-    "references": [
-        "RiseOn.Analytics",
-        "AppsFlyer"
-    ],
+    "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

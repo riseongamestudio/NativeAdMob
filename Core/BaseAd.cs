@@ -1,6 +1,4 @@
 using System;
-using AppsFlyerSDK;
-using RiseOn.Analytics;
 using UnityEngine;
 
 namespace RiseOn.NativeAdMob {
@@ -24,7 +22,7 @@ namespace RiseOn.NativeAdMob {
         // learned once.
         public event Action OnAdLoaded;
         public event Action<AdError> OnAdLoadFailed;
-        public event Action<AdImpression> OnAdPaid;
+        public event Action<AdInfo> OnAdPaid;
 
         /// <summary>
         /// Where the game puts this placement. No SDK can know it - one
@@ -32,9 +30,9 @@ namespace RiseOn.NativeAdMob {
         /// end card depending only on who asked - so each placement declares
         /// it, and every paid impression this unit raises carries it.
         /// </summary>
-        public AdFormat Format { get; }
+        public string Format { get; }
 
-        private protected BaseAd(string adUnitId, AdFormat format) {
+        private protected BaseAd(string adUnitId, string format) {
             if (string.IsNullOrWhiteSpace(adUnitId)) {
                 throw new ArgumentException(
                     "A non-empty ad unit ID is required."
@@ -84,12 +82,10 @@ namespace RiseOn.NativeAdMob {
             // Native reports the money and the network; only this side knows
             // the placement. The record is therefore assembled here and
             // nowhere else, and it leaves the pack already complete.
-            AdImpression impression = new(
+            var impression = new AdInfo(
                 source
               , adUnitId
               , Format
-                // Every ad this pack serves comes through the AdMob SDK.
-              , MediationNetwork.GoogleAdMob
               , value
               , currencyCode);
             InvokeSafely(() => handler(impression));

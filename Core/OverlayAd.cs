@@ -1,6 +1,6 @@
 using System;
-using RiseOn.Analytics;
 using UnityEngine;
+
 namespace RiseOn.NativeAdMob {
     /// <summary>
     /// The shared engine of the two overlay formats - an ad presented over
@@ -29,7 +29,7 @@ namespace RiseOn.NativeAdMob {
 
         private protected OverlayAd(
             string adUnitId
-          , AdFormat format
+          , string format
           , bool coversFullScreen
           , float heightRatio
           , int cacheSize
