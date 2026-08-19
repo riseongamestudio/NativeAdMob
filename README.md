@@ -91,6 +91,14 @@ hằng số chỉ tham gia gián tiếp qua cái trần đó.
 Sửa một chỗ thì **sửa cả ba**, nếu không bản preview trong Editor sẽ nói dối
 về thứ máy thật hiển thị.
 
+Nhưng đồng bộ được con số đó **không có nghĩa là preview trung thực**. Preview
+chỉ dựng hai bố cục đại diện: overlay xếp chồng (media trên, chữ dưới) và ô
+in-feed. Nó **không có** MEDIA_LEFT, **không có** ticker, **không có**
+icon-hero. Một creative đứng xem trong Editor sẽ ra thẻ xếp chồng, còn trên
+máy ra rail bên phải — mục 1 nói về bố cục mà preview không vẽ được. Muốn
+kiểm bố cục side-media thì phải build lên máy và đọc dòng log
+`Side-media layout:`.
+
 ## 3. Cache: bao nhiêu, nạp khi nào, hết hạn khi nào
 
 Overlay và in-feed dùng chung một mô hình: giữ sẵn `CacheSize` ad ấm.
@@ -100,12 +108,17 @@ Overlay và in-feed dùng chung một mô hình: giữ sẵn `CacheSize` ad ấm
 - Chỉnh ở C#: `FullScreenAd.Settings.CacheSize`, `HalfScreenAd.Settings.CacheSize`,
   `InFeedAd.Settings.CacheSize`. Collapsible để **2** vì plan chained bày ad
   thứ hai ngay khi ad đầu đóng.
-- **Ba nơi kích hoạt nạp**: provider gọi `Load()`; một lượt load **thành công**
-  tự nối lượt sau cho tới khi đầy; và một `Show` vừa rút ad ra khỏi cache.
-- **Load hỏng thì dừng hẳn** — không retry, không backoff bên trong pack.
-  Quyền retry thuộc về provider (`AdMobProvider` đang dùng backoff luỹ thừa 2,
-  trần 32 giây).
 - Chỉ **ad ở đầu hàng** được dựng sẵn giao diện; ad phía sau dựng khi lên đầu.
+
+Nhưng **cách nạp thì hai bên khác hẳn nhau**, đừng suy từ bên này sang bên kia:
+
+| | Overlay | In-feed |
+|---|---|---|
+| Ai gọi nạp | provider gọi `Load()`; một lượt load **thành công** tự nối lượt sau tới khi đầy; và một `Show` vừa rút ad ra khỏi cache | **không có `Load()` công khai**. Tự nạp từ constructor, từ slot khi hết hàng (`RequestLoad`), từ lượt retry của chính nó, và từ lượt quét hết hạn |
+| Load hỏng | **dừng hẳn** — pack không retry, không backoff. Quyền retry thuộc provider (`AdMobProvider` dùng backoff luỹ thừa 2, trần 32 giây) | **tự retry**: `ScheduleNoFillRetry` → `BackoffDelayMs`, gốc 1 giây, mũ trần 5 → tối đa 32 giây |
+
+Hệ quả cần nhớ: **đừng chồng thêm retry phía provider cho in-feed** — nó đã có
+sẵn backoff riêng, chồng thêm là nhân đôi số request lúc no-fill.
 
 ### Hết hạn: 1 giờ
 

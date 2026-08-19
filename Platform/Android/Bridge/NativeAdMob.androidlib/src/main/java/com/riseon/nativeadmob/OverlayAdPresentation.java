@@ -83,7 +83,7 @@ public final class OverlayAdPresentation
         contentView = new OverlayAdContentView(
                 context
               , nativeAd
-              , countDownSec
+              , Math.max(0, countDownSec) * 1000L
               , closeOnLeft
               , timerOnLeft
               , fullscreen

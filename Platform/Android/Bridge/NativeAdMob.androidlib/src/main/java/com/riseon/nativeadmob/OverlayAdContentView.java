@@ -234,30 +234,12 @@ final class OverlayAdContentView extends FrameLayout {
     private Button callToActionView;
     private boolean released;
 
-    OverlayAdContentView(
-            Context context
-          , NativeAd nativeAd
-          , int countDownSec
-          , boolean xRandom
-          , boolean timerOnLeft
-          , boolean fullscreen
-          , float backgroundAlpha
-          , boolean fakeCloseAutoDismiss
-          , int requestedPanelHeight
-          , Runnable onClose) {
-        this(
-                context
-              , nativeAd
-              , Math.max(0, countDownSec) * MILLIS_PER_SECOND
-              , xRandom && Math.random() < 0.5d
-              , timerOnLeft
-              , fullscreen
-              , backgroundAlpha
-              , fakeCloseAutoDismiss
-              , requestedPanelHeight
-              , onClose);
-    }
-
+    // One constructor only, and it takes milliseconds. A seconds-taking
+    // twin used to sit here and roll the close button's side itself; an
+    // int argument then bound to it instead of to this one and re-rolled a
+    // side that had already been decided, which is how the collapsible
+    // ended up 25/75 instead of 50/50. The side arrives resolved now, from
+    // OverlayAdStyle, and there is nothing left to pick by accident.
     OverlayAdContentView(
             Context context
           , NativeAd nativeAd
@@ -2639,9 +2621,9 @@ final class OverlayAdContentView extends FrameLayout {
               , Math.round(mediaWidth / mediaAspectRatio));
     }
 
-    // The width a picture must keep to earn the rail beside it - the line
-    // that admits the layout, and the line it may not cross when it pays
-    // for its own left edge.
+    // The width a picture must keep to earn the rail beside it. The video
+    // floor for every creative, image ones included: a picture narrow
+    // enough to need the image floor is too narrow to carry a rail.
     private static int SideMediaFloor(float density) {
         return (int) Math.ceil(MIN_VIDEO_MEDIA_SIZE_DP * density);
     }

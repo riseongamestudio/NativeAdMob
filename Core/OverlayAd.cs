@@ -72,7 +72,6 @@ namespace RiseOn.NativeAdMob {
             lock (nativeAdStateLock) {
                 if (releasedManaged || client == null) return;
 
-                Debug.Log("Load()");
                 client.Load();
             }
         }
@@ -98,7 +97,6 @@ namespace RiseOn.NativeAdMob {
                 return;
             }
 
-            Debug.Log("Show()");
             lock (nativeAdStateLock) {
                 if (!releasedManaged
                  && showPendingOrActive

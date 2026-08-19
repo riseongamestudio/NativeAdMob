@@ -9,7 +9,6 @@ const int32_t RONativeAdInternalLoadError = -1;
 const int32_t RONativeAdInternalPresentationError = -2;
 
 @implementation ROBaseAd {
-    atomic_int _loadGeneration;
     atomic_bool _released;
     // Callbacks are read on SDK threads and written from Unity's thread; the
     // struct swap is guarded so a reader never sees half of an update.
@@ -23,7 +22,6 @@ const int32_t RONativeAdInternalPresentationError = -2;
 
     _instanceId = instanceId;
     _callbacksLock = [NSObject new];
-    atomic_init(&_loadGeneration, 0);
     atomic_init(&_released, false);
     return self;
 }
@@ -54,18 +52,6 @@ const int32_t RONativeAdInternalPresentationError = -2;
     @synchronized (_callbacksLock) {
         return _callbacks;
     }
-}
-
-- (int32_t)nextLoadGeneration {
-    return atomic_fetch_add(&_loadGeneration, 1) + 1;
-}
-
-- (void)invalidateLoadGeneration {
-    atomic_fetch_add(&_loadGeneration, 1);
-}
-
-- (BOOL)isCurrentLoadGeneration:(int32_t)generation {
-    return !self.released && generation == atomic_load(&_loadGeneration);
 }
 
 + (void)runOnMainThread:(dispatch_block_t)action {

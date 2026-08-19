@@ -257,7 +257,6 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 - (void)ro_doLoadAdWithHost:(UIViewController *)host
                       style:(HBOverlayStyle *)loadStyle {
     _isAdLoading = YES;
-    [self nextLoadGeneration];
     [self ro_notifyCurrentState];
     [self notifyLoadingStarted];
 
@@ -274,7 +273,12 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 - (void)adLoader:(GADAdLoader *)adLoader
         didReceiveNativeAd:(GADNativeAd *)nativeAd {
     [ROBaseAd runOnMainThread:^{
-        if (self.released) return;
+        // Only the loader we still hold may speak for us. Nothing today
+        // can swap it mid-request - ro_startLoadWithHost: refuses while
+        // _isAdLoading - so this is not covering a live bug; it is the
+        // invariant itself, standing where Java stands its load-generation
+        // check, and it keeps standing if someone later relaxes that gate.
+        if (self.released || adLoader != self->_adLoader) return;
 
         @synchronized (self->_ownedAds) {
             [self->_ownedAds addObject:nativeAd];
@@ -325,7 +329,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 - (void)adLoader:(GADAdLoader *)adLoader
         didFailToReceiveAdWithError:(NSError *)error {
     [ROBaseAd runOnMainThread:^{
-        if (self.released) return;
+        if (self.released || adLoader != self->_adLoader) return;
 
         self->_isAdLoading = NO;
         [self ro_notifyCurrentState];
@@ -433,7 +437,6 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 - (void)releaseAd {
     if (self.released) return;
     [self markReleased];
-    [self invalidateLoadGeneration];
     [ROBaseAd runOnMainThread:^{
         self->_isAdLoading = NO;
         [self ro_releasePreparedPresentation];

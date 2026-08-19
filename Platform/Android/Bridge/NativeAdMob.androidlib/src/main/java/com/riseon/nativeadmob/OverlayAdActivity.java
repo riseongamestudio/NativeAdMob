@@ -40,6 +40,13 @@ public final class OverlayAdActivity extends Activity {
     private static final long RESTORE_FOCUS_RETRY_MS = 100L;
     private static final long RESTORE_ATTACH_TIMEOUT_MS = 1200L;
     private static final int MAX_RESTORE_START_ATTEMPTS = 4;
+    // Waiting for window focus is its own loop and needs its own bound: the
+    // start counter never advances while we wait, so without this a system
+    // dialog sitting over the game - a permission prompt, an OEM overlay -
+    // kept the poll running at 10Hz for as long as it stayed up, holding
+    // the whole session graph alive behind it. Thirty seconds of patience,
+    // then the session fails like any other restore that cannot land.
+    private static final int MAX_RESTORE_FOCUS_WAIT_ATTEMPTS = 300;
     private static final Object SESSION_LOCK = new Object();
     private static final HashMap<String, Session> SESSIONS =
             new HashMap<>();
@@ -450,6 +457,7 @@ public final class OverlayAdActivity extends Activity {
             targetSession.restoreScheduled = false;
             targetSession.restoreStartInFlight = false;
             targetSession.restoreStartAttempts = 0;
+            targetSession.restoreFocusWaitAttempts = 0;
             return targetSession;
         }
     }
@@ -679,6 +687,7 @@ public final class OverlayAdActivity extends Activity {
         Session targetSession;
         Activity hostActivity;
         boolean waitForFocus = false;
+        boolean giveUp = false;
 
         synchronized (SESSION_LOCK) {
             targetSession = SESSIONS.get(targetSessionId);
@@ -697,11 +706,29 @@ public final class OverlayAdActivity extends Activity {
             if (!IsActivityUsable(hostActivity)) return;
 
             if (!hostActivity.hasWindowFocus()) {
-                waitForFocus = true;
+                waitForFocus =
+                        ++targetSession.restoreFocusWaitAttempts
+                                < MAX_RESTORE_FOCUS_WAIT_ATTEMPTS;
+                giveUp = !waitForFocus;
             } else {
+                targetSession.restoreFocusWaitAttempts = 0;
                 targetSession.restoreStartInFlight = true;
                 ++targetSession.restoreStartAttempts;
             }
+        }
+
+        if (giveUp) {
+            Log.e(TAG, "Native full-screen session "
+                    + targetSessionId
+                    + " never regained window focus");
+            Session completedSession = RemoveSession(targetSessionId, null);
+            if (completedSession != null) {
+                completedSession.owner.OnActivityPresentationCompleted(
+                        completedSession.sessionId
+                      , completedSession.nativeAd
+                      , "Host never regained focus");
+            }
+            return;
         }
 
         if (waitForFocus) {
@@ -868,6 +895,7 @@ public final class OverlayAdActivity extends Activity {
         boolean restoreScheduled;
         boolean restoreStartInFlight;
         int restoreStartAttempts;
+        int restoreFocusWaitAttempts;
 
         Session(
                 String sessionId

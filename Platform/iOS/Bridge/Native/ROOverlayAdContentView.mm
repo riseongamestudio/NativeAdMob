@@ -196,6 +196,10 @@ static void ROCentreUnderIcon(UIView *view) {
     // What the media's left edge costs the row: 0 while the picture bleeds,
     // the side padding once something stands under it.
     CGFloat _sideRowLeftInset;
+    // What the plain arrangement spends across, and what the three edges of
+    // the spilled one share. Kept so the responsive pass can land on the
+    // rail's true inner width without re-deriving the split.
+    CGFloat _sidePaddingBudget;
     BOOL _mediaAvoidsControlStrip;
     BOOL _mediaAspectReported;
     BOOL _mediaAboveIdentity;
@@ -526,6 +530,7 @@ static void ROCentreUnderIcon(UIView *view) {
                 0
               , UIScreen.mainScreen.bounds.size.width - sideMediaWidth);
         CGFloat sidePaddingBudget = 2 * ROSideRailPadding(railOuterPlain);
+        _sidePaddingBudget = sidePaddingBudget;
         CGFloat railGap;
         CGFloat sideRowRightPadding;
         if (callToActionBelow) {
@@ -1040,18 +1045,24 @@ static void ROCentreUnderIcon(UIView *view) {
     }
     if (!railFits) return;
 
-    // Text no larger than the rail can wear: the ceiling follows the
-    // rail's width, so a narrow column keeps modest sizes even with height
-    // to spare. It reads the column the PLAIN arrangement would have had,
-    // so the picture's left edge cannot cost a step of text size either.
+    // Three widths, and they are not interchangeable. The outer width is
+    // what the rail actually occupies; the scale width is the column the
+    // PLAIN arrangement would have had, which the text ceiling reads so the
+    // picture's left edge cannot cost a step of text size; the content
+    // width is what is left inside the rail's own padding.
     CGFloat railOuterWidth = MAX(
+            0
+          , UIScreen.mainScreen.bounds.size.width
+                    - _sideMediaWidthPx
+                    - _sideRowLeftInset);
+    CGFloat railScaleWidth = MAX(
             0
           , UIScreen.mainScreen.bounds.size.width - _sideMediaWidthPx);
     CGFloat railScaleCap = MAX(
             0
           , MIN(
                 1
-              , (railOuterWidth - kRORailScaleCapMinWidth)
+              , (railScaleWidth - kRORailScaleCapMinWidth)
                         / kRORailScaleCapRange));
     CGFloat railScale = railScaleCap;
     [self ro_applyRailContentScale:railScale];
@@ -1077,13 +1088,7 @@ static void ROCentreUnderIcon(UIView *view) {
     // fit, and when a text still cannot show itself whole, trade the scale
     // down a step and try again. Only what survives this may ever scroll.
     CGFloat railContentWidth = MAX(
-            0
-          , railOuterWidth
-                - 2 * MAX(
-                    kRORailMinSidePadding
-                  , MIN(
-                        kROHorizontalPadding
-                      , railOuterWidth * kRORailSidePaddingRatio)));
+            0, railScaleWidth - _sidePaddingBudget);
     for (NSInteger attempt = 0;
          attempt <= kRORailFullTextSteps;
          ++attempt) {
@@ -1284,7 +1289,12 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     CGFloat mediaWidth = [self ro_sideMediaWidthForPanelHeight:panelHeight];
     CGFloat railWidth =
             UIScreen.mainScreen.bounds.size.width - mediaWidth;
-    return mediaWidth >= _minimumMediaSize
+    // The video floor for every creative, image ones included - the same
+    // line SideMediaFloor draws on Android. A picture narrow enough to need
+    // the image floor is too narrow to carry a rail beside it, and letting
+    // the two platforms disagree here put the same creative in a rail on
+    // one and stacked on the other.
+    return mediaWidth >= kROMinVideoMediaSize
             && railWidth >= kROSideMediaMinRail;
 }
 

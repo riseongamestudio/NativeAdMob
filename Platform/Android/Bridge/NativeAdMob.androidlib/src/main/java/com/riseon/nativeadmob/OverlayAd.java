@@ -362,7 +362,7 @@ public final class OverlayAd extends BaseAd {
               , timerSide
               , redirectOnClose);
         configuredStyle = updatedStyle;
-        RequestPreparedPresentationRebuild(updatedStyle);
+        RequestPreparedFaceRebuild(updatedStyle);
     }
 
     public void Load(final Activity activity) {
@@ -893,7 +893,7 @@ public final class OverlayAd extends BaseAd {
         }
     }
 
-    private void RequestPreparedPresentationRebuild(
+    private void RequestPreparedFaceRebuild(
             OverlayAdStyle requestedStyle) {
         // Every runtime presentation setter must publish a fresh style
         // snapshot and pass through here, so a prepared UI never keeps
@@ -904,20 +904,23 @@ public final class OverlayAd extends BaseAd {
             // the cache, never the one on screen, and skipping it left the
             // replacement fetched during the show holding a stale
             // countdown, which then had to be rebuilt at show time.
+            //
+            // Both faces rebuild, not just the bottom-slice one. The
+            // full-screen face carries the close side, the timer side and
+            // the redirect flag baked in at build time, and the take-back
+            // check compares ad identity and assets - never the style - so
+            // a face left standing here is a face that would be shown with
+            // last plan's controls.
             if (released
                     || requestedStyle == null
-                    || requestedStyle.fullscreen
-                    || configuredStyle != requestedStyle
-                    || cachedAds.isEmpty()) {
+                    || configuredStyle != requestedStyle) {
                 return;
             }
 
-            Activity activity = preparedActivity;
-            NativeAd ad = HeadAd();
-            ReleasePreparedPresentation();
-            if (IsActivityUsable(activity)) {
-                PreparePresentation(activity, ad, requestedStyle);
-            }
+            NativeAd head = HeadAd();
+            if (head == null) return;
+
+            PrepareFace(cacheActivity, head, requestedStyle);
         });
     }
 
@@ -1016,10 +1019,11 @@ public final class OverlayAd extends BaseAd {
     private PreparedFullScreenContent TakePreparedFullScreenContent(
             Activity activity
           , NativeAd ad) {
-        // Ad identity and the assets' face are the keys. After Configure
-        // the style can only change its countdown, which the presented view
-        // refreshes on resume - but assets that finished arriving after the
-        // build changed the layout the ad needs, so a stale face rebuilds.
+        // Ad identity and the assets' face are the keys - the style is
+        // not among them, because SetClose rebuilds this content outright
+        // rather than leaving a stale one to be caught here. What this does
+        // catch is assets that finished arriving after the build and
+        // changed the layout the ad needs.
         if (preparedContentView == null
                 || preparedContentActivity != activity
                 || preparedContentAd != ad

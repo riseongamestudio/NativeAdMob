@@ -185,7 +185,6 @@ static float ROResolveBackgroundAlpha(float value) {
 - (void)releaseAd {
     if (self.released) return;
     [self markReleased];
-    [self invalidateLoadGeneration];
     [ROBaseAd runOnMainThread:^{
         self->_isAdLoading = NO;
         self->_retryScheduled = NO;
@@ -225,7 +224,6 @@ static float ROResolveBackgroundAlpha(float value) {
     }
 
     _isAdLoading = YES;
-    [self nextLoadGeneration];
     [self ro_notifyLoadingStarted];
 
     _adLoader = [[GADAdLoader alloc]
@@ -252,7 +250,10 @@ static float ROResolveBackgroundAlpha(float value) {
 - (void)adLoader:(GADAdLoader *)adLoader
         didReceiveNativeAd:(GADNativeAd *)nativeAd {
     [ROBaseAd runOnMainThread:^{
-        if (self.released) return;
+        // Only the loader we still hold may speak for us - the same
+        // invariant the overlay keeps, and the one Java spells with a load
+        // generation.
+        if (self.released || adLoader != self->_adLoader) return;
 
         self->_noFillStreak = 0;
         nativeAd.delegate = self;
@@ -288,7 +289,7 @@ static float ROResolveBackgroundAlpha(float value) {
 - (void)adLoader:(GADAdLoader *)adLoader
         didFailToReceiveAdWithError:(NSError *)error {
     [ROBaseAd runOnMainThread:^{
-        if (self.released) return;
+        if (self.released || adLoader != self->_adLoader) return;
 
         self->_isAdLoading = NO;
         NSTimeInterval retryDelay = [self ro_scheduleNoFillRetry];

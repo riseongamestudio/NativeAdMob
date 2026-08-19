@@ -40,10 +40,12 @@ extern const int32_t RONativeAdInternalPresentationError; // -2, same as Java
 - (void)setListenerCallbacks:(RONativeAdListenerCallbacks)callbacks;
 - (void)clearListenerCallbacks;
 
-// Load generation - AtomicInteger semantics from Java.
-- (int32_t)nextLoadGeneration;
-- (void)invalidateLoadGeneration;
-- (BOOL)isCurrentLoadGeneration:(int32_t)generation;
+// No load generation here. Java captures one per request inside the
+// listener it hands the SDK; this side hands the SDK itself as the
+// delegate and gets the GADAdLoader back with every callback, so loader
+// identity answers the same question - see the guards in ROOverlayAd and
+// ROInFeedAd. A counter that no callback could read was worse than none:
+// it read like a guard that was not there.
 
 // Runs on main immediately when already there, else dispatches - the same
 // behaviour as Java's RunOnMainThread.
