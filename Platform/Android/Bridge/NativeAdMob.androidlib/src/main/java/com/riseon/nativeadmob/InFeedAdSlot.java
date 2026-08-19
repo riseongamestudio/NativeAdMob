@@ -149,6 +149,10 @@ final class InFeedAdSlot {
 
     void Show() {
         ShowCore();
+        // The entry on screen ages like any other. Re-armed after every
+        // show, because a slot that stays open - a popup left up while the
+        // phone sits in a pocket - has no other moment that would catch it.
+        ScheduleEntryExpiry();
         ScheduleWatchdog();
     }
 
@@ -164,7 +168,6 @@ final class InFeedAdSlot {
                         + " materializing=" + Describe(materializingEntry)
                         + " cached=" + owner.CachedCount());
         visibleRequested = true;
-        owner.main.removeCallbacks(entryExpiryRunnable);
 
         RemoveExpiredMaterializingEntry();
         RemoveExpiredActiveEntry();
@@ -353,6 +356,14 @@ final class InFeedAdSlot {
         DisplayEntry entry = new DisplayEntry(ad, presentation, loadedAtMs);
         holder[0] = entry;
         materializingEntry = entry;
+        // Armed where the entry is BORN, not where some caller remembered.
+        // Eight call sites reach this method and three of them re-armed
+        // afterwards, which held only while a timer happened to be pending
+        // already; once an expiry emptied the slot the schedule went quiet,
+        // and the next ad to arrive inherited no deadline at all. If the
+        // presentation below fails and this entry is destroyed, the pending
+        // timer is a harmless early wakeup that re-arms on what it finds.
+        ScheduleEntryExpiry();
 
         presentation.SetVisible(
                 visibleRequested && activeEntry == null);
@@ -579,8 +590,18 @@ final class InFeedAdSlot {
         owner.RequestLoad();
     }
 
+    // An expired creative may not stay on screen, so this runs whether the
+    // slot is shown or hidden. The replacement it presents deliberately
+    // skips MIN_DWELL_MS and MIN_SWAP_INTERVAL_MS - the old entry is already
+    // destroyed by then, so there is nothing left for a dwell rule to
+    // protect. Do not "restore" that check here.
+    //
+    // With nothing warm behind it the slot goes blank until a load lands -
+    // the same outcome a hidden slot already had, and the only honest one:
+    // the impression count belongs to the SDK, so the pack cannot keep the
+    // ad up and stop counting it.
     private void HandleEntryExpiry() {
-        if (owner.released || visibleRequested) return;
+        if (owner.released) return;
 
         RemoveExpiredMaterializingEntry();
         RemoveExpiredActiveEntry();
@@ -594,7 +615,7 @@ final class InFeedAdSlot {
 
     private void ScheduleEntryExpiry() {
         owner.main.removeCallbacks(entryExpiryRunnable);
-        if (owner.released || visibleRequested) return;
+        if (owner.released) return;
 
         long nextExpiryAtMs = Long.MAX_VALUE;
         if (materializingEntry != null) {
@@ -668,6 +689,15 @@ final class InFeedAdSlot {
             ScheduleForegroundRecheck();
             return;
         }
+
+        // Age is measured on elapsed real time, which counts the hours the
+        // phone spent asleep; the expiry timer is posted on uptime, which
+        // does not. So the timer alone cannot be trusted across a long
+        // sleep, and coming back to the foreground is where the entry gets
+        // read for age instead of waited on. The overlay's cache learned
+        // this first and sweeps on the way into every Show.
+        RemoveExpiredMaterializingEntry();
+        RemoveExpiredActiveEntry();
 
         // Coming back to the foreground is a resume, not a rotation. Present
         // only what could not be presented while the window was dark - an

@@ -162,6 +162,10 @@ static NSTimeInterval RONow(void) {
 
 - (void)show {
     [self ro_showCore];
+    // The entry on screen ages like any other. Re-armed after every show,
+    // because a slot that stays open - a popup left up while the phone sits
+    // in a pocket - has no other moment that would catch it.
+    [self ro_scheduleEntryExpiry];
     [self ro_scheduleWatchdog];
 }
 
@@ -179,8 +183,6 @@ static NSTimeInterval RONow(void) {
           , [self ro_describeEntry:_materializingEntry]
           , (long)[owner cachedCount]);
     _visibleRequested = YES;
-    [_entryExpiryTimer invalidate];
-    _entryExpiryTimer = nil;
 
     [self ro_removeExpiredEntries];
     [_activeEntry.presentation requestDisplayNotification];
@@ -227,13 +229,22 @@ static NSTimeInterval RONow(void) {
     _visibleRequested = NO;
     [_refreshTimer invalidate];
     _refreshTimer = nil;
-    [self ro_pauseVisibleTimer:_activeEntry];
-    [_activeEntry.presentation setVisible:NO];
-    [_materializingEntry.presentation setVisible:NO];
     // Rotate during the hidden stretch rather than on the way back in - but
     // not in this turn of the runloop: laying the replacement out would sit
     // in front of the commit that draws the hide. The completion block runs
     // after this transaction commits, then the swap gets its own turn.
+    //
+    // The transaction is opened explicitly, and that is the whole point.
+    // setCompletionBlock: belongs to whichever transaction is current and a
+    // second call REPLACES the first - so two slots hidden in one frame,
+    // sharing the implicit transaction, used to lose the first slot's swap
+    // outright. An explicit begin/commit gives each slot a transaction of
+    // its own, and the generation guard below goes back to what it was for:
+    // catching a stale swap, not a missing one.
+    [CATransaction begin];
+    [self ro_pauseVisibleTimer:_activeEntry];
+    [_activeEntry.presentation setVisible:NO];
+    [_materializingEntry.presentation setVisible:NO];
     NSInteger generation = ++_hiddenSwapGeneration;
     __weak ROInFeedAdSlot *weakSelf = self;
     [CATransaction setCompletionBlock:^{
@@ -248,6 +259,7 @@ static NSTimeInterval RONow(void) {
             [strongSelf ro_trySwapActiveEntry];
         });
     }];
+    [CATransaction commit];
     _activeEntry.visibleWaitStartedAt = kRONoTimestamp;
     _materializingEntry.visibleWaitStartedAt = kRONoTimestamp;
     [_watchdogTimer invalidate];
@@ -345,6 +357,14 @@ static NSTimeInterval RONow(void) {
                                       listener:self];
     entry.presentation = presentation;
     _materializingEntry = entry;
+    // Armed where the entry is BORN, not where some caller remembered.
+    // Eight call sites reach this method and three of them re-armed
+    // afterwards, which held only while a timer happened to be pending
+    // already; once an expiry emptied the slot the schedule went quiet, and
+    // the next ad to arrive inherited no deadline at all. If the
+    // presentation below fails and this entry is destroyed, the pending
+    // timer is a harmless early wakeup that re-arms on what it finds.
+    [self ro_scheduleEntryExpiry];
 
     [presentation setVisible:(_visibleRequested && _activeEntry == nil)];
     if (![presentation show]) {
@@ -735,6 +755,14 @@ static NSTimeInterval RONow(void) {
         return;
     }
 
+    // Age is measured on the system clock, which counts the hours the phone
+    // spent asleep; the expiry timer does not fire while the app is
+    // suspended. So the timer alone cannot be trusted across a long sleep,
+    // and coming back to the foreground is where the entry gets read for age
+    // instead of waited on. The overlay's cache learned this first and
+    // sweeps on the way into every show.
+    [self ro_removeExpiredEntries];
+
     // Coming back to the foreground is a resume, not a rotation. Present only
     // what could not be presented while the window was dark - an empty slot -
     // and leave whatever survived the background on screen. presentCachedAd
@@ -750,7 +778,7 @@ static NSTimeInterval RONow(void) {
 - (void)ro_scheduleEntryExpiry {
     [_entryExpiryTimer invalidate];
     _entryExpiryTimer = nil;
-    if ([self ro_isReleased] || _visibleRequested) return;
+    if ([self ro_isReleased]) return;
 
     NSTimeInterval nextExpiryAt = DBL_MAX;
     if (_materializingEntry != nil) {
@@ -773,9 +801,17 @@ static NSTimeInterval RONow(void) {
     }];
 }
 
+// An expired creative may not stay on screen, so this runs whether the slot
+// is shown or hidden. The replacement it presents deliberately skips the
+// dwell and swap-interval floors - the old entry is already destroyed by
+// then, so there is nothing left for a dwell rule to protect. Do not
+// "restore" that check here. With nothing warm behind it the slot goes blank until
+// a load lands - the same outcome a hidden slot already had, and the only
+// honest one: the impression count belongs to the SDK, so the pack cannot
+// keep the ad up and stop counting it.
 - (void)ro_handleEntryExpiry {
     ROInFeedAd *owner = _owner;
-    if (owner == nil || owner.released || _visibleRequested) return;
+    if (owner == nil || owner.released) return;
 
     [self ro_removeExpiredEntries];
     if ([owner hasCachedAd]) {

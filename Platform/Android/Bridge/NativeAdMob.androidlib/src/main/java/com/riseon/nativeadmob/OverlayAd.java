@@ -375,8 +375,9 @@ public final class OverlayAd extends BaseAd {
             return;
         }
 
-        // Load chi snapshot phan style can cho request (hien tai la mute
-        // policy). Presentation style se duoc snapshot muon hon tai Show.
+        // The load snapshots only the part of the style the request needs -
+        // today that is the mute policy. The presentation style is
+        // snapshotted later, at Show.
         final String requestAdUnitId = adUnitId;
         final OverlayAdStyle loadStyle = configuredStyle;
 
@@ -1089,7 +1090,7 @@ public final class OverlayAd extends BaseAd {
     private void CompletePresentation(
             NativeAd shownAd
           , String errorMessage) {
-        // Identity guard dam bao completion va destroy chi chay mot lan.
+        // Identity guard: completion and destroy run once per shown ad.
         if (activeNativeAd != shownAd) return;
 
         NativeAdCompletedListener onCompleted = activeShowCompleted;
