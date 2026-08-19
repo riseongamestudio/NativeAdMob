@@ -65,6 +65,13 @@ final class InFeedAdPresentation extends FrameLayout
     private View.OnLayoutChangeListener rootReadyLayoutListener;
     private View.OnAttachStateChangeListener rootAttachStateListener;
     private ViewTreeObserver.OnPreDrawListener rootReadyPreDrawListener;
+    // The observer the listener above went onto, kept because it cannot be
+    // asked for again: getViewTreeObserver() hands back the window's while
+    // the view is attached and a fresh floating one after it detaches, and
+    // removing from the wrong instance is a silent no-op that leaves this
+    // presentation - and its ad, view tree and Activity - alive on the
+    // window's callback list for the rest of its life.
+    private ViewTreeObserver rootReadyObserver;
     private final Runnable rootReadyRecheckRunnable =
             this::CheckContentRootReady;
     private boolean waitingForRoot;
@@ -291,6 +298,7 @@ final class InFeedAdPresentation extends FrameLayout
         ViewTreeObserver observer = contentRoot.getViewTreeObserver();
         if (observer.isAlive()) {
             observer.addOnPreDrawListener(rootReadyPreDrawListener);
+            rootReadyObserver = observer;
         }
         ScheduleRootReadyRecheck(0L);
     }
@@ -351,14 +359,14 @@ final class InFeedAdPresentation extends FrameLayout
                 contentRoot.removeOnLayoutChangeListener(
                         rootReadyLayoutListener);
             }
-            if (rootReadyPreDrawListener != null) {
-                ViewTreeObserver observer = contentRoot.getViewTreeObserver();
-                if (observer.isAlive()) {
-                    observer.removeOnPreDrawListener(
-                            rootReadyPreDrawListener);
-                }
-            }
         }
+        if (rootReadyObserver != null
+                && rootReadyPreDrawListener != null
+                && rootReadyObserver.isAlive()) {
+            rootReadyObserver.removeOnPreDrawListener(
+                    rootReadyPreDrawListener);
+        }
+        rootReadyObserver = null;
         rootReadyLayoutListener = null;
         rootReadyPreDrawListener = null;
     }

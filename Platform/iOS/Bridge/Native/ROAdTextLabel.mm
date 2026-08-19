@@ -1,5 +1,9 @@
 #import "ROAdTextLabel.h"
 
+// The slack Android spends under the same name, TEXT_BOUNDS_TOLERANCE_PX.
+// One point against one pixel: the two are not the same quantity, and the
+// pack has now borrowed this number three times without naming it.
+static const CGFloat kROTextBoundsTolerance = 1;
 static const NSTimeInterval kROMarqueeInitialDelaySeconds = 1.2;
 static const NSTimeInterval kROMarqueeRepeatDelaySeconds = 1.2;
 static const CGFloat kROMarqueePointsPerSecond = 30;
@@ -133,6 +137,42 @@ static const CGFloat kROMarqueeGhostGapRatio = 1.0f / 3.0f;
             ? CGFLOAT_MAX
             : cappedLines * self.font.lineHeight;
     return ceil(unbounded.size.height) <= ceil(allowedHeight) + 1;
+}
+
+// A line whose glyphs run past the slot - an unbreakable token, a long URL,
+// a compound noun - never ellipsizes, so it slips past every height-based
+// check and simply draws outside the box. The Java side walks the layout's
+// lines for exactly this and rejects the plan.
+//
+// There are no per-line metrics to walk here, so the question is asked of
+// the TOKENS rather than the paragraph: a wrapping label can only exceed its
+// slot when one token is wider than the slot on its own, and a single token
+// cannot wrap, so its unconstrained width is unambiguous. Measuring the
+// paragraph instead would mean trusting how the typesetter reports a
+// fragment too wide to fit, which is not something this pack reads anywhere
+// else and not something anyone here can run to find out.
+//
+// Unknowns answer YES: a check that cannot see the geometry must not reject
+// a plan.
+- (BOOL)ro_fitsWidthWithoutOverflow:(CGFloat)width {
+    if (self.marquee) return YES;
+
+    NSString *value = self.text ?: @"";
+    if (value.length == 0 || self.font == nil || width <= 0) return YES;
+
+    NSDictionary *attributes = @{ NSFontAttributeName: self.font };
+    NSArray<NSString *> *tokens = [value
+            componentsSeparatedByCharactersInSet:
+                    NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    for (NSString *token in tokens) {
+        if (token.length == 0) continue;
+
+        CGFloat tokenWidth = [token sizeWithAttributes:attributes].width;
+        if (ceil(tokenWidth) > ceil(width) + kROTextBoundsTolerance) {
+            return NO;
+        }
+    }
+    return YES;
 }
 
 - (void)ro_layoutWithFrame:(CGRect)frame {

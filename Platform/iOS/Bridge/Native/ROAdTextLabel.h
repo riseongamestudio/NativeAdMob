@@ -26,6 +26,7 @@ NS_ASSUME_NONNULL_BEGIN
 // will bring the rest around), and for wrapped only when the allotted lines
 // hold everything - the whole-or-scrolling policy check.
 - (BOOL)ro_showsEntireTextForWidth:(CGFloat)width;
+- (BOOL)ro_fitsWidthWithoutOverflow:(CGFloat)width;
 
 // The height one rendered line takes at the current font.
 - (CGFloat)ro_singleLineHeight;

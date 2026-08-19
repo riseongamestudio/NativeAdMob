@@ -28,6 +28,7 @@ import com.google.android.gms.ads.nativead.NativeAdView;
 import com.google.android.gms.ads.nativead.NativeAd;
 
 import java.util.List;
+import java.util.Locale;
 
 final class InFeedAdViewFactory {
     private static final String TAG = "InFeedAd";
@@ -1486,7 +1487,8 @@ final class InFeedAdViewFactory {
         double starRating = ResolveStarRating();
         if (plan.showRating && starRating > 0d) {
             views.rating = CreateText(
-                    "\u2605 " + String.valueOf(starRating)
+                    String.format(
+                        Locale.US, "\u2605 %.1f", starRating)
                   , OptionalSp(plan)
                   , false
                   , NO_POLICY_TEXT_LIMIT_UNITS);

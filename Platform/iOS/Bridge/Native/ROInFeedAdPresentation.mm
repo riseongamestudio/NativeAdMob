@@ -15,6 +15,18 @@ static const NSTimeInterval kRORootReadyRecheckDelay = 0.05;
 static const NSTimeInterval kROMaxRootWait = 10.0;
 static const uint32_t kROBackgroundRgb = 0x1B2029;
 
+// Elapsed time is measured on the clock that only goes forward, never on
+// NSDate: a wall clock is a statement about what time it is, not about how
+// long something has taken, and an NTP correction landing mid-wait would
+// move a deadline that has nothing to do with the calendar. The same clock
+// the rest of this port already keeps - and the exact counterpart of the
+// SystemClock.uptimeMillis the Java side measures these three windows with,
+// deep sleep excluded on both.
+static NSTimeInterval RONow(void) {
+    return [NSProcessInfo processInfo].systemUptime;
+}
+
+
 @implementation ROInFeedAdPresentation {
     __weak UIViewController *_hostViewController;
     GADNativeAd *_nativeAd;
@@ -38,15 +50,15 @@ static const uint32_t kROBackgroundRgb = 0x1B2029;
     NSString *_lastLayoutFailure;
 
     CADisplayLink *_observationLink;
-    NSDate *_finalObservationStartedAt;
-    NSDate *_candidateObservationStartedAt;
+    NSTimeInterval _finalObservationStartedAt;
+    NSTimeInterval _candidateObservationStartedAt;
     NSInteger _stablePasses;
     NSInteger _invalidStablePasses;
     int64_t _lastGeometrySignature;
     int64_t _lastInvalidGeometrySignature;
 
     BOOL _waitingForRoot;
-    NSDate *_rootWaitStartedAt;
+    NSTimeInterval _rootWaitStartedAt;
     BOOL _visibleRequested;
     BOOL _layoutReady;
     BOOL _readyNotified;
@@ -229,7 +241,7 @@ static const uint32_t kROBackgroundRgb = 0x1B2029;
     if (![self ro_fitHostInsideContentRoot]) {
         return [self ro_fail:@"In-feed could not place its presentation view"];
     }
-    _finalObservationStartedAt = [NSDate date];
+    _finalObservationStartedAt = RONow();
     [self ro_beginObservingFinalAssetGeometry];
     return YES;
 }
@@ -237,7 +249,7 @@ static const uint32_t kROBackgroundRgb = 0x1B2029;
 - (void)ro_waitForContentRootReady {
     if (_waitingForRoot) return;
     _waitingForRoot = YES;
-    _rootWaitStartedAt = [NSDate date];
+    _rootWaitStartedAt = RONow();
     [self ro_scheduleRootReadyRecheck];
 }
 
@@ -255,7 +267,7 @@ static const uint32_t kROBackgroundRgb = 0x1B2029;
     if (![self ro_isContentRootReady]) {
         // Bounded so a root that never settles ends as a normal dismissal
         // instead of parking the slot and blocking every later load.
-        if (-[_rootWaitStartedAt timeIntervalSinceNow] >= kROMaxRootWait) {
+        if (RONow() - _rootWaitStartedAt >= kROMaxRootWait) {
             [self ro_recordFailure:[NSString stringWithFormat:
                     @"In-feed content root did not become ready within %gms"
                   , kROMaxRootWait * 1000]];
@@ -362,7 +374,7 @@ static const uint32_t kROBackgroundRgb = 0x1B2029;
 
 - (void)ro_beginObservingFinalAssetGeometry {
     [_observationLink invalidate];
-    _candidateObservationStartedAt = [NSDate date];
+    _candidateObservationStartedAt = RONow();
     _stablePasses = 0;
     _invalidStablePasses = 0;
     _lastGeometrySignature = INT64_MIN;
@@ -388,9 +400,9 @@ static const uint32_t kROBackgroundRgb = 0x1B2029;
 
     [self ro_layoutBoundContent];
     NSTimeInterval candidateObservation =
-            -[_candidateObservationStartedAt timeIntervalSinceNow];
+            RONow() - _candidateObservationStartedAt;
     NSTimeInterval totalObservation =
-            -[_finalObservationStartedAt timeIntervalSinceNow];
+            RONow() - _finalObservationStartedAt;
     BOOL validationDeadlineReached =
             totalObservation >= kROMaxFinalLayoutObservation;
     BOOL hostFits = [self ro_fitHostInsideContentRoot];

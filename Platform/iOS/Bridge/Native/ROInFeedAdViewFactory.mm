@@ -772,8 +772,18 @@ static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
         row.ro_vertical = NO;
         row.ro_gravity = HBGravityCenterVertical;
 
-        HBLinearLayoutView *content = [self ro_buildIdentityAndText:views
-                                                               plan:plan];
+        // The same leftover test the mirrored template runs. Without it
+        // this branch kept the button inside the text column while
+        // MEDIA_LEFT moved it under the row, so one creative got two
+        // different buttons depending on which side its picture landed.
+        CGFloat leftover =
+                [self ro_sideLayoutLeftoverHeightForPlan:plan];
+        BOOL callToActionBelow =
+                leftover >= [self callToActionHeightForPlan:plan] + gap;
+        HBLinearLayoutView *content =
+                [self ro_buildIdentityAndText:views
+                                         plan:plan
+                          includeCallToAction:!callToActionBelow];
         views.insetContent = content;
         // The mirror's asymmetry pays on the badge side: AdChoices, the wider
         // badge, lands on the media, and only the text column reserves the
@@ -790,6 +800,13 @@ static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
         [row addSubview:mediaView];
         row.ro_layoutWidth = ROLayoutMatchParent;
         [outer addSubview:row];
+        if (callToActionBelow) {
+            [self ro_addCallToActionTo:outer
+                                 views:views
+                                  plan:plan
+                                   gap:gap
+                             fullWidth:YES];
+        }
         return [self ro_finishContentRoot:root outer:outer views:views plan:plan];
     }
 
@@ -1120,6 +1137,9 @@ static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
     actionRow.ro_layoutWidth = ROLayoutMatchParent;
     actionRow.ro_layoutMargins = UIEdgeInsetsMake(gap, 0, 0, 0);
     [content addSubview:actionRow];
+    // The filler icon occupies the picture's band above the text, so the
+    // text centres under it exactly as it does beside a side media.
+    if (fillerCarriesIcon) ROInFeedCentreBlock(views);
     return content;
 }
 
@@ -1168,7 +1188,7 @@ static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
     double starRating = [self resolveStarRating];
     if (plan.showRating && starRating > 0) {
         views.rating = [self ro_createTextWithValue:
-                        [NSString stringWithFormat:@"★ %g", starRating]
+                        [NSString stringWithFormat:@"★ %.1f", starRating]
                                                size:[self ro_optionalSizeForPlan:plan]
                                                bold:NO];
         views.rating.textColor = ROInFeedArgb(0xFFFFC107);
@@ -1213,8 +1233,19 @@ static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
     if (![self hasRenderableIcon]) return;
 
     UIImageView *icon = [[UIImageView alloc] init];
-    icon.contentMode = UIViewContentModeScaleAspectFit;
-    icon.image = _nativeAd.icon.image;
+    UIImage *iconImage = _nativeAd.icon.image;
+    icon.image = iconImage;
+    // CENTER_INSIDE on the Java side: shrink to fit, never enlarge. UIKit
+    // has no single mode for that, so the choice is made from the asset -
+    // an icon already inside the box is drawn at its own size rather than
+    // blown up soft to fill it. The filler icon keeps ScaleAspectFit,
+    // matching FIT_CENTER over there.
+    icon.contentMode =
+            iconImage != nil
+                    && iconImage.size.width <= size
+                    && iconImage.size.height <= size
+                    ? UIViewContentModeCenter
+                    : UIViewContentModeScaleAspectFit;
     icon.ro_layoutWidth = size;
     icon.ro_layoutHeight = size;
     icon.ro_layoutMargins = UIEdgeInsetsMake(0, 0, 0, gap);

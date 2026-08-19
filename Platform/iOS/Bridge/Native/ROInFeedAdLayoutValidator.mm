@@ -100,6 +100,12 @@ static const int64_t kROGeometryHashPrime = 1099511628211LL;
                                  reason:[NSString stringWithFormat:
                                         @"%@ text is clipped", name]];
             }
+            if (![text ro_fitsWidthWithoutOverflow:rect.size.width]) {
+                return [self ro_failure:logFailure
+                                 reason:[NSString stringWithFormat:
+                                        @"%@ text overflows horizontally"
+                                      , name]];
+            }
         }
     } else if ([asset isKindOfClass:UIButton.class]) {
         UIButton *button = (UIButton *)asset;
@@ -127,6 +133,51 @@ static const int64_t kROGeometryHashPrime = 1099511628211LL;
 // and will be. A part of it is not an outcome the layout may settle for.
 // The exemption is per text: a plan may scroll its body while its headline
 // is held to showing everything.
+// The Java side runs its policy text check on the call to action as well -
+// a Button is a TextView over there, so one method serves both. Here the
+// button's title lives in a plain UILabel and ROAdTextLabel's check cannot
+// reach it, so the same question is asked directly: would the whole title
+// need more height than the label's line cap grants at the width it has?
+//
+// Every unknown answers YES on purpose. A check that cannot see the
+// geometry must not reject a plan: failing open leaves the behaviour that
+// shipped, while failing closed would empty the feed on one platform.
+- (BOOL)ro_validateButtonPolicyText:(UIButton *)button
+                               name:(NSString *)name
+                         logFailure:(BOOL)logFailure {
+    UILabel *label = button.titleLabel;
+    NSString *title = label.text ?: @"";
+    if (label == nil || title.length == 0 || label.font == nil) return YES;
+
+    CGFloat width = label.frame.size.width;
+    if (width <= 0) {
+        // The box minus the padding the title is laid out inside - the same
+        // subtraction the button branch of ro_addValidatedAsset: makes. The
+        // full box would measure the title against up to 20pt it never gets,
+        // and pass a label that wraps.
+        width = button.frame.size.width
+                - button.contentEdgeInsets.left
+                - button.contentEdgeInsets.right;
+    }
+    if (width <= 0) return YES;
+
+    CGRect unbounded = [title
+            boundingRectWithSize:CGSizeMake(width, CGFLOAT_MAX)
+                         options:NSStringDrawingUsesLineFragmentOrigin
+                      attributes:@{NSFontAttributeName: label.font}
+                         context:nil];
+    NSInteger cappedLines = label.numberOfLines;
+    CGFloat allowedHeight = cappedLines <= 0
+            ? CGFLOAT_MAX
+            : cappedLines * label.font.lineHeight;
+    if (ceil(unbounded.size.height) <= ceil(allowedHeight) + 1) return YES;
+
+    return [self ro_failure:logFailure
+                     reason:[NSString stringWithFormat:
+                            @"%@ shows only part of its value without "
+                             "scrolling", name]];
+}
+
 - (BOOL)ro_validatePolicyVisibleText:(ROAdTextLabel *)text
                                 name:(NSString *)name
                           logFailure:(BOOL)logFailure {
@@ -197,7 +248,10 @@ static const int64_t kROGeometryHashPrime = 1099511628211LL;
                                  minHeight:[_viewFactory
                                         callToActionHeightForPlan:plan]
                                     assets:visibleAssets
-                                logFailure:logFailure]) {
+                                logFailure:logFailure]
+            || ![self ro_validateButtonPolicyText:views.callToAction
+                                             name:@"call to action"
+                                       logFailure:logFailure]) {
         return NO;
     }
 

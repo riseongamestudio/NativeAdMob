@@ -26,6 +26,14 @@ static const uint32_t kROCollapsibleBackgroundRgb = 0x1B2029;
 // fives are less than the two eights the plain one used to spend, so the
 // nicer arrangement can never be the one that runs out of width first.
 static const CGFloat kROHorizontalPadding = 5;
+
+// Elapsed time is measured on the clock that only goes forward, never on
+// NSDate - the same one the rest of this port keeps. Declared per file
+// because that is how the other four carry it; see the note in ROBaseAd.h
+// if that ever stops being worth the repetition.
+static NSTimeInterval RONow(void) {
+    return [NSProcessInfo processInfo].systemUptime;
+}
 static const CGFloat kROControlStripHeight = 30;
 static const CGFloat kROControlGap = 2;
 static const CGFloat kRORightControlInset = 18;
@@ -1843,8 +1851,12 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
         return;
     }
 
-    NSDate *finishAt =
-            [NSDate dateWithTimeIntervalSinceNow:remainingMs / 1000.0];
+    // Monotonic, like the CountDownTimer the Java side runs this on. The
+    // manual route to a clock change cannot reach a running countdown - the
+    // Settings trip resigns active, which pauses it, and the return builds a
+    // fresh anchor - but an NTP correction needs no trip, and a deadline
+    // measured on the calendar was never the right instrument anyway.
+    NSTimeInterval finishAt = RONow() + remainingMs / 1000.0;
     __weak ROOverlayAdContentView *weakSelf = self;
     _timer = [NSTimer scheduledTimerWithTimeInterval:kROCountdownInterval
                                              repeats:YES
@@ -1854,7 +1866,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
             [timer invalidate];
             return;
         }
-        NSTimeInterval remaining = finishAt.timeIntervalSinceNow;
+        NSTimeInterval remaining = finishAt - RONow();
         strongSelf->_countDownRemainingMs =
                 MAX(0, (int64_t)(remaining * 1000));
         if (remaining > 0) {
