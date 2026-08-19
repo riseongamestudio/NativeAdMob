@@ -19,36 +19,35 @@ import com.google.android.gms.ads.nativead.NativeAd;
 public final class OverlayAdPresentation
         extends Dialog
         implements NativeAdPresentation {
-    // One layer above the half-screen cover, which is SUB_PANEL (1002).
+    // Both the same layer, and it has to stay that way.
     //
     // Android orders windows by TYPE first and by the order they were added
-    // second; there is no z-order API and no insert-at-index, so the type is
-    // the only way to state a ladder. The pack's is:
+    // second; there is no z-order API and no insert-at-index. The half-screen
+    // cover is TYPE_APPLICATION_SUB_PANEL too, so raising it while this ad is
+    // already up puts the cover ON TOP of the ad, where iOS keeps the ad on
+    // top. The order between those two is a CALLER CONTRACT here: raise the
+    // cover first, open the ad second. That order is correct on both
+    // platforms, and it is the order the game uses.
     //
-    //     1000  TYPE_APPLICATION_PANEL             in-feed
-    //     1002  TYPE_APPLICATION_SUB_PANEL         half-screen cover
-    //     1003  TYPE_APPLICATION_ATTACHED_DIALOG   half-screen ad  <- here
+    // TYPE_APPLICATION_ATTACHED_DIALOG (1003) was tried as a way to make the
+    // ladder hold by itself, on the assumption that a bigger type number
+    // draws higher. IT DOES NOT. Measured with `adb shell dumpsys window
+    // windows`, which lists top first:
     //
-    // which is the subview order the iOS side keeps, and unlike a caller
-    // contract it holds whichever surface was raised first.
+    //     ty=APPLICATION_SUB_PANEL          <- cover
+    //     ty=APPLICATION_ATTACHED_DIALOG    <- ad, buried
+    //     ty=APPLICATION_PANEL              <- in-feed
+    //     ty=BASE_APPLICATION               <- Unity
     //
-    // READ THIS BEFORE TRUSTING IT. That the ladder follows the numbers is
-    // NOT a documented guarantee. The type-to-layer mapping lives in
-    // WindowManagerService: it is not in android.jar, and the stub sources
-    // ship with the javadoc stripped, so nothing in the SDK states it. The
-    // framework also carries a separate hidden type at 1005 named
-    // APPLICATION_ABOVE_SUB_PANEL, which is a reason to doubt that a larger
-    // number simply means higher. The constant itself is ordinary public API
-    // in the same sub-window band as 1002 - same token, not deprecated - so
-    // there is no risk in USING it; the risk is only in the ordering it is
-    // being relied on for, and that has to be confirmed on a device.
+    // The collapsible showed as a black band with nothing in it. Sub-window
+    // types are mapped to layers inside WindowManagerService and the mapping
+    // is not the numeric order; the only type that sorts above SUB_PANEL is
+    // ABOVE_SUB_PANEL (1005), which is @hide and cannot be named. So this is
+    // the top rung available, and the contract carries the rest.
     private static final int NON_FULLSCREEN_WINDOW_TYPE =
-            WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG;
-    // The fullscreen branch below is unreachable - a full-screen ad goes
-    // through OverlayAdActivity - but if it is ever revived it belongs on the
-    // same rung as its half-screen sibling, above the cover.
+            WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL;
     private static final int FULLSCREEN_WINDOW_TYPE =
-            WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG;
+            WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL;
 
     private final Activity hostActivity;
     private final NativeAd nativeAd;

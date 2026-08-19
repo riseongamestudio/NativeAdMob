@@ -159,36 +159,31 @@ mà Activity thì luôn lên trên cùng. Hệ điều hành lo, không phải m
 Window không có index như subview — `WindowManager` không có API đổi z-order.
 Chỉ hai đòn bẩy: **type**, và thứ tự `addView` trong cùng type. Đòn bẩy thứ hai
 vô dụng ở đây vì muốn leo lên phải gỡ window ra thêm lại (flicker, mà cũng chỉ
-tới được *đỉnh* của type chứ không chèn xuống dưới được). Nên thang được viết
-bằng type:
+tới được *đỉnh* của type chứ không chèn xuống dưới được).
 
-| | | |
-|---|---|---|
-| 1000 | `TYPE_APPLICATION_PANEL` | in-feed |
-| 1002 | `TYPE_APPLICATION_SUB_PANEL` | màn che half |
-| 1003 | `TYPE_APPLICATION_ATTACHED_DIALOG` | ad half |
-| — | Activity | full-screen (ad và màn che) |
+Mà ad half và màn che half **cùng** type 1002. Nên trên Android thứ tự giữa hai
+cái đó là **hợp đồng của người gọi**: bật màn che *trước*, mở ad *sau*. Thứ tự
+đó đúng ở cả hai nền tảng và là thứ tự game dùng. Trường hợp ngược lại — bật
+màn che khi ad half đang hiện — Android sẽ cho màn che đè lên ad, iOS thì không.
 
-Đúng bằng thứ tự subview bên iOS, và khác hợp đồng gọi hàm ở chỗ nó đúng bất kể
-cái nào được bật trước.
+### Đã thử tách type và đã sai — đừng thử lại
 
-**Chỗ này chưa được bảo đảm bởi tài liệu.** Bản thân hằng số 1003 là public API
-bình thường, không deprecated, cùng dải sub-window (1000–1999) với 1002 nên cùng
-cơ chế token — dùng nó không có rủi ro gì. Rủi ro nằm ở giả định "số lớn hơn thì
-nằm trên": ánh xạ type → layer nằm trong `WindowManagerService`, không có trong
-`android.jar`, và `android-stubs-src.jar` đã bị lột javadoc nên không file nào
-trong SDK nói ra điều đó. Framework còn giữ riêng một type `@hide` ở **1005**
-tên `APPLICATION_ABOVE_SUB_PANEL`, là một lý do để nghi ngờ quy tắc theo số.
+Ý tưởng: đẩy ad half lên `TYPE_APPLICATION_ATTACHED_DIALOG` (1003) để thang tự
+đúng, dựa trên giả định "số type lớn hơn thì vẽ trên". **Giả định đó sai.** Đo
+bằng `adb shell dumpsys window windows` (liệt kê từ trên xuống) trên bản build
+đã chứa 1003:
 
-Phải xác nhận trên máy thật, và phải kiểm **hai** quan hệ chứ không phải một:
+    ty=APPLICATION_SUB_PANEL          <- màn che
+    ty=APPLICATION_ATTACHED_DIALOG    <- ad half, bị chôn
+    ty=APPLICATION_PANEL              <- in-feed
+    ty=BASE_APPLICATION               <- Unity
 
-1. ad half vẫn nằm **trên** in-feed (1003 so với 1000) — quan hệ này trước đây
-   đúng ở 1002 và đã chạy thật, đổi type là đem nó ra đặt cược lại;
-2. ad half nằm **trên** màn che half (1003 so với 1002) — thứ vừa mua được.
-
-Sai ở (1) thì đổi ngược `NON_FULLSCREEN_WINDOW_TYPE` về
-`TYPE_APPLICATION_SUB_PANEL` là xong, và quay lại hợp đồng "bật màn che trước,
-mở ad sau".
+Triệu chứng trên máy: collapsible ra một mảng đen nửa dưới màn hình, không có
+gì trong đó. Sub-window type được ánh xạ sang layer bên trong
+`WindowManagerService`, và ánh xạ đó **không** theo thứ tự số. Type duy nhất
+xếp trên `SUB_PANEL` là `ABOVE_SUB_PANEL` (1005), mà nó `@hide` nên không gọi
+tên được. Vậy 1002 là bậc cao nhất dùng được, phần còn lại do hợp đồng gọi hàm
+gánh.
 
 **iOS** không có khái niệm đó. Không Activity, không window type; `UIWindow`
 chỉ có `windowLevel`, và `zPosition` thì đổi thứ tự vẽ nhưng **không** đổi thứ
