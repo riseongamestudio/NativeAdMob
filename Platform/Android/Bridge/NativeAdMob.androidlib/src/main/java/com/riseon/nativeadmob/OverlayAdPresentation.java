@@ -113,12 +113,11 @@ public final class OverlayAdPresentation
               , requestedPanelHeight
               , this::dismiss);
         setContentView(contentView);
-
-        if (!fullscreen && window != null) {
-            window.setLayout(
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                  , contentView.GetResolvedPanelHeight());
-        }
+        // The window keeps the height ConfigureWindow already gave it. It
+        // used to be re-sized here from a height the content had negotiated
+        // upward, which is how the ad ended up taller than the cover built
+        // from the same request. There is one panel height now and the
+        // content fits inside it.
     }
 
     @Override
@@ -136,6 +135,14 @@ public final class OverlayAdPresentation
     public boolean Prepare() {
         create();
         return contentView != null;
+    }
+
+    // Prepare builds the whole content view, so by the time it returns the
+    // layout has already been attempted and either found or not. Asking here
+    // is what lets an unrenderable creative be dropped before it is ever
+    // shown, instead of being discovered with the ad already on screen.
+    public boolean IsLayoutUnrenderable() {
+        return contentView != null && contentView.IsLayoutUnrenderable();
     }
 
     @Override

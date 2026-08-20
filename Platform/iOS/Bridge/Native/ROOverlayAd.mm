@@ -12,6 +12,11 @@ static const NSInteger kROMaxCacheSize = 5;
 // every hour." The in-feed unit keeps the same number, from the same
 // sentence.
 static const NSTimeInterval kROMaxCachedAdAge = 3600;
+// Retry lives in the unit, not in the caller - the Android side carries the
+// reasoning. The arithmetic is InFeedAd.BackoffDelayMs written in C: base
+// one second, doubling per miss, capped at 2^5.
+static const NSInteger kROMaxRetryExponent = 5;
+static const NSTimeInterval kRORetryBaseDelay = 1.0;
 
 static NSTimeInterval RONow(void) {
     return [NSProcessInfo processInfo].systemUptime;
@@ -129,6 +134,12 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     HBOverlayStyle *_configuredStyle;
     BOOL _configured;
     BOOL _isAdLoading;
+    // One Load from outside starts the unit; it keeps itself fed from then
+    // on. The generation is how a pending retry is cancelled: dispatch_after
+    // cannot be recalled, so the block checks it is still the current one.
+    BOOL _retryScheduled;
+    NSInteger _retryGeneration;
+    NSInteger _noFillStreak;
 
     GADAdLoader *_adLoader;
     NSInteger _cacheSize;
@@ -244,6 +255,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     if (self.released
             || !_configured
             || _isAdLoading
+            || _retryScheduled
             || loadStyle == nil
             || (NSInteger)_cachedAds.count >= _cacheSize
             || ![ROBaseAd isViewControllerUsable:host]) {
@@ -252,6 +264,74 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 
     [self ro_doLoadAdWithHost:host style:loadStyle];
     return YES;
+}
+
+#pragma mark - Retry
+
++ (NSTimeInterval)ro_backoffDelayForStreak:(NSInteger)streak
+                         immediateAttempts:(NSInteger)immediateAttempts {
+    if (streak <= immediateAttempts) return 0.0;
+
+    NSInteger exponent = MIN(
+            kROMaxRetryExponent
+          , streak - immediateAttempts);
+    return kRORetryBaseDelay * (NSTimeInterval)(1L << exponent);
+}
+
+- (NSTimeInterval)ro_scheduleNoFillRetry {
+    [self ro_cancelRetry];
+    if (self.released) return -1.0;
+
+    ++_noFillStreak;
+    return [self ro_postRetryAfter:
+            [ROOverlayAd ro_backoffDelayForStreak:_noFillStreak
+                                immediateAttempts:0]];
+}
+
+- (NSTimeInterval)ro_postRetryAfter:(NSTimeInterval)delay {
+    [self ro_cancelRetry];
+    if (self.released) return -1.0;
+
+    NSTimeInterval resolvedDelay = MAX(0.0, delay);
+    _retryScheduled = YES;
+    NSInteger generation = ++_retryGeneration;
+    dispatch_after(
+            dispatch_time(
+                    DISPATCH_TIME_NOW
+                  , (int64_t)(resolvedDelay * NSEC_PER_SEC))
+          , dispatch_get_main_queue()
+          , ^{
+                if (self.released
+                        || generation != self->_retryGeneration) {
+                    return;
+                }
+                [self ro_handleRetry];
+            });
+    return resolvedDelay;
+}
+
+- (void)ro_cancelRetry {
+    ++_retryGeneration;
+    _retryScheduled = NO;
+}
+
+- (void)ro_handleRetry {
+    _retryScheduled = NO;
+    if (self.released) return;
+
+    UIViewController *host = [ROBaseAd unityViewController];
+    if ([self ro_startLoadWithHost:host]) return;
+
+    // A full cache or a load already in flight ends the loop on purpose; a
+    // missing view controller does not, because one will arrive and nobody
+    // outside is going to call load again.
+    if (!_isAdLoading
+            && _configured
+            && (NSInteger)_cachedAds.count < _cacheSize) {
+        [self ro_postRetryAfter:
+                [ROOverlayAd ro_backoffDelayForStreak:MAX(1, _noFillStreak)
+                                    immediateAttempts:0]];
+    }
 }
 
 - (void)ro_doLoadAdWithHost:(UIViewController *)host
@@ -319,6 +399,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
         }
 
         self->_isAdLoading = NO;
+        self->_noFillStreak = 0;
         [self ro_notifyCurrentState];
         [self notifyLoadingCompletedWithCode:kROLoadSuccessCode
                                     message:@""
@@ -343,8 +424,22 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 
         self->_isAdLoading = NO;
         [self ro_notifyCurrentState];
+        NSTimeInterval retryDelay = [self ro_scheduleNoFillRetry];
+        // The caller only logs now, so the message carries what it used to
+        // work out for itself - above all when the next attempt is due.
+        NSString *message = [NSString stringWithFormat:
+                @"%@ | adUnitId=%@ | cached=%ld/%ld | noFill=%ld | retry=%@"
+              , error.localizedDescription
+              , self->_adUnitId
+              , (long)self->_cachedAds.count
+              , (long)self->_cacheSize
+              , (long)self->_noFillStreak
+              , retryDelay < 0.0
+                        ? @"not scheduled"
+                        : [NSString stringWithFormat:@"%.0fms"
+                                  , retryDelay * 1000.0]];
         [self notifyLoadingCompletedWithCode:(int32_t)error.code
-                                    message:error.localizedDescription
+                                    message:message
                                 cachedCount:(int32_t)self->_cachedAds.count
                                   cacheSize:(int32_t)self->_cacheSize];
     }];
@@ -451,6 +546,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     [self markReleased];
     [ROBaseAd runOnMainThread:^{
         self->_isAdLoading = NO;
+        [self ro_cancelRetry];
         [self ro_releasePreparedPresentation];
 
         ROOverlayAdPresentation *currentPresentation =

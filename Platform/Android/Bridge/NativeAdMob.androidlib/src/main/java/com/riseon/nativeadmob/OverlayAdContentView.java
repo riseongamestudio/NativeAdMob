@@ -102,6 +102,14 @@ final class OverlayAdContentView extends FrameLayout {
     // is certain and only the browser is late. It ends the wait rather than
     // deciding it: whatever opened either arrived or is not coming.
     private static final long REDIRECT_TIMEOUT_MS = 3000L;
+    // The veil between the picture and the text in the scrim layout. The
+    // same value in-feed uses, because it is the same idea and a reader
+    // moving between the two formats should not see two different greys.
+    private static final String SCRIM_VEIL_COLOR = "#B3000000";
+    // How many measure-and-adjust rounds the pre-layout settle may take.
+    // It converges in two on every ad measured so far; the cap is here so a
+    // creative nobody anticipated cannot spin.
+    private static final int SETTLE_MAX_PASSES = 4;
     private static final int MIN_BADGE_SIZE_PX = 15;
     private static final int ATTRIBUTION_WIDTH_DP = 24;
     private static final int ATTRIBUTION_HEIGHT_DP = 18;
@@ -219,6 +227,31 @@ final class OverlayAdContentView extends FrameLayout {
     private Button avoidanceCallToAction;
     private LinearLayout avoidanceIdentityRow;
     private boolean chromeTrimmedForMedia;
+    private boolean scrimLayoutActive;
+    private boolean mediaIsVideo;
+    // Every layout was tried and none can show this creative in this panel.
+    // The ad is not renderable here and the only answer is a different ad.
+    private boolean layoutUnrenderable;
+    // The last avoidance pass could not place the picture anywhere inside
+    // the panel. The panel cannot grow, so the layout changes instead.
+    private boolean avoidanceFoundNoBand;
+    // The last plan printed, so repeats of an unchanged one stay quiet.
+    private String lastAvoidancePlan;
+    // What the pre-layout settle has to reach. These used to be captured by
+    // layout-change listeners, which is exactly what made the panel move
+    // after it was already on screen; the settle needs them from outside.
+    private LinearLayout settleColumn;
+    private LinearLayout settleIdentityRow;
+    private LinearLayout settleIdentityText;
+    private ImageView settleIcon;
+    private TextView settleHeadline;
+    private TextView settleBody;
+    private TextView settleAdvertiser;
+    private int settleColumnWidth;
+    private float settleDensity;
+    // Headline, body, advertiser. Each is shrunk at most once, the same
+    // bound the listener carried, and the reason the settle loop ends.
+    private final boolean[] textShrunk = new boolean[3];
     private float avoidanceMediaAspect;
     private int avoidanceMinimumMediaSize;
     private int avoidanceHorizontalPadding;
@@ -229,7 +262,6 @@ final class OverlayAdContentView extends FrameLayout {
     private final boolean fullscreen;
     private final int backgroundColor;
     private final Runnable onClose;
-    private int resolvedPanelHeight;
     private CountDownTimer timer;
     private SingleClickNativeAdContainer nativeAdContainer;
     private NativeAdView nativeAdView;
@@ -277,6 +309,7 @@ final class OverlayAdContentView extends FrameLayout {
         this.fakeCloseAutoDismiss = fakeCloseAutoDismiss;
         this.onClose = onClose;
         Build(requestedPanelHeight);
+        SettleContentBeforeLayout();
         ApplyFullscreenContentInset();
     }
 
@@ -320,10 +353,6 @@ final class OverlayAdContentView extends FrameLayout {
                 requestedHeight
               , (int) (MIN_PANEL_HEIGHT_DP * density));
         return Math.min(displayMetrics.heightPixels, requestedHeight);
-    }
-
-    int GetResolvedPanelHeight() {
-        return resolvedPanelHeight;
     }
 
     void Release() {
@@ -372,11 +401,14 @@ final class OverlayAdContentView extends FrameLayout {
     // arriving - nothing else takes the screen off an ad the player just
     // sent themselves away from. The ad closes underneath it, unseen.
     //
-    // This is the hook that matters, because the only ad that asks for
-    // RedirectOnClose is the half-screen collapsible, and that one lives in
-    // a Dialog on the Unity Activity - it never sees an Activity onPause of
-    // its own. A view gets window focus changes whichever window it sits in,
-    // so this one covers the Activity path and the Dialog path alike.
+    // This hook covers the ACTIVITY path only. It was written believing it
+    // also covered the Dialog path - "a view gets window focus changes
+    // whichever window it sits in" - and that is false for the one window
+    // that matters: OverlayAdPresentation adds FLAG_NOT_FOCUSABLE to the
+    // half-screen window, and a window that never takes focus never reports
+    // losing it. Measured: across a whole session of half-screen shows this
+    // hook fired exactly once, for a full-screen ad. The half-screen path is
+    // covered by onWindowVisibilityChanged below.
     //
     // Home, a call or the notification shade land here too, but only matter
     // while redirectPending, which needs the close button pressed AND the
@@ -386,6 +418,23 @@ final class OverlayAdContentView extends FrameLayout {
     public void onWindowFocusChanged(boolean hasWindowFocus) {
         super.onWindowFocusChanged(hasWindowFocus);
         if (!hasWindowFocus && redirectPending) RunCloseFromRedirect();
+    }
+
+    // The half-screen path's signal, and the reason the redirect used to
+    // leave the ad standing: that window is not focusable, so the hook above
+    // is deaf there and only the 3s fallback ever closed it - long enough
+    // for the player to come back from the browser and still find the ad.
+    //
+    // Window VISIBILITY does not need focus. When the browser takes the
+    // screen the host Activity stops, every window on its token goes
+    // invisible, and that reaches here whichever window this view sits in -
+    // which is what the focus hook was wrongly believed to do.
+    @Override
+    protected void onWindowVisibilityChanged(int visibility) {
+        super.onWindowVisibilityChanged(visibility);
+        if (visibility != View.VISIBLE && redirectPending) {
+            RunCloseFromRedirect();
+        }
     }
 
     // The Activity path's own signal. Redundant with the focus change above
@@ -474,6 +523,7 @@ final class OverlayAdContentView extends FrameLayout {
         boolean hasVideoContent =
                 mediaContent != null
                         && mediaContent.hasVideoContent();
+        mediaIsVideo = hasVideoContent;
         Drawable mainMediaImage =
                 mediaContent != null
                         ? mediaContent.getMainImage()
@@ -960,9 +1010,12 @@ final class OverlayAdContentView extends FrameLayout {
               , body
               , icon
               , callToAction);
-        KeepTextWholeOrScrolling(headline);
-        KeepTextWholeOrScrolling(body);
-        KeepTextWholeOrScrolling(advertiser);
+        settleColumn = contentColumn;
+        settleColumnWidth = displayMetrics.widthPixels;
+        settleDensity = density;
+        settleHeadline = headline;
+        settleBody = body;
+        settleAdvertiser = advertiser;
         // One anchor per block: where the icon stands alone above the text
         // - the rail beside a side media, or the icon standing in for a
         // missing picture - the text centres under it. A centred icon over
@@ -1014,12 +1067,12 @@ final class OverlayAdContentView extends FrameLayout {
                       , callToAction);
             }
         }
+        // Same condition the listener carried: the icon only follows the
+        // text where it actually stands beside it.
         if (!iconHero && !sideMediaLayout) {
-            MatchIconSizeToIdentityText(
-                    icon
-                  , identityText
-                  , identityRow
-                  , density);
+            settleIcon = icon;
+            settleIdentityText = identityText;
+            settleIdentityRow = identityRow;
         }
         if (fullscreen && hasDisplayableMedia && !sideMediaLayout) {
             EnableControlAvoidance(
@@ -1226,6 +1279,19 @@ final class OverlayAdContentView extends FrameLayout {
                       , icon
                       , callToAction
                       , requestedPanelHeight);
+                // The plan came back with nowhere to put the picture: the
+                // text alone has taken the panel. The panel is fixed, so the
+                // layout gives way instead - the same scrim, for the same
+                // reason. Done here rather than after the settle because the
+                // media may only be reparented before setNativeAd binds it.
+                if (avoidanceFoundNoBand) {
+                    controlAvoidanceActive = false;
+                    layoutUnrenderable = !ApplyScrimLayout(
+                            contentColumn
+                          , mediaView
+                          , density
+                          , horizontalPadding);
+                }
                 return;
             }
 
@@ -1233,7 +1299,7 @@ final class OverlayAdContentView extends FrameLayout {
             SetMediaSideBleed(mediaView, horizontalPadding);
             RestoreOptionalRows(advertiser, starRating, body);
         }
-        RunCollapsibleFitPipeline(
+        if (RunCollapsibleFitPipeline(
                 displayMetrics
               , horizontalPadding
               , minimumMediaSize
@@ -1249,7 +1315,103 @@ final class OverlayAdContentView extends FrameLayout {
               , starRating
               , body
               , icon
-              , callToAction);
+              , callToAction)) {
+            return;
+        }
+
+        // Every rung is spent: smallest scale, fewest body lines, body and
+        // rating and advertiser all dropped, media at its floor - and the
+        // column still does not fit. Stacking is what has run out, not room.
+        //
+        // The scrim spends the panel twice. The picture takes the whole of
+        // it, a veil goes over the picture, and the text sits on the veil
+        // instead of underneath the picture - so the height the text needs
+        // is no longer subtracted from the height the picture needs. This
+        // is the template in-feed reaches for in a squarish cell, for the
+        // same reason and with the same veil.
+        layoutUnrenderable = !ApplyScrimLayout(
+                contentColumn
+              , mediaView
+              , density
+              , horizontalPadding);
+        if (layoutUnrenderable) {
+            Log.i(TAG, "layout: UNRENDERABLE - every template exhausted");
+        }
+    }
+
+    // Turns the built column into the scrim template in place. The column is
+    // already parented to nativeAdView, which is a FrameLayout, so the whole
+    // change is a reparent and three layout params: the media moves out of
+    // the column to sit behind everything, a veil goes over it, and the
+    // column stops filling the panel and hugs its bottom edge.
+    private boolean ApplyScrimLayout(
+            LinearLayout contentColumn
+          , MediaView mediaView
+          , float density
+          , int horizontalPadding) {
+        // Never a video. A player behind text it does not know about cannot
+        // keep its controls or its frame clear of them, and the veil dims
+        // every frame of it besides. In-feed draws the same line: the scrim
+        // template is only ever evaluated for a still main image.
+        if (mediaIsVideo) {
+            Log.i(TAG, "scrim layout: refused, media is video");
+            return false;
+        }
+        if (scrimLayoutActive
+                || nativeAdView == null
+                || mediaView == null
+                || !(mediaView.getParent() instanceof ViewGroup)) {
+            return false;
+        }
+
+        scrimLayoutActive = true;
+        mediaAvoidsControlStrip = false;
+        ((ViewGroup) mediaView.getParent()).removeView(mediaView);
+        nativeAdView.addView(
+                mediaView
+              , 0
+              , new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                  , ViewGroup.LayoutParams.MATCH_PARENT));
+
+        View veil = new View(getContext());
+        veil.setBackgroundColor(Color.parseColor(SCRIM_VEIL_COLOR));
+        veil.setClickable(false);
+        veil.setFocusable(false);
+        veil.setImportantForAccessibility(
+                View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        nativeAdView.addView(
+                veil
+              , 1
+              , new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                  , ViewGroup.LayoutParams.MATCH_PARENT));
+
+        ViewGroup.LayoutParams columnParams = contentColumn.getLayoutParams();
+        if (columnParams instanceof FrameLayout.LayoutParams) {
+            FrameLayout.LayoutParams frameParams =
+                    (FrameLayout.LayoutParams) columnParams;
+            frameParams.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+            frameParams.gravity = Gravity.BOTTOM;
+            contentColumn.setLayoutParams(frameParams);
+        }
+        // The veil already separates the text from the picture, so the block
+        // spends only a hair on each side - enough that nothing is printed
+        // on the very edge, never enough to read as a border. The top strip
+        // inset goes: a block hugging the bottom has no strip above it.
+        int scrimPad = Math.max(1, horizontalPadding);
+        contentColumn.setPadding(scrimPad, scrimPad, scrimPad, scrimPad);
+        contentColumn.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        contentColumn.setClipToPadding(false);
+        Log.i(TAG, "scrim layout: adopted, pad=" + scrimPad);
+        return true;
+    }
+
+    // Read by the presentation once the view is built: true means no
+    // arrangement of this creative fits this panel, so the ad must be
+    // dropped and another requested rather than shown badly.
+    boolean IsLayoutUnrenderable() {
+        return layoutUnrenderable;
     }
 
     private boolean RunCollapsibleFitPipeline(
@@ -1821,6 +1983,7 @@ final class OverlayAdContentView extends FrameLayout {
               , displayMetrics.widthPixels - 2 * horizontalPadding);
         return ContentFitsWithMediaHeight(
                 contentWidth
+              , displayMetrics.widthPixels
               , minimumMediaSize
               , mediaAspectRatio
               , hasDisplayableMedia
@@ -1847,6 +2010,7 @@ final class OverlayAdContentView extends FrameLayout {
               , Math.round(contentWidth / mediaAspectRatio));
         return ContentFitsWithMediaHeight(
                 contentWidth
+              , displayMetrics.widthPixels
               , minimumMediaSize
               , mediaAspectRatio
               , hasDisplayableMedia
@@ -1856,8 +2020,30 @@ final class OverlayAdContentView extends FrameLayout {
               , mediaView);
     }
 
+    // The column is laid out MATCH_PARENT inside a panel as wide as the
+    // screen, and it carries the side padding ITSELF. Measuring it at the
+    // already-padded width subtracts that padding a second time: the text is
+    // measured narrower than it will ever be, wraps to more lines, and the
+    // column reports needing height it does not need. contentWidth is the
+    // basis for what goes INSIDE the column - the media - and columnWidth is
+    // what the column itself gets. They are not the same number and this is
+    // the only place that ever confused them.
+    private static int MeasureColumnHeight(
+            LinearLayout contentColumn
+          , int columnWidth) {
+        contentColumn.measure(
+                View.MeasureSpec.makeMeasureSpec(
+                        columnWidth
+                      , View.MeasureSpec.EXACTLY)
+              , View.MeasureSpec.makeMeasureSpec(
+                        0
+                      , View.MeasureSpec.UNSPECIFIED));
+        return contentColumn.getMeasuredHeight();
+    }
+
     private static boolean ContentFitsWithMediaHeight(
             int contentWidth
+          , int columnWidth
           , int minimumMediaSize
           , float mediaAspectRatio
           , boolean hasDisplayableMedia
@@ -1883,14 +2069,7 @@ final class OverlayAdContentView extends FrameLayout {
             mediaView.setLayoutParams(mediaLayoutParams);
         }
 
-        int contentWidthSpec = View.MeasureSpec.makeMeasureSpec(
-                contentWidth
-              , View.MeasureSpec.EXACTLY);
-        int unspecifiedHeightSpec = View.MeasureSpec.makeMeasureSpec(
-                0
-              , View.MeasureSpec.UNSPECIFIED);
-        contentColumn.measure(contentWidthSpec, unspecifiedHeightSpec);
-        return contentColumn.getMeasuredHeight() <= panelHeight;
+        return MeasureColumnHeight(contentColumn, columnWidth) <= panelHeight;
     }
 
     private static float Interpolate(
@@ -1900,54 +2079,126 @@ final class OverlayAdContentView extends FrameLayout {
         return minimum + (maximum - minimum) * scale;
     }
 
-    private static void MatchIconSizeToIdentityText(
-            ImageView icon
-          , LinearLayout identityText
-          , LinearLayout identityRow
-          , float density) {
-        identityRow.addOnLayoutChangeListener(
-                (view
-               , left
-               , top
-               , right
-               , bottom
-               , oldLeft
-               , oldTop
-               , oldRight
-               , oldBottom) -> {
-                    int textHeight = identityText.getHeight();
-                    int rowWidth = right - left;
-                    if (textHeight <= 0 || rowWidth <= 0) return;
+    // Everything that used to be decided AFTER layout is decided here,
+    // before anything is painted.
+    //
+    // The icon and the identity text are a cycle: identityText carries
+    // weight=1 so it takes whatever width the icon leaves, its lines then
+    // set its height, and that height sets the icon. Running one leg in a
+    // layout-change listener does not break the cycle - it only moves it to
+    // where layout has already happened, so layout ends up changing its own
+    // input and a second pass no longer agrees with the first. That
+    // disagreement is what re-settled the panel a frame after it appeared:
+    // measured on device, the icon went 84px -> 192px between the two
+    // passes and carried the whole column with it.
+    //
+    // A cycle is resolved the way a cycle has to be: measure, adjust,
+    // measure again, until nothing moves - all of it before the first
+    // paint. It terminates because the icon only ever grows (its floor is
+    // its current size) and is capped, and each text is shrunk at most once.
+    private void SettleContentBeforeLayout() {
+        if (settleColumn == null || settleColumnWidth <= 0) return;
 
-                    LinearLayout.LayoutParams layoutParams =
-                            (LinearLayout.LayoutParams)
-                                    icon.getLayoutParams();
-                    int minimumIconSize = Math.max(
-                            Math.round(MIN_ICON_SIZE_DP * density)
-                          , Math.max(
-                                layoutParams.width
-                              , layoutParams.height));
-                    int maximumIconSize = Math.max(
-                            minimumIconSize
-                          , Math.min(
-                                Math.round(MAX_ICON_SIZE_DP * density)
-                              , Math.round(
-                                    rowWidth
-                                            * MAX_ICON_ROW_WIDTH_RATIO)));
-                    int resolvedIconSize = Math.max(
-                            minimumIconSize
-                          , Math.min(textHeight, maximumIconSize));
-                    if (layoutParams.width == resolvedIconSize
-                            && layoutParams.height == resolvedIconSize) {
-                        return;
-                    }
+        for (int pass = 0; pass < SETTLE_MAX_PASSES; ++pass) {
+            settleColumn.measure(
+                    View.MeasureSpec.makeMeasureSpec(
+                            settleColumnWidth
+                          , View.MeasureSpec.EXACTLY)
+                  , View.MeasureSpec.makeMeasureSpec(
+                            0
+                          , View.MeasureSpec.UNSPECIFIED));
 
-                    layoutParams.width = resolvedIconSize;
-                    layoutParams.height = resolvedIconSize;
-                    layoutParams.setMarginEnd(
-                            Math.round(ICON_GAP_DP * density));
-                    icon.setLayoutParams(layoutParams);
-                });
+            boolean changed = SettleIconSize();
+            changed |= SettleTextFitting(settleHeadline, 0);
+            changed |= SettleTextFitting(settleBody, 1);
+            changed |= SettleTextFitting(settleAdvertiser, 2);
+            if (!changed) break;
+
+            // The avoidance plan was drawn against the content as it was;
+            // the content just moved, so the plan is redrawn here rather
+            // than left for onSizeChanged to correct in front of the player.
+            // The plan changes; the panel never does.
+            if (controlAvoidanceActive) {
+                RecomputeMediaControlAvoidance(
+                        settleColumnWidth
+                      , avoidancePanelHeight);
+            }
+        }
+    }
+
+    private boolean SettleIconSize() {
+        if (settleIcon == null
+                || settleIdentityText == null
+                || settleIdentityRow == null) {
+            return false;
+        }
+
+        int textHeight = settleIdentityText.getMeasuredHeight();
+        int rowWidth = settleIdentityRow.getMeasuredWidth();
+        if (textHeight <= 0 || rowWidth <= 0) return false;
+
+        LinearLayout.LayoutParams layoutParams =
+                (LinearLayout.LayoutParams) settleIcon.getLayoutParams();
+        int minimumIconSize = Math.max(
+                Math.round(MIN_ICON_SIZE_DP * settleDensity)
+              , Math.max(layoutParams.width, layoutParams.height));
+        int maximumIconSize = Math.max(
+                minimumIconSize
+              , Math.min(
+                    Math.round(MAX_ICON_SIZE_DP * settleDensity)
+                  , Math.round(rowWidth * MAX_ICON_ROW_WIDTH_RATIO)));
+        int resolvedIconSize = Math.max(
+                minimumIconSize
+              , Math.min(textHeight, maximumIconSize));
+        if (layoutParams.width == resolvedIconSize
+                && layoutParams.height == resolvedIconSize) {
+            return false;
+        }
+
+        layoutParams.width = resolvedIconSize;
+        layoutParams.height = resolvedIconSize;
+        layoutParams.setMarginEnd(
+                Math.round(ICON_GAP_DP * settleDensity));
+        settleIcon.setLayoutParams(layoutParams);
+        return true;
+    }
+
+    // The measure-time twin of the rule that used to ride a layout-change
+    // listener: a value is on screen whole, or on one line that scrolls -
+    // never cut. Measured width stands in for laid-out width, and the
+    // TextView already owns a Layout by now because measuring built one.
+    private boolean SettleTextFitting(TextView text, int index) {
+        if (text == null
+                || textShrunk[index]
+                || text.getVisibility() != View.VISIBLE) {
+            return false;
+        }
+
+        Layout layout = text.getLayout();
+        if (layout == null || layout.getLineCount() == 0) return false;
+
+        if (text.getEllipsize() == TextUtils.TruncateAt.MARQUEE) {
+            int window = text.getMeasuredWidth()
+                    - text.getPaddingLeft()
+                    - text.getPaddingRight();
+            if (window <= 0 || layout.getLineWidth(0) <= window) {
+                return false;
+            }
+
+            textShrunk[index] = true;
+            text.setTextSize(
+                    TypedValue.COMPLEX_UNIT_PX
+                  , text.getTextSize() * MARQUEE_TEXT_SHRINK);
+            return true;
+        }
+
+        if (!RailTextTruncated(text)) return false;
+
+        textShrunk[index] = true;
+        float shrunkSize = text.getTextSize() * MARQUEE_TEXT_SHRINK;
+        MarqueeWhenTooLong(text);
+        text.setTextSize(TypedValue.COMPLEX_UNIT_PX, shrunkSize);
+        return true;
     }
 
     // ------------------------------------------------------------------
@@ -2119,60 +2370,81 @@ final class OverlayAdContentView extends FrameLayout {
         // filling the panel.
         int mediaSeam = Math.round(MEDIA_LOWER_SEAM_DP * density);
         long bestScore = -1L;
-        int bestBoxWidth = Math.max(panelWidth, avoidanceMinimumMediaSize);
-        int bestBoxHeight = Math.max(
-                avoidanceMinimumMediaSize
-              , availableHeight - mediaSeam);
+        // A box of nothing, not a box the size of the panel. The defaults
+        // are what survives when no placement is found, and a panel-sized
+        // default overflows the very panel this is trying to fit into.
+        int bestBoxWidth = 0;
+        int bestBoxHeight = 0;
         int bestTop = 0;
         int bestIntervalLeft = 0;
         int bestIntervalWidth = panelWidth;
         boolean bestEdges = false;
-        for (int[] candidate : candidates) {
-            int top = candidate[0];
-            int intervalLeft = Math.max(0, candidate[1]);
-            int intervalRight = Math.min(panelWidth, candidate[2]);
-            // The picture stays on the panel's centre line, so what a
-            // candidate really offers is twice its narrower half: growing
-            // past that would push the media off centre, not make it bigger.
-            int panelCentre = panelWidth / 2;
-            int intervalWidth = 2 * Math.min(
-                    panelCentre - intervalLeft
-                  , intervalRight - panelCentre);
-            if (intervalWidth < avoidanceMinimumMediaSize) continue;
+        // Two sweeps. The first honours the media's floor; the second, run
+        // only if the first found nothing, drops the floor to a single
+        // pixel. The panel is fixed and cannot be asked to grow, so a media
+        // below its preferred size is the answer - the picture takes the
+        // room that exists instead of demanding room that does not.
+        for (int sweep = 0; sweep < 2 && bestScore < 0L; ++sweep) {
+            int mediaFloor = sweep == 0 ? avoidanceMinimumMediaSize : 1;
+            for (int[] candidate : candidates) {
+                int top = candidate[0];
+                int intervalLeft = Math.max(0, candidate[1]);
+                int intervalRight = Math.min(panelWidth, candidate[2]);
+                // The picture stays on the panel's centre line, so what a
+                // candidate really offers is twice its narrower half:
+                // growing past that would push the media off centre, not
+                // make it bigger.
+                int panelCentre = panelWidth / 2;
+                int intervalWidth = 2 * Math.min(
+                        panelCentre - intervalLeft
+                      , intervalRight - panelCentre);
+                if (intervalWidth < mediaFloor) continue;
 
-            int bandHeight = availableHeight - top - mediaSeam;
-            if (bandHeight < avoidanceMinimumMediaSize) continue;
+                int bandHeight = availableHeight - top - mediaSeam;
+                if (bandHeight < mediaFloor) continue;
 
-            int boxWidth;
-            int boxHeight;
-            if (mediaAspectReported) {
-                boxHeight = Math.min(
-                        bandHeight
-                      , Math.round(
-                            intervalWidth / avoidanceMediaAspect));
-                boxWidth = Math.min(
-                        intervalWidth
-                      , Math.round(boxHeight * avoidanceMediaAspect));
-                if (boxWidth < avoidanceMinimumMediaSize
-                        || boxHeight < avoidanceMinimumMediaSize) {
-                    continue;
+                int boxWidth;
+                int boxHeight;
+                if (mediaAspectReported) {
+                    boxHeight = Math.min(
+                            bandHeight
+                          , Math.round(
+                                intervalWidth / avoidanceMediaAspect));
+                    boxWidth = Math.min(
+                            intervalWidth
+                          , Math.round(boxHeight * avoidanceMediaAspect));
+                    if (boxWidth < mediaFloor || boxHeight < mediaFloor) {
+                        continue;
+                    }
+                } else {
+                    boxWidth = intervalWidth;
+                    boxHeight = bandHeight;
                 }
-            } else {
-                boxWidth = intervalWidth;
-                boxHeight = bandHeight;
-            }
 
-            long score = (long) boxWidth * boxHeight;
-            if (score > bestScore
-                    || (score == bestScore && top < bestTop)) {
-                bestScore = score;
-                bestBoxWidth = boxWidth;
-                bestBoxHeight = boxHeight;
-                bestTop = top;
-                bestIntervalLeft = intervalLeft;
-                bestIntervalWidth = intervalWidth;
-                bestEdges = candidate[3] == 1;
+                long score = (long) boxWidth * boxHeight;
+                if (score > bestScore
+                        || (score == bestScore && top < bestTop)) {
+                    bestScore = score;
+                    bestBoxWidth = boxWidth;
+                    bestBoxHeight = boxHeight;
+                    bestTop = top;
+                    bestIntervalLeft = intervalLeft;
+                    bestIntervalWidth = intervalWidth;
+                    bestEdges = candidate[3] == 1;
+                }
             }
+        }
+
+        // Both sweeps found nothing: the lower stack alone has eaten the
+        // panel and there is no band left at all. The media collapses to
+        // nothing and the text keeps the room - which is the whole contract
+        // now, the same one in-feed lives under. Nothing overflows and
+        // nothing asks for a bigger panel.
+        avoidanceFoundNoBand = bestScore < 0L;
+        if (avoidanceFoundNoBand) {
+            Log.i(TAG, "avoidance: NO BAND lower=" + lowerContentHeight
+                    + " panel=" + panelHeight
+                    + " avail=" + availableHeight);
         }
 
         if (TrimChromeForStarvedMedia(
@@ -2223,14 +2495,23 @@ final class OverlayAdContentView extends FrameLayout {
                 slack = grownSlack;
             }
         }
-        Log.i(TAG, "Avoidance: panel=" + panelWidth + "x" + panelHeight
+        // One line per PLAN, not per pass. The settle runs this two or three
+        // times and onSizeChanged once more, all of them landing on the same
+        // answer now - printing that answer four times says nothing the
+        // first one did not. A second line for one ad means the layout moved
+        // after it had settled, which is the one thing worth a log here.
+        String plan = "Avoidance: panel=" + panelWidth + "x" + panelHeight
                 + " lower=" + lowerContentHeight
                 + " avail=" + availableHeight
                 + " box=" + bestBoxWidth + "x" + bestBoxHeight
                 + " top=" + bestTop
                 + " intervalLeft=" + bestIntervalLeft
                 + " slack=" + slack
-                + " edges=" + bestEdges);
+                + " edges=" + bestEdges;
+        if (!plan.equals(lastAvoidancePlan)) {
+            lastAvoidancePlan = plan;
+            Log.i(TAG, plan);
+        }
         controlsAtEdgesBelowBadges = bestEdges;
         avoidanceColumn.setPadding(
                 avoidanceColumn.getPaddingLeft()
@@ -2354,7 +2635,34 @@ final class OverlayAdContentView extends FrameLayout {
                   , view.getPaddingBottom());
             return windowInsets;
         });
+        // Ask the host now instead of waiting to be told. Insets are
+        // delivered after the window is attached, and on a cutout device
+        // that arrived 116ms AFTER the ad was already on screen - the whole
+        // panel then dropped 110px in front of the player. The host window
+        // knows its own cutout before any of this, so the padding is right
+        // on the first paint and the listener above only ever confirms it.
+        ApplyCutoutInsetFromHost();
         requestApplyInsets();
+    }
+
+    private void ApplyCutoutInsetFromHost() {
+        if (!(getContext() instanceof android.app.Activity)) return;
+
+        android.view.Window hostWindow =
+                ((android.app.Activity) getContext()).getWindow();
+        if (hostWindow == null) return;
+
+        android.view.WindowInsets hostInsets =
+                hostWindow.getDecorView().getRootWindowInsets();
+        if (hostInsets == null) return;
+
+        android.view.DisplayCutout displayCutout =
+                hostInsets.getDisplayCutout();
+        setPadding(
+                getPaddingLeft()
+              , displayCutout == null ? 0 : displayCutout.getSafeInsetTop()
+              , getPaddingRight()
+              , getPaddingBottom());
     }
 
     private TextView CreateAttributionView(
@@ -2442,70 +2750,6 @@ final class OverlayAdContentView extends FrameLayout {
         text.setEllipsize(TextUtils.TruncateAt.MARQUEE);
         text.setMarqueeRepeatLimit(-1);
         text.setSelected(true);
-    }
-
-    // The same rule the in-feed layout follows: a value is on screen whole, or
-    // it is on one line that scrolls - never cut. There is no candidate ladder
-    // here to re-run, so the switch happens on the laid-out view: a text that
-    // could not show everything in the lines it was given becomes a scrolling
-    // line, and any line that actually scrolls does so below the size that
-    // failed to fit still.
-    private static void KeepTextWholeOrScrolling(TextView text) {
-        if (text == null) return;
-
-        final boolean[] shrunk = new boolean[1];
-        text.addOnLayoutChangeListener(
-                (view
-               , left
-               , top
-               , right
-               , bottom
-               , oldLeft
-               , oldTop
-               , oldRight
-               , oldBottom) -> {
-                    if (text.getVisibility() != View.VISIBLE) return;
-                    Layout layout = text.getLayout();
-                    if (layout == null || layout.getLineCount() == 0) return;
-
-                    if (text.getEllipsize()
-                            == TextUtils.TruncateAt.MARQUEE) {
-                        if (shrunk[0]) return;
-                        int window = text.getWidth()
-                                - text.getPaddingLeft()
-                                - text.getPaddingRight();
-                        if (window > 0
-                                && layout.getLineWidth(0) > window) {
-                            shrunk[0] = true;
-                            text.setTextSize(
-                                    TypedValue.COMPLEX_UNIT_PX
-                                  , text.getTextSize()
-                                            * MARQUEE_TEXT_SHRINK);
-                        }
-                        return;
-                    }
-
-                    boolean truncated = false;
-                    int lineCount = layout.getLineCount();
-                    for (int line = 0;
-                         line < lineCount && !truncated;
-                         ++line) {
-                        truncated = layout.getEllipsisCount(line) > 0;
-                    }
-                    if (!truncated) {
-                        truncated = layout.getLineEnd(lineCount - 1)
-                                < text.getText().length();
-                    }
-                    if (!truncated) return;
-
-                    shrunk[0] = true;
-                    float shrunkSize =
-                            text.getTextSize() * MARQUEE_TEXT_SHRINK;
-                    MarqueeWhenTooLong(text);
-                    text.setTextSize(
-                            TypedValue.COMPLEX_UNIT_PX
-                          , shrunkSize);
-                });
     }
 
     private void BindAssets(
@@ -2601,22 +2845,11 @@ final class OverlayAdContentView extends FrameLayout {
                   , mediaView);
         }
 
-        int contentWidth = Math.max(
-                0
-              , displayMetrics.widthPixels - 2 * horizontalPadding);
-        contentColumn.measure(
-                View.MeasureSpec.makeMeasureSpec(
-                        contentWidth
-                      , View.MeasureSpec.EXACTLY)
-              , View.MeasureSpec.makeMeasureSpec(
-                        0
-                      , View.MeasureSpec.UNSPECIFIED));
-        int requiredPanelHeight = contentColumn.getMeasuredHeight();
-        resolvedPanelHeight = fullscreen
-                ? displayMetrics.heightPixels
-                : Math.min(
-                        displayMetrics.heightPixels
-                      , Math.max(requestedPanelHeight, requiredPanelHeight));
+        // The panel does not grow. It never did have the right to: the
+        // caller asked for a share of the screen and that share is the whole
+        // budget, exactly as in-feed lives inside the cell it is handed.
+        // Content that will not fit is shrunk, dropped or collapsed by the
+        // pipeline above - it is never answered with a bigger panel.
     }
 
     private int SizeMediaForBudget(
@@ -2630,16 +2863,12 @@ final class OverlayAdContentView extends FrameLayout {
         int contentWidth = Math.max(
                 0
               , displayMetrics.widthPixels - 2 * horizontalPadding);
-        int contentWidthSpec = View.MeasureSpec.makeMeasureSpec(
-                contentWidth
-              , View.MeasureSpec.EXACTLY);
-        int unspecifiedHeightSpec = View.MeasureSpec.makeMeasureSpec(
-                0
-              , View.MeasureSpec.UNSPECIFIED);
-        contentColumn.measure(contentWidthSpec, unspecifiedHeightSpec);
         int lowerContentHeight = Math.max(
                 0
-              , contentColumn.getMeasuredHeight() - minimumMediaSize);
+              , MeasureColumnHeight(
+                    contentColumn
+                  , displayMetrics.widthPixels)
+                        - minimumMediaSize);
         int panelHeight = fullscreen
                 ? displayMetrics.heightPixels
                 : requestedPanelHeight;

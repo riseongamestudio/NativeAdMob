@@ -636,7 +636,6 @@ final class InFeedAdViewFactory {
             // Not the inset content: ConfigureInsetContent would
             // reset the scrim's own padding to the slot edge.
             views.scrim = scrim;
-            if (!probe) LogScrimGeometry(scrim, plan);
             outer.setGravity(
                     Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
             outer.addView(
@@ -863,60 +862,6 @@ final class InFeedAdViewFactory {
         ConfigureInsetContent(views, plan);
         ConfigureBadgeOverlays(views, plan);
         return root;
-    }
-
-    // The block's real edges against the cell's, printed once per build.
-    // Guesswork about in-feed padding ends here: the numbers say whether
-    // the block meets the cell or something still holds it off.
-    private void LogScrimGeometry(
-            LinearLayout scrim
-          , InFeedAdLayoutEngine.LayoutPlan plan) {
-        scrim.addOnLayoutChangeListener(
-                new View.OnLayoutChangeListener() {
-                    private boolean logged;
-
-                    @Override
-                    public void onLayoutChange(
-                            View view
-                          , int left
-                          , int top
-                          , int right
-                          , int bottom
-                          , int oldLeft
-                          , int oldTop
-                          , int oldRight
-                          , int oldBottom) {
-                        if (logged || right - left <= 0) return;
-                        logged = true;
-
-                        StringBuilder children = new StringBuilder();
-                        for (int index = 0;
-                                index < scrim.getChildCount();
-                                ++index) {
-                            View child = scrim.getChildAt(index);
-                            if (child.getVisibility() == View.GONE) {
-                                continue;
-                            }
-                            children.append(' ')
-                                    .append(child.getClass()
-                                            .getSimpleName())
-                                    .append('[')
-                                    .append(child.getLeft())
-                                    .append(',')
-                                    .append(child.getRight())
-                                    .append(']');
-                        }
-                        Log.i(TAG, "Scrim geometry: cell="
-                                + plan.width + "x" + plan.height
-                                + " block=[" + left + "," + top + "]["
-                                + right + "," + bottom + "]"
-                                + " pad=" + scrim.getPaddingLeft() + "/"
-                                + scrim.getPaddingTop() + "/"
-                                + scrim.getPaddingRight() + "/"
-                                + scrim.getPaddingBottom()
-                                + " children:" + children);
-                    }
-                });
     }
 
     // One anchor per block: where the icon stands alone above the text,

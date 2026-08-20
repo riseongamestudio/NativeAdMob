@@ -114,6 +114,21 @@ public final class OverlayAd extends BaseAd {
     // head is always the first to go stale.
     private final ArrayDeque<CachedAd> cachedAds = new ArrayDeque<>();
     private final Runnable cacheExpiryRunnable = this::HandleCacheExpiry;
+    // Retry lives here, not in the caller. One Load from outside starts the
+    // unit and it keeps itself fed from then on - the same arrangement
+    // in-feed has, and the reason its behaviour under a dry network is
+    // worth copying rather than reinventing per placement.
+    private final Runnable retryRunnable = this::HandleRetry;
+    private boolean retryScheduled;
+    // Two streaks because there are two failures. An empty network is
+    // nobody's fault and backs off from the first miss; a creative that
+    // will not lay out is one creative's fault, and the next one usually
+    // fits - so that streak gets its first attempts for free.
+    private int noFillStreak;
+    private int layoutFailStreak;
+    // Whether anything has ever laid out in this placement. Until something
+    // has, a run of failures is more likely the panel than the creatives.
+    private boolean layoutProven;
     // The stage a timer-driven reload builds on. Every Load and Show hands
     // one in; the sweep that fires an hour later has none of its own.
     private Activity cacheActivity;
@@ -406,6 +421,7 @@ public final class OverlayAd extends BaseAd {
         if (released
                 || !configured
                 || isAdLoading
+                || retryScheduled
                 || loadStyle == null
                 || cachedAds.size() >= cacheSize
                 || !IsActivityUsable(activity)) {
@@ -415,6 +431,123 @@ public final class OverlayAd extends BaseAd {
         cacheActivity = activity;
         DoLoadAd(activity, requestAdUnitId, loadStyle);
         return true;
+    }
+
+    // ------------------------------------------------------------------
+    // RETRY
+    //
+    // Two classes, exactly as in-feed draws them, and the arithmetic is
+    // in-feed's own function rather than a second copy of it.
+    //
+    //   no fill  - BackoffDelayMs(streak, 0): the network had nothing, so
+    //              back off from the very first miss.
+    //   layout   - BackoffDelayMs(streak, RETRY_IMMEDIATE_LAYOUT_ATTEMPTS):
+    //              the network had something this panel could not show. A
+    //              different creative usually can, so the first attempts go
+    //              out immediately before any backing off begins.
+    //
+    // And one valve: if nothing has EVER laid out here and creatives keep
+    // failing, the panel is the likelier culprit, so the unit stops burning
+    // requests and settles into a slow poll.
+    // ------------------------------------------------------------------
+
+    private static final int RETRY_IMMEDIATE_LAYOUT_ATTEMPTS = 2;
+    private static final int MAX_UNPROVEN_LAYOUT_FAILURES = 20;
+    private static final long UNPROVEN_LAYOUT_RETRY_DELAY_MS = 300_000L;
+
+    private long ScheduleNoFillRetry() {
+        CancelRetry();
+        if (released) return InFeedAd.NO_RETRY_SCHEDULED_MS;
+
+        ++noFillStreak;
+        return PostRetry(InFeedAd.BackoffDelayMs(noFillStreak, 0));
+    }
+
+    private long ScheduleLayoutRetry() {
+        CancelRetry();
+        if (released) return InFeedAd.NO_RETRY_SCHEDULED_MS;
+
+        ++layoutFailStreak;
+        if (!layoutProven
+                && layoutFailStreak >= MAX_UNPROVEN_LAYOUT_FAILURES) {
+            Log.e(
+                    TAG
+                  , layoutFailStreak
+                            + " creatives in a row could not be laid out in"
+                            + " this panel and none has ever rendered here;"
+                            + " falling back to a slow poll");
+            return PostRetry(UNPROVEN_LAYOUT_RETRY_DELAY_MS);
+        }
+        return PostRetry(
+                InFeedAd.BackoffDelayMs(
+                        layoutFailStreak
+                      , RETRY_IMMEDIATE_LAYOUT_ATTEMPTS));
+    }
+
+    private long PostRetry(long delayMs) {
+        CancelRetry();
+        if (released) return InFeedAd.NO_RETRY_SCHEDULED_MS;
+
+        retryScheduled = true;
+        main.postDelayed(retryRunnable, Math.max(0L, delayMs));
+        return delayMs;
+    }
+
+    private void CancelRetry() {
+        main.removeCallbacks(retryRunnable);
+        retryScheduled = false;
+    }
+
+    private void HandleRetry() {
+        retryScheduled = false;
+        if (released) return;
+        if (StartLoad(cacheActivity, adUnitId, configuredStyle)) return;
+
+        // Nothing left. A full cache or a load already in flight ends the
+        // loop on purpose; a missing Activity does not, because one will
+        // arrive and nobody outside is going to call Load again.
+        if (!isAdLoading && cachedAds.size() < cacheSize && configured) {
+            PostRetry(
+                    InFeedAd.BackoffDelayMs(Math.max(1, noFillStreak), 0));
+        }
+    }
+
+    // A creative that no layout could show. It leaves the cache, the seat
+    // it held is refilled by the retry, and the streak that governs that
+    // retry is the layout one - not the no-fill one, because the network
+    // did its part.
+    // The caller only logs now, so the message has to carry what the caller
+    // used to work out for itself - above all when the next attempt is due.
+    private String BuildFailureMessage(
+            String reason
+          , long retryDelayMs) {
+        String retryDescription =
+                retryDelayMs == InFeedAd.NO_RETRY_SCHEDULED_MS
+                        ? "not scheduled"
+                        : retryDelayMs + "ms";
+        return String.valueOf(reason)
+                + " | adUnitId=" + String.valueOf(adUnitId)
+                + " | cached=" + cachedAds.size() + "/" + cacheSize
+                + " | noFill=" + noFillStreak
+                + " | layoutFail=" + layoutFailStreak
+                + " | retry=" + retryDescription;
+    }
+
+    private void DropUnrenderableAd(NativeAd ad) {
+        for (java.util.Iterator<CachedAd> entries = cachedAds.iterator();
+                entries.hasNext();) {
+            if (entries.next().ad == ad) {
+                entries.remove();
+                break;
+            }
+        }
+        cachedCount = cachedAds.size();
+        ForgetAd(ad);
+        long retryDelayMs = ScheduleLayoutRetry();
+        Log.i(TAG, "layout: dropped unrenderable creative, cache "
+                + cachedCount + "/" + cacheSize
+                + ", retry in " + retryDelayMs + "ms");
+        NotifyCurrentState();
     }
 
     private void DoLoadAd(
@@ -462,8 +595,12 @@ public final class OverlayAd extends BaseAd {
 
                             isAdLoading = false;
                             NotifyCurrentState();
+                            long retryDelayMs = ScheduleNoFillRetry();
                             NotifyLoadingCompleted(
-                                    error.getCode(), error.getMessage());
+                                    error.getCode()
+                                  , BuildFailureMessage(
+                                        error.getMessage()
+                                      , retryDelayMs));
                         }
 
                         @Override
@@ -471,6 +608,7 @@ public final class OverlayAd extends BaseAd {
                             if (!IsCurrentLoadGeneration(generation)) return;
 
                             isAdLoading = false;
+                            noFillStreak = 0;
                             NotifyCurrentState();
                             NotifyLoadingCompleted(0, "");
                             // One request per ad: this chains on until the
@@ -507,10 +645,13 @@ public final class OverlayAd extends BaseAd {
                 NotifyCurrentState();
                 Log.e(TAG, "Native ad load failed before callback"
                       , exception);
+                long retryDelayMs = ScheduleNoFillRetry();
                 NotifyLoadingCompleted(
                         INTERNAL_LOAD_ERROR
-                      , "Failed to load ad: "
-                                + String.valueOf(exception.getMessage()));
+                      , BuildFailureMessage(
+                            "Failed to load ad: "
+                                    + String.valueOf(exception.getMessage())
+                          , retryDelayMs));
             }
         }
     }
@@ -669,6 +810,7 @@ public final class OverlayAd extends BaseAd {
         main.removeCallbacksAndMessages(null);
         RunOnMainThread(() -> {
             isAdLoading = false;
+            CancelRetry();
 
             ReleasePreparedPresentation();
             ReleasePreparedFullScreenContent();
@@ -885,6 +1027,18 @@ public final class OverlayAd extends BaseAd {
                 createdPresentation.Release();
                 return false;
             }
+
+            // Prepare built the whole view, so the verdict is already in.
+            // A creative no layout can show is dropped here, with the ad
+            // still in the cache and nothing on screen - the one moment
+            // where refusing it costs the player nothing.
+            if (createdPresentation.IsLayoutUnrenderable()) {
+                createdPresentation.Release();
+                DropUnrenderableAd(ad);
+                return false;
+            }
+            layoutProven = true;
+            layoutFailStreak = 0;
 
             preparedPresentation = createdPresentation;
             preparedActivity = activity;
