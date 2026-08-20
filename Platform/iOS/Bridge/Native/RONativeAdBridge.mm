@@ -201,7 +201,7 @@ void ROOverlayAd_Show(
       , RONativeAdShowCompletedCallback onCompleted) {
     if (handle == NULL) {
         if (onCompleted != NULL) {
-            onCompleted(0, showId, "Ad released", false);
+            onCompleted(0, showId, "Ad released", false, 0);
         }
         return;
     }

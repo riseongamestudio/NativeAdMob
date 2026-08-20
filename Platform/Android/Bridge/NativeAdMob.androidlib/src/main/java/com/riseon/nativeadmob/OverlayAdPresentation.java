@@ -93,15 +93,11 @@ public final class OverlayAdPresentation
         setCancelable(false);
 
         Context context = getContext();
-        boolean hasVideoContent =
-                nativeAd.getMediaContent() != null
-                        && nativeAd.getMediaContent().hasVideoContent();
         int requestedPanelHeight =
                 OverlayAdContentView.ResolveInitialPanelHeight(
                         context
                       , fullscreen
-                      , heightRatio
-                      , hasVideoContent);
+                      , heightRatio);
         Window window = getWindow();
         ConfigureWindow(window, requestedPanelHeight);
 

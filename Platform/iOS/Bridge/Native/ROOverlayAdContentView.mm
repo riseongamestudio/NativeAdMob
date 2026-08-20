@@ -242,8 +242,19 @@ static void ROCentreUnderIcon(UIView *view) {
 + (CGFloat)resolveInitialPanelHeightForFullscreen:(BOOL)fullscreen
                                       heightRatio:(float)heightRatio
                                   hasVideoContent:(BOOL)hasVideoContent {
+    if (fullscreen) return UIScreen.mainScreen.bounds.size.height;
+
+    return [self resolveHalfScreenPanelHeightForRatio:heightRatio];
+}
+
+// The one place a half-screen height is decided, and the COVER behind the ad
+// has to come here too. Computing its own from the host view's bounds while
+// the ad measured UIScreen made the two disagree wherever the Unity view is
+// not the whole screen, and the surplus showed as an empty band above the ad
+// - both sit at the bottom, so only the taller one has anything left over.
+// The Android side carries the same pairing.
++ (CGFloat)resolveHalfScreenPanelHeightForRatio:(float)heightRatio {
     CGSize screen = UIScreen.mainScreen.bounds.size;
-    if (fullscreen) return screen.height;
 
     float ratio = heightRatio;
     if (isnan(ratio) || isinf(ratio)) {
@@ -770,11 +781,15 @@ static void ROCentreUnderIcon(UIView *view) {
         return;
     }
 
+    // A second tap while the first redirect is still on its way must not
+    // reach the SDK again - one press, one click, which is the whole point
+    // of the multi-click latch. Checked BEFORE performClick, not after.
+    if (_redirectPending) return;
+
     // The SDK's own click path, so the redirect and the click accounting
     // stay in Google's hands rather than being faked here. The close itself
     // waits for onPaused; see there.
     [_nativeAd performClickOnAssetWithKey:GADNativeCallToActionAsset];
-    if (_redirectPending) return;
 
     _redirectPending = YES;
     __weak ROOverlayAdContentView *weakSelf = self;

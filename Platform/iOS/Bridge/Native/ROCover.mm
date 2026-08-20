@@ -1,6 +1,7 @@
-#import "RONativeCover.h"
+#import "ROCover.h"
 
 #import "ROInFeedAdPresentation.h"
+#import "ROOverlayAdContentView.h"
 
 // Unity's own entry points. Declared here rather than pulled in from
 // UnityInterface.h for the same reason the Google SDK declares them: the
@@ -122,7 +123,7 @@ static void ROApplyPause(void) {
     ROSetPauseGuardRunning(wantsPause);
 }
 
-void RONativeCover_SetAdWantsPause(BOOL wantsPause) {
+void ROCover_SetAdWantsPause(BOOL wantsPause) {
     if (ROAdWantsPause == wantsPause) return;
 
     ROAdWantsPause = wantsPause;
@@ -225,7 +226,13 @@ static void ROHideFullScreen(void) {
     CGFloat ratio = self.coverHeightRatio;
     if (isnan(ratio) || ratio <= 0 || ratio >= 1) ratio = 1;
 
-    CGFloat height = MAX(1, self.bounds.size.height * ratio);
+    // The ad's own resolver, not a second formula of our own - see the note
+    // on resolveHalfScreenPanelHeightForRatio:. A cover that measured itself
+    // ended up a different height from the ad it sits behind.
+    CGFloat height = ratio >= 1
+            ? self.bounds.size.height
+            : MAX(1, [ROOverlayAdContentView
+                    resolveHalfScreenPanelHeightForRatio:ratio]);
     self.cover.frame = CGRectMake(
             0
           , self.bounds.size.height - height
@@ -246,7 +253,7 @@ static void ROHideFullScreen(void) {
 
 static ROHalfScreenCoverView *ROHalfScreenCover = nil;
 
-UIView *RONativeCover_HalfScreenView(void) {
+UIView *ROHalfScreenCover_View(void) {
     return ROHalfScreenCover;
 }
 
@@ -292,21 +299,21 @@ static void ROHideHalfScreen(void) {
 
 extern "C" {
 
-void RONativeCover_ShowFull(int32_t color) {
+void ROFullScreenCover_Show(int32_t color) {
     dispatch_async(dispatch_get_main_queue(), ^{ ROShowFullScreen(color); });
 }
 
-void RONativeCover_HideFull(void) {
+void ROFullScreenCover_Hide(void) {
     dispatch_async(dispatch_get_main_queue(), ^{ ROHideFullScreen(); });
 }
 
-void RONativeCover_ShowHalf(int32_t color, float heightRatio) {
+void ROHalfScreenCover_Show(int32_t color, float heightRatio) {
     dispatch_async(dispatch_get_main_queue(), ^{
         ROShowHalfScreen(color, heightRatio);
     });
 }
 
-void RONativeCover_HideHalf(void) {
+void ROHalfScreenCover_Hide(void) {
     dispatch_async(dispatch_get_main_queue(), ^{ ROHideHalfScreen(); });
 }
 

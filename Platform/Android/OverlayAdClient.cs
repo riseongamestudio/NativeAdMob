@@ -59,11 +59,12 @@ namespace RiseOn.NativeAdMob.Android {
 
         public void Show(int showId) {
             var completedListener = new NativeAdCompletedListenerProxy(
-                (errorMessage, adConsumed) =>
+                (errorMessage, adConsumed, cachedCount) =>
                     callbacks.OnShowCompleted(
                         showId
                       , errorMessage
-                      , adConsumed));
+                      , adConsumed
+                      , cachedCount));
             activeShowCompleted = completedListener;
             try {
                 javaObject?.Call(
@@ -72,7 +73,11 @@ namespace RiseOn.NativeAdMob.Android {
                   , completedListener);
             } catch (Exception exception) {
                 Debug.LogException(exception);
-                callbacks.OnShowCompleted(showId, exception.Message, false);
+                // The call never reached Java, so there is no cache news to
+                // report. An empty cache is the safe thing to claim: it can
+                // only skip an ad, and the next state notification corrects
+                // it - claiming a warm one would offer an ad nobody has.
+                callbacks.OnShowCompleted(showId, exception.Message, false, 0);
             }
         }
 

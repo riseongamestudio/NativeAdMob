@@ -8,7 +8,7 @@ namespace RiseOn.NativeAdMob.Editor {
     // preview has no such seam; the full-screen one also stops the game, and
     // there is no Activity and no UnityPause in play here to stop it with. A
     // rectangle that looked right would still be testing nothing.
-    internal sealed class NativeCoverPlatform : INativeCoverPlatform {
+    internal sealed class CoverPlatform : ICoverPlatform {
         private static bool unsupportedLogged;
 
         public void ShowFullScreen(int argb) => LogUnsupported();

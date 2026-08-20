@@ -1,7 +1,7 @@
 using UnityEngine;
 
 namespace RiseOn.NativeAdMob.iOS {
-    internal sealed class AdPlatform : IAdPlatform, INativeCoverPlatform {
+    internal sealed class AdPlatform : IAdPlatform, ICoverPlatform {
         public IInFeedAdClient CreateInFeed(
             InFeedAd.Settings settings
           , IInFeedAdCallbacks callbacks) {
@@ -26,6 +26,6 @@ namespace RiseOn.NativeAdMob.iOS {
 
         public void HideHalfScreen() => cover.HideHalfScreen();
 
-        private readonly NativeCoverPlatform cover = new();
+        private readonly CoverPlatform cover = new();
     }
 }

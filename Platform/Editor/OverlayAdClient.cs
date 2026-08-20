@@ -40,12 +40,12 @@ namespace RiseOn.NativeAdMob.Editor {
             adLoading = false;
             adReady   = true;
             callbacks.OnStateChanged(true, false);
-            callbacks.OnLoadingCompleted(0, string.Empty);
+            callbacks.OnLoadingCompleted(0, string.Empty, 1, 1);
         }
 
         public void Show(int showId) {
             if (!adReady) {
-                callbacks.OnShowCompleted(showId, AD_NOT_READY_ERROR, false);
+                callbacks.OnShowCompleted(showId, AD_NOT_READY_ERROR, false, 0);
                 return;
             }
 
@@ -56,12 +56,15 @@ namespace RiseOn.NativeAdMob.Editor {
                     config.Snapshot()
                   , () => {
                         preview = null;
-                        callbacks.OnShowCompleted(showId, string.Empty, true);
+                        // This client keeps a cache of one, and the show
+                        // just spent it. Nothing refills it until Load is
+                        // called again, so the count is flatly zero.
+                        callbacks.OnShowCompleted(showId, string.Empty, true, 0);
                     });
                 callbacks.OnDisplayed();
             } catch (Exception exception) {
                 Debug.LogException(exception);
-                callbacks.OnShowCompleted(showId, exception.Message, true);
+                callbacks.OnShowCompleted(showId, exception.Message, true, 0);
             }
         }
 

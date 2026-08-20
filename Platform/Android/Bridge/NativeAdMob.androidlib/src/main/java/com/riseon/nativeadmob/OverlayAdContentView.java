@@ -247,7 +247,8 @@ final class OverlayAdContentView extends FrameLayout {
     // the screen means nobody ever sees the swap.
     private boolean redirectPending;
     private final Runnable closeFallbackRunnable = this::RunCloseFromPress;
-    private final Runnable redirectFallbackRunnable = this::RunCloseFromRedirect;
+    private final Runnable redirectFallbackRunnable =
+            this::RunCloseFromRedirect;
 
     // One constructor only, and it takes milliseconds. A seconds-taking
     // twin used to sit here and roll the close button's side itself; an
@@ -282,27 +283,37 @@ final class OverlayAdContentView extends FrameLayout {
     static int ResolveInitialPanelHeight(
             Context context
           , boolean fullscreen
-          , float heightRatio
-          , boolean hasVideoContent) {
+          , float heightRatio) {
+        if (fullscreen) {
+            return context.getResources()
+                    .getDisplayMetrics().heightPixels;
+        }
+        return ResolveHalfScreenPanelHeight(context, heightRatio);
+    }
+
+    // The one place a half-screen height is decided, and the COVER behind the
+    // ad has to come here too.
+    //
+    // The cover used to compute its own from decorView.getHeight() while the
+    // ad used displayMetrics.heightPixels. Those are the same number on a
+    // plain 1080x1920 emulator, which is why it looked fine there - and they
+    // differ on a real device with a cutout or a gesture bar. The surplus
+    // showed up as an empty black band above the ad, because both windows sit
+    // at Gravity.BOTTOM and only the taller one has anything left over.
+    static int ResolveHalfScreenPanelHeight(
+            Context context
+          , float heightRatio) {
         DisplayMetrics displayMetrics =
                 context.getResources().getDisplayMetrics();
-        if (fullscreen) return displayMetrics.heightPixels;
-
         float density = displayMetrics.density;
-        int minimumMediaSize =
-                (int) Math.ceil(
-                        (hasVideoContent
-                                ? MIN_VIDEO_MEDIA_SIZE_DP
-                                : MIN_IMAGE_MEDIA_SIZE_DP)
-                                * density);
-        int controlStripHeight =
-                (int) (CONTROL_STRIP_HEIGHT_DP * density);
+
         float ratio = heightRatio;
         if (Float.isNaN(ratio) || Float.isInfinite(ratio)) {
             Log.w(TAG, "heightRatio is not finite; using 0.5");
             ratio = DEFAULT_HEIGHT_RATIO;
         }
         ratio = Math.max(0f, Math.min(1f, ratio));
+
         int requestedHeight =
                 (int) (displayMetrics.heightPixels * ratio);
         requestedHeight = Math.max(
@@ -418,7 +429,11 @@ final class OverlayAdContentView extends FrameLayout {
     }
 
     private void ArmCloseFromPress() {
-        if (released || closePressPending) return;
+        // redirectPending too: a second press while the redirect is on its
+        // way would arm the SHORT fallback and close the ad before the
+        // browser arrives - the exact gap this wait exists to remove. The
+        // press is ignored; the redirect, or its own bound, still ends it.
+        if (released || closePressPending || redirectPending) return;
 
         closePressPending = true;
         close.postDelayed(closeFallbackRunnable, CLOSE_REPORT_TIMEOUT_MS);

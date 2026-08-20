@@ -1,7 +1,11 @@
 namespace RiseOn.NativeAdMob {
     // Callbacks may arrive on any thread; the wrapper marshals and gates.
     internal interface IInFeedAdCallbacks {
-        void OnLoadingCompleted(int errorCode, string errorMessage);
+        void OnLoadingCompleted(
+            int errorCode
+          , string errorMessage
+          , int cachedCount
+          , int cacheSize);
         void OnAdPaid(
             string source
           , string adUnitId

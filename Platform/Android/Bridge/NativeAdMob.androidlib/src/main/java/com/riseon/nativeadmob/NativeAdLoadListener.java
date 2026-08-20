@@ -5,7 +5,11 @@ package com.riseon.nativeadmob;
 public interface NativeAdLoadListener {
     void OnStateChanged(boolean isReady, boolean isLoading);
     void OnShowNotReady();
-    void OnLoadingCompleted(int errorCode, String errorMessage);
+    void OnLoadingCompleted(
+            int errorCode
+          , String errorMessage
+          , int cachedCount
+          , int cacheSize);
     void OnLoadingStarted();
     void OnAdPaid(
         String adSource

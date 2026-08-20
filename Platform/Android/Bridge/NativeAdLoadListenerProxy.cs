@@ -19,8 +19,16 @@ namespace RiseOn.NativeAdMob.Android {
 
         public void OnShowNotReady() => callbacks.OnShowNotReady();
 
-        public void OnLoadingCompleted(int errorCode, string errorMessage)
-            => callbacks.OnLoadingCompleted(errorCode, errorMessage);
+        public void OnLoadingCompleted(
+            int errorCode
+          , string errorMessage
+          , int cachedCount
+          , int cacheSize)
+            => callbacks.OnLoadingCompleted(
+                errorCode
+              , errorMessage
+              , cachedCount
+              , cacheSize);
 
         // Nothing downstream listens for a load beginning, and neither
         // AdMob nor MAX reports one. The native contract still calls it.

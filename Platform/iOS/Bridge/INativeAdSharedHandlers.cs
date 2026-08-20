@@ -3,7 +3,11 @@ namespace RiseOn.NativeAdMob.iOS {
     // trampolines reach them through this without caring which one answered.
     internal interface INativeAdSharedHandlers {
         void HandleLoadingStarted();
-        void HandleLoadingCompleted(int errorCode, string errorMessage);
+        void HandleLoadingCompleted(
+            int errorCode
+          , string errorMessage
+          , int cachedCount
+          , int cacheSize);
         void HandleAdPaid(
             string source
           , string adUnitId

@@ -5,90 +5,57 @@ import android.app.Dialog;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
-import android.os.Handler;
-import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 
-// Two covers, two mechanisms, and the difference is what they stop.
-//
-// The full-screen cover is an ACTIVITY (NativeCoverActivity), so the system
-// pauses Unity behind it. That is the point of it - and the reason it is
-// dangerous: a paused Unity runs no C#, so whatever takes the cover down must
-// reach Hide from a thread that is still moving. See NativeCoverActivity for
-// the rule that pays for it.
-//
-// The half-screen cover is a WINDOW on the Unity Activity. It changes nothing
-// about the Activity's lifecycle, so the game keeps running behind it - which
-// is what a cover over half the screen has to do anyway - and Hide is always
-// reachable.
-public final class NativeCover {
-    private static final Handler MAIN =
-            new Handler(Looper.getMainLooper());
+// The half-screen cover: a WINDOW on the Unity Activity, not an Activity of
+// its own. It changes nothing about the Activity's lifecycle, so the game
+// keeps running behind it - which is what a cover over part of the screen has
+// to do anyway - and Hide is always reachable.
+public final class HalfScreenCover {
+    private static CoverDialog dialog;
+    private static int color = Color.BLACK;
+    private static float heightRatio = 1f;
 
-    // Only the half-screen cover keeps state here; the full-screen one lives
-    // as an Activity and holds its own.
-    private static final Cover HALF_SCREEN = new Cover();
+    private HalfScreenCover() {}
 
-    private NativeCover() {}
-
-    public static void ShowFullScreen(Activity currentActivity, int color) {
-        RunOnMainThread(() -> {
-            if (!IsActivityUsable(currentActivity)) return;
-
-            NativeCoverActivity.Start(currentActivity, color);
-        });
-    }
-
-    public static void HideFullScreen() {
-        RunOnMainThread(NativeCoverActivity::Finish);
-    }
-
-    public static void ShowHalfScreen(
+    public static void Show(
             Activity currentActivity
-          , int color
-          , float heightRatio) {
-        Show(HALF_SCREEN, currentActivity, color, heightRatio);
-    }
-
-    public static void HideHalfScreen() {
-        RunOnMainThread(HALF_SCREEN::Dismiss);
-    }
-
-    private static void Show(
-            Cover cover
-          , Activity currentActivity
-          , int color
-          , float heightRatio) {
-        float resolvedRatio = ResolveHeightRatio(heightRatio);
-        RunOnMainThread(() -> {
-            cover.color = color;
+          , int coverColor
+          , float ratio) {
+        float resolvedRatio = ResolveHeightRatio(ratio);
+        BaseCover.RunOnMainThread(() -> {
+            color = coverColor;
             // A cover already up at this height only needs repainting.
             // Tearing the window down and building another is a visible
             // flicker, in the one surface whose whole job is to hide those.
-            if (cover.dialog != null && cover.heightRatio == resolvedRatio) {
-                cover.dialog.SetColor(color);
+            if (dialog != null && heightRatio == resolvedRatio) {
+                dialog.SetColor(coverColor);
                 return;
             }
 
-            cover.heightRatio = resolvedRatio;
-            cover.Dismiss();
-            if (!IsActivityUsable(currentActivity)) return;
+            heightRatio = resolvedRatio;
+            Dismiss();
+            if (!BaseCover.IsActivityUsable(currentActivity)) return;
 
             CoverDialog createdDialog = new CoverDialog(
                     currentActivity
-                  , cover.color
-                  , cover.heightRatio);
-            cover.dialog = createdDialog;
+                  , color
+                  , heightRatio);
+            dialog = createdDialog;
             try {
                 createdDialog.show();
             } catch (RuntimeException ignored) {
-                if (cover.dialog == createdDialog) cover.Dismiss();
+                if (dialog == createdDialog) Dismiss();
             }
         });
+    }
+
+    public static void Hide() {
+        BaseCover.RunOnMainThread(HalfScreenCover::Dismiss);
     }
 
     // Anything outside (0,1] means the whole screen: a caller that names no
@@ -98,58 +65,30 @@ public final class NativeCover {
         return value;
     }
 
-    // One hop for the whole class, and it does not need an Activity to make
-    // it. Activity.runOnUiThread is the same logic - run inline when already
-    // on the UI thread, post otherwise - but it has nothing to post to when
-    // the Activity is null, and the version that stood here ran the action
-    // on whatever thread called it. Window work on Unity's thread is a crash
-    // waiting for the one call that arrives with no Activity in hand.
-    private static void RunOnMainThread(Runnable action) {
-        if (action == null) return;
+    private static void Dismiss() {
+        CoverDialog currentDialog = dialog;
+        dialog = null;
+        if (currentDialog == null) return;
 
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            action.run();
-            return;
-        }
-        MAIN.post(action);
-    }
-
-    private static boolean IsActivityUsable(Activity activity) {
-        return activity != null
-                && !activity.isFinishing()
-                && !activity.isDestroyed();
-    }
-
-    private static final class Cover {
-        private CoverDialog dialog;
-        private int color = Color.BLACK;
-        private float heightRatio = 1f;
-
-        private void Dismiss() {
-            CoverDialog currentDialog = dialog;
-            dialog = null;
-            if (currentDialog == null) return;
-
-            try {
-                currentDialog.dismiss();
-            } catch (RuntimeException ignored) {
-            }
+        try {
+            currentDialog.dismiss();
+        } catch (RuntimeException ignored) {
         }
     }
 
     private static final class CoverDialog extends Dialog {
         private final Activity hostActivity;
         private final int initialColor;
-        private final float heightRatio;
+        private final float coverHeightRatio;
         private FrameLayout overlayView;
 
-        CoverDialog(Activity activity, int color, float ratio) {
+        CoverDialog(Activity activity, int dialogColor, float ratio) {
             super(
                     activity
                   , android.R.style.Theme_Translucent_NoTitleBar_Fullscreen);
             hostActivity = activity;
-            initialColor = color;
-            heightRatio = ratio;
+            initialColor = dialogColor;
+            coverHeightRatio = ratio;
         }
 
         @Override
@@ -158,7 +97,7 @@ public final class NativeCover {
             setCancelable(false);
 
             Window window = getWindow();
-            ConfigureWindow(window, hostActivity, heightRatio);
+            ConfigureWindow(window, hostActivity, coverHeightRatio);
 
             overlayView = new FrameLayout(hostActivity);
             overlayView.setBackgroundColor(initialColor);
@@ -176,17 +115,17 @@ public final class NativeCover {
         @Override
         protected void onStart() {
             super.onStart();
-            ConfigureWindow(getWindow(), hostActivity, heightRatio);
+            ConfigureWindow(getWindow(), hostActivity, coverHeightRatio);
         }
 
-        void SetColor(int color) {
-            if (overlayView != null) overlayView.setBackgroundColor(color);
+        void SetColor(int newColor) {
+            if (overlayView != null) overlayView.setBackgroundColor(newColor);
         }
 
         private static void ConfigureWindow(
                 Window window
               , Activity activity
-              , float heightRatio) {
+              , float ratio) {
             if (window == null
                     || activity == null
                     || activity.getWindow() == null) {
@@ -205,12 +144,20 @@ public final class NativeCover {
             // A partial cover is a SHORT WINDOW, not a full one with a
             // transparent top: the strip above it never enters this window's
             // input region, so the game keeps receiving touches there.
-            int coverHeight = heightRatio >= 1f
+            //
+            // The height comes from the ad's own function, not from a second
+            // formula of our own. This used to read decorView.getHeight(),
+            // which matches displayMetrics.heightPixels on a plain emulator
+            // and does NOT on a device with a cutout or a gesture bar - and
+            // the difference showed as a black band above the ad, since both
+            // windows sit at Gravity.BOTTOM.
+            int coverHeight = ratio >= 1f
                     ? ViewGroup.LayoutParams.MATCH_PARENT
                     : Math.max(
                             1
-                          , Math.round(
-                                hostDecorView.getHeight() * heightRatio));
+                          , OverlayAdContentView.ResolveHalfScreenPanelHeight(
+                                activity
+                              , ratio));
 
             WindowManager.LayoutParams attributes =
                     window.getAttributes();

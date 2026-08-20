@@ -463,7 +463,9 @@ static NSTimeInterval RONow(void) {
     callbacks.loadingCompleted(
             self.instanceId
           , errorCode
-          , (errorMessage ?: @"").UTF8String);
+          , (errorMessage ?: @"").UTF8String
+          , (int32_t)_cachedAds.count
+          , (int32_t)_cacheSize);
 }
 
 // The base's paid binding delivers through this hook.

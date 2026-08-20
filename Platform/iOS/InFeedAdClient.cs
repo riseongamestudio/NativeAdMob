@@ -81,8 +81,15 @@ namespace RiseOn.NativeAdMob.iOS {
         void INativeAdSharedHandlers.HandleLoadingStarted() {}
 
         void INativeAdSharedHandlers.HandleLoadingCompleted(
-            int errorCode, string errorMessage)
-            => callbacks.OnLoadingCompleted(errorCode, errorMessage);
+            int errorCode
+          , string errorMessage
+          , int cachedCount
+          , int cacheSize)
+            => callbacks.OnLoadingCompleted(
+                errorCode
+              , errorMessage
+              , cachedCount
+              , cacheSize);
 
         void INativeAdSharedHandlers.HandleAdPaid(
             string source

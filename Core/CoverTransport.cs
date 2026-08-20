@@ -14,10 +14,10 @@ namespace RiseOn.NativeAdMob {
         // something is wrong with the build, never because a target simply
         // has no covers: a target that does not draw them says so itself and
         // is still installed.
-        internal static INativeCoverPlatform Platform {
+        internal static ICoverPlatform Platform {
             get {
                 var installed = AdPlatformRegistry.Installed;
-                if (installed is INativeCoverPlatform cover) return cover;
+                if (installed is ICoverPlatform cover) return cover;
 
                 LogMissingPlatform(installed);
                 return null;
@@ -40,7 +40,7 @@ namespace RiseOn.NativeAdMob {
                       + "nothing. The platform assembly's bootstrap did not "
                       + "run."
                     : $"{installed.GetType().Name} does not implement "
-                      + $"{nameof(INativeCoverPlatform)}; covers do nothing "
+                      + $"{nameof(ICoverPlatform)}; covers do nothing "
                       + $"on {Application.platform}.");
         }
     }

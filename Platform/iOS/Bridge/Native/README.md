@@ -25,7 +25,7 @@ cùng format dòng log.
 | `OverlayAd.java` | `ROOverlayAd.h/.mm` |
 | `OverlayAdContentView.java` | `ROOverlayAdContentView.h/.mm` |
 | `OverlayAdActivity.java` + `OverlayAdPresentation.java` | `ROOverlayAdPresentation.h/.mm` |
-| `NativeCover.java` + `NativeCoverActivity.java` | `RONativeCover.h/.mm` (+ `../NativeCoverBridge.cs`) |
+| `BaseCover.java` + `FullScreenCover.java`(+`Activity`) + `HalfScreenCover.java` | `ROCover.h/.mm` (+ `../CoverBridge.cs`) |
 
 Hai file cuối là **màn che** (`FullScreenCover`, `HalfScreenCover`) — không
 có quảng cáo nào trong đó, chỉ một mảng màu. Chúng ở chung pack vì phải xếp

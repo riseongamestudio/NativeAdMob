@@ -208,16 +208,11 @@ public final class OverlayAdActivity extends Activity {
                 if (preparedContentView != null) {
                     preparedContentView.Release();
                 }
-                boolean hasVideoContent =
-                        session.nativeAd.getMediaContent() != null
-                                && session.nativeAd.getMediaContent()
-                                        .hasVideoContent();
                 int requestedPanelHeight =
                         OverlayAdContentView.ResolveInitialPanelHeight(
                                 this
                               , true
-                              , session.style.heightRatio
-                              , hasVideoContent);
+                              , session.style.heightRatio);
                 contentView = new OverlayAdContentView(
                         this
                       , session.nativeAd

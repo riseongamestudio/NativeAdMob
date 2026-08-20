@@ -18,8 +18,16 @@ namespace RiseOn.NativeAdMob.Android {
         // AdMob nor MAX reports one. The native contract still calls it.
         public void OnLoadingStarted() {}
 
-        public void OnLoadingCompleted(int errorCode, string errorMessage)
-            => callbacks.OnLoadingCompleted(errorCode, errorMessage);
+        public void OnLoadingCompleted(
+            int errorCode
+          , string errorMessage
+          , int cachedCount
+          , int cacheSize)
+            => callbacks.OnLoadingCompleted(
+                errorCode
+              , errorMessage
+              , cachedCount
+              , cacheSize);
 
         public void OnAdPaid(
             string adSource

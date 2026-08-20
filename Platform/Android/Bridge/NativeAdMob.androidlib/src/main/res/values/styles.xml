@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The full-screen cover's theme, and the first line is the whole point.
+         OPAQUE, not translucent.
+
+         The cover always fills the screen, so it has no business declaring
+         otherwise - and declaring otherwise is what let the game show through
+         it. Theme.Translucent tells WindowManager the window may not cover
+         what is under it, so the Activity below is kept VISIBLE and
+         composited underneath; any moment this window is not yet fully
+         painted, the compositor fills the gap with Unity's last frame. An
+         opaque window has no such gap: the system knows nothing behind it can
+         show, and stops drawing the Activity below.
+
+         The theme was inherited from the AD Activity, which genuinely needs
+         translucency because a half-screen panel does not fill the screen.
+         The cover took a property it never wanted.
+
+         windowBackground black so the window is painted before the content
+         view has laid out; windowAnimationStyle @null so coming back to the
+         front is not an alpha fade, which would reopen the same gap for the
+         length of the animation. -->
+    <style name="RiseOnFullScreenCoverTheme" parent="@android:style/Theme.NoTitleBar">
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+</resources>

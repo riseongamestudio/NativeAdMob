@@ -20,7 +20,7 @@ namespace RiseOn.NativeAdMob {
         // it earns, it goes away. Every list about an ad follows this - the
         // events here, the subscriptions, the handlers - so the order is
         // learned once.
-        public event Action OnAdLoaded;
+        public event Action<LoadedAdInfo> OnAdLoaded;
         public event Action<AdError> OnAdLoadFailed;
         public event Action<AdInfo> OnAdPaid;
 
@@ -58,9 +58,15 @@ namespace RiseOn.NativeAdMob {
         // again to find out which of them it got.
         private protected void RaiseLoadingCompleted(
             int errorCode
-          , string errorMessage) {
+          , string errorMessage
+          , int cachedCount
+          , int cacheSize) {
             if (errorCode is LOAD_SUCCESS_CODE) {
-                InvokeSafely(OnAdLoaded);
+                var loaded = OnAdLoaded;
+                if (loaded == null) return;
+
+                LoadedAdInfo info = new(cachedCount, cacheSize);
+                InvokeSafely(() => loaded(info));
                 return;
             }
 

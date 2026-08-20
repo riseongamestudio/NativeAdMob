@@ -21,7 +21,7 @@
              moment it is covering the seam it was raised for, and be gone
              when the ad closes. Finish() owns the lifetime instead. -->
         <activity
-            android:name="com.riseon.nativeadmob.NativeCoverActivity"
+            android:name="com.riseon.nativeadmob.FullScreenCoverActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
             android:enableOnBackInvokedCallback="true"
             android:excludeFromRecents="true"
@@ -29,6 +29,6 @@
             android:hardwareAccelerated="true"
             android:launchMode="singleTop"
             android:screenOrientation="behind"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+            android:theme="@style/RiseOnFullScreenCoverTheme" />
     </application>
 </manifest>

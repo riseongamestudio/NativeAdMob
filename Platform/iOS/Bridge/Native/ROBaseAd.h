@@ -70,7 +70,9 @@ extern const int32_t RONativeAdInternalPresentationError; // -2, same as Java
                   currencyCode:(NSString *_Nullable)currencyCode
                      precision:(int32_t)precision;
 - (void)notifyLoadingCompletedWithCode:(int32_t)errorCode
-                               message:(NSString *_Nullable)errorMessage;
+                               message:(NSString *_Nullable)errorMessage
+                           cachedCount:(int32_t)cachedCount
+                             cacheSize:(int32_t)cacheSize;
 - (void)notifyStateChangedWithReady:(BOOL)isReady loading:(BOOL)isLoading;
 - (void)notifyShowNotReady;
 - (void)notifyDisplayed;

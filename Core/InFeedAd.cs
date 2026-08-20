@@ -132,9 +132,17 @@ namespace RiseOn.NativeAdMob {
             }
         }
 
-        void IInFeedAdCallbacks.OnLoadingCompleted(int errorCode, string errorMessage)
+        void IInFeedAdCallbacks.OnLoadingCompleted(
+            int errorCode
+          , string errorMessage
+          , int cachedCount
+          , int cacheSize)
             => DispatchFromNative(
-                () => RaiseLoadingCompleted(errorCode, errorMessage));
+                () => RaiseLoadingCompleted(
+                    errorCode
+                  , errorMessage
+                  , cachedCount
+                  , cacheSize));
 
         void IInFeedAdCallbacks.OnAdPaid(
             string source

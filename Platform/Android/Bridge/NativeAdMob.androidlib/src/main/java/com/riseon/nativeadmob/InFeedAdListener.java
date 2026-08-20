@@ -6,7 +6,11 @@ package com.riseon.nativeadmob;
 // display slot of it.
 public interface InFeedAdListener {
     void OnLoadingStarted();
-    void OnLoadingCompleted(int errorCode, String errorMessage);
+    void OnLoadingCompleted(
+            int errorCode
+          , String errorMessage
+          , int cachedCount
+          , int cacheSize);
     void OnAdPaid(
         String adSource
       , String adUnitId

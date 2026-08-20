@@ -26,6 +26,8 @@ NS_ASSUME_NONNULL_BEGIN
 // The counterpart of ResolveInitialPanelHeight: fullscreen takes the screen,
 // otherwise the height ratio bounded below by the control strip plus the
 // media minimum.
++ (CGFloat)resolveHalfScreenPanelHeightForRatio:(float)heightRatio;
+
 + (CGFloat)resolveInitialPanelHeightForFullscreen:(BOOL)fullscreen
                                       heightRatio:(float)heightRatio
                                   hasVideoContent:(BOOL)hasVideoContent;

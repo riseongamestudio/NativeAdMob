@@ -14,7 +14,7 @@ import android.window.OnBackInvokedDispatcher;
 // The full-screen cover, and the reason it is an Activity rather than a
 // window: an Activity on top pauses the one below, so Unity stops rendering
 // and stops its audio without the game asking. The half-screen cover in
-// NativeCover does not and cannot - same process, same Activity, nothing for
+// HalfScreenCover does not and cannot - same process, same Activity, nothing for
 // the system to pause.
 //
 // THE PRICE, AND THE RULE THAT PAYS IT. Stopping Unity stops C#, so whatever
@@ -31,17 +31,17 @@ import android.window.OnBackInvokedDispatcher;
 // The other cost is that Android gives no way to hold one of these and toggle
 // it. There is no setActive, no show, no hide: start puts it on top, finish
 // takes it away, and every appearance is a task transition.
-public final class NativeCoverActivity extends Activity {
+public final class FullScreenCoverActivity extends Activity {
     private static final String EXTRA_COLOR =
             "com.riseon.nativeadmob.COVER_COLOR";
 
-    private static NativeCoverActivity current;
+    private static FullScreenCoverActivity current;
 
     private FrameLayout coverView;
     private Object backCallback;
 
     static void Start(Activity host, int color) {
-        NativeCoverActivity showing = current;
+        FullScreenCoverActivity showing = current;
         if (showing != null) {
             // Already up: repaint rather than stack a second one.
             showing.ApplyColor(color);
@@ -49,7 +49,7 @@ public final class NativeCoverActivity extends Activity {
         }
 
         android.content.Intent intent =
-                new android.content.Intent(host, NativeCoverActivity.class);
+                new android.content.Intent(host, FullScreenCoverActivity.class);
         intent.putExtra(EXTRA_COLOR, color);
         // No animation either way: the cover exists to hide a seam, and a
         // fade of its own would be one more seam to hide.
@@ -59,7 +59,7 @@ public final class NativeCoverActivity extends Activity {
     }
 
     static void Finish() {
-        NativeCoverActivity showing = current;
+        FullScreenCoverActivity showing = current;
         if (showing == null) return;
 
         showing.finish();

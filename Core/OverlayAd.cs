@@ -160,9 +160,17 @@ namespace RiseOn.NativeAdMob {
             }
         }
 
-        void IOverlayAdCallbacks.OnLoadingCompleted(int errorCode, string errorMessage)
+        void IOverlayAdCallbacks.OnLoadingCompleted(
+            int errorCode
+          , string errorMessage
+          , int cachedCount
+          , int cacheSize)
             => DispatchFromNative(
-                () => RaiseLoadingCompleted(errorCode, errorMessage));
+                () => RaiseLoadingCompleted(
+                    errorCode
+                  , errorMessage
+                  , cachedCount
+                  , cacheSize));
 
         void IOverlayAdCallbacks.OnAdPaid(
             string source
@@ -201,8 +209,9 @@ namespace RiseOn.NativeAdMob {
         void IOverlayAdCallbacks.OnShowCompleted(
             int showId
           , string errorMessage
-          , bool adConsumed) {
-            if (!TryTakeShow(showId)) return;
+          , bool adConsumed
+          , int cachedCount) {
+            if (!TryTakeShow(showId, cachedCount)) return;
 
             // Listeners must fully return before the consumed ad starts its
             // automatic replacement load.
@@ -214,19 +223,24 @@ namespace RiseOn.NativeAdMob {
             if (adConsumed) Load();
         }
 
-        // Readiness is never guessed here. The native side publishes it -
-        // empty cache the moment a show takes the ad, full again the moment
-        // a replacement lands - and that notification is applied straight
-        // away while this completion waits a frame in Unity's queue. Wiping
-        // the flag here would therefore overwrite the truth with a stale
-        // assumption and strand a perfectly good cached ad.
-        private bool TryTakeShow(int generation) {
+        // Both halves of readiness settle here, together, under one lock.
+        //
+        // They are owned by different sides: whether a show is running is
+        // this side's business, and what the cache holds is native's. The
+        // count therefore travels WITH the completion - a listener asking
+        // IsReady the moment it is told the ad is gone gets the cache as it
+        // is now, not as the last separate state notification left it. Those
+        // notifications still arrive and still agree; they are no longer the
+        // only way the truth gets here, which is what used to make a chained
+        // show read its answer from before the previous ad had ended.
+        private bool TryTakeShow(int generation, int cachedCount) {
             lock (nativeAdStateLock) {
                 if (!showPendingOrActive || generation != showGeneration) {
                     return false;
                 }
 
                 showPendingOrActive = false;
+                cachedAdReady       = cachedCount > 0;
             }
 
             return true;

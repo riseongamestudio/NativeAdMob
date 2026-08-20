@@ -1116,6 +1116,11 @@ namespace RiseOn.NativeAdMob.Editor {
               , CLOSE_TEXT
               , CLOSE_FONT_SIZE
               , closeOnLeft);
+            // Closes at once, where a device waits for the redirect to take
+            // the screen before closing. There is nothing to wait for here:
+            // opening a URL hands it to the desktop browser and the Editor
+            // never loses focus, so the wait would only ever end on its
+            // timeout.
             closeButton.onClick.AddListener(() => {
                 if (config.Close.RedirectOnClose) {
                     TryOpenUrl(TEST_AD_CLICK_URL, CLICK_LOG_TEXT);

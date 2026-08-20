@@ -118,13 +118,17 @@ const int32_t RONativeAdInternalPresentationError = -2;
 }
 
 - (void)notifyLoadingCompletedWithCode:(int32_t)errorCode
-                               message:(NSString *)errorMessage {
+                               message:(NSString *)errorMessage
+                           cachedCount:(int32_t)cachedCount
+                             cacheSize:(int32_t)cacheSize {
     RONativeAdListenerCallbacks callbacks = [self currentCallbacks];
     if (callbacks.loadingCompleted == NULL) return;
     callbacks.loadingCompleted(
             self.instanceId
           , errorCode
-          , (errorMessage ?: @"").UTF8String);
+          , (errorMessage ?: @"").UTF8String
+          , cachedCount
+          , cacheSize);
 }
 
 - (void)notifyAdPaidWithSource:(NSString *)source

@@ -12,7 +12,11 @@ namespace RiseOn.NativeAdMob.iOS {
     internal static class NativeAdBridge {
         internal delegate void LoadingStartedDelegate(int instanceId);
         internal delegate void LoadingCompletedDelegate(
-            int instanceId, int errorCode, string errorMessage);
+            int instanceId
+          , int errorCode
+          , string errorMessage
+          , int cachedCount
+          , int cacheSize);
         internal delegate void AdPaidDelegate(
             int instanceId
           , string source
@@ -32,7 +36,8 @@ namespace RiseOn.NativeAdMob.iOS {
             int instanceId
           , int showId
           , string errorMessage
-          , [MarshalAs(UnmanagedType.I1)] bool adConsumed);
+          , [MarshalAs(UnmanagedType.I1)] bool adConsumed
+          , int cachedCount);
         internal delegate void SlotDisplayedDelegate(
             int instanceId, int slotIndex);
         internal delegate void SlotShowNotReadyDelegate(
@@ -173,9 +178,17 @@ namespace RiseOn.NativeAdMob.iOS {
 
         [MonoPInvokeCallback(typeof(LoadingCompletedDelegate))]
         private static void OnLoadingCompleted(
-            int instanceId, int errorCode, string errorMessage)
+            int instanceId
+          , int errorCode
+          , string errorMessage
+          , int cachedCount
+          , int cacheSize)
             => (Find(instanceId) as INativeAdSharedHandlers)
-                ?.HandleLoadingCompleted(errorCode, errorMessage);
+                ?.HandleLoadingCompleted(
+                    errorCode
+                  , errorMessage
+                  , cachedCount
+                  , cacheSize);
 
         [MonoPInvokeCallback(typeof(AdPaidDelegate))]
         private static void OnAdPaid(
@@ -210,9 +223,14 @@ namespace RiseOn.NativeAdMob.iOS {
 
         [MonoPInvokeCallback(typeof(ShowCompletedDelegate))]
         private static void OnShowCompleted(
-            int instanceId, int showId, string errorMessage, bool adConsumed)
+            int instanceId
+          , int showId
+          , string errorMessage
+          , bool adConsumed
+          , int cachedCount)
             => (Find(instanceId) as OverlayAdClient)
-                ?.HandleShowCompleted(showId, errorMessage, adConsumed);
+                ?.HandleShowCompleted(
+                    showId, errorMessage, adConsumed, cachedCount);
 
         [MonoPInvokeCallback(typeof(SlotDisplayedDelegate))]
         private static void OnSlotDisplayed(int instanceId, int slotIndex)

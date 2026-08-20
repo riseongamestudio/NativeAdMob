@@ -33,7 +33,9 @@ typedef void (*RONativeAdLoadingStartedCallback)(int32_t instanceId);
 typedef void (*RONativeAdLoadingCompletedCallback)(
         int32_t instanceId
       , int32_t errorCode
-      , const char* errorMessage);
+      , const char* errorMessage
+      , int32_t cachedCount
+      , int32_t cacheSize);
 typedef void (*RONativeAdPaidCallback)(
         int32_t instanceId
       , const char* source
@@ -54,12 +56,14 @@ typedef void (*RONativeAdShowNotReadyCallback)(int32_t instanceId);
 
 // The AdCompletedListener interface on Android. showId is the C#-side
 // show generation, echoed back so a completion can only resolve the show
-// that registered it.
+// that registered it. cachedCount is the cache as it stands after this
+// completion, carried along so nobody has to ask for it afterwards.
 typedef void (*RONativeAdShowCompletedCallback)(
         int32_t instanceId
       , int32_t showId
       , const char* errorMessage
-      , bool adConsumed);
+      , bool adConsumed
+      , int32_t cachedCount);
 
 // The slot-indexed half of the InFeedListener interface on Android: one
 // in-feed unit owns several display slots, and these callbacks say which

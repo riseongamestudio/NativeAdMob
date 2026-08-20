@@ -212,7 +212,9 @@ thẳng từ Unity root VC — đúng cách GMA present ad toàn màn của họ
 present thì luôn vẽ trên **toàn bộ** subview của VC present nó, nên nó tự động
 đứng trên cả ba tầng kia mà không ai phải sắp.
 
-### Vì sao màn che không phải window, cũng không phải present
+### Vì sao trên iOS màn che là subview, không phải window cũng không phải present
+
+(Chỉ nói về iOS. Trên Android màn che full-screen là Activity — xem mục 5.)
 
 Bản đầu cho mỗi màn che một `UIWindow` với `windowLevel` riêng. Xếp lớp tuyệt
 đối thật, nhưng là tuyệt đối trên **mọi thứ**, kể cả ad mà SDK mediation
@@ -239,7 +241,7 @@ Làm subview thì không lấy của ai cái gì, và vẫn được đúng th�
 tự dừng Activity bên dưới. Không dòng nào trong pack gọi `UnityPlayer.pause()`.
 
 **iOS** không có Activity nên tự gọi `UnityPause`. Đúng một hàm
-`ROApplyPause()` trong `RONativeCover.mm` gọi nó, lái bằng hai cờ có tên — một
+`ROApplyPause()` trong `ROCover.mm` gọi nó, lái bằng hai cờ có tên — một
 của màn che, một của ad — rồi OR lại.
 
 ### Luật phải trả cho cái pause đó

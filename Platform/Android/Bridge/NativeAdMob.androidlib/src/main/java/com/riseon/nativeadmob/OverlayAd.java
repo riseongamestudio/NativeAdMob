@@ -265,7 +265,11 @@ public final class OverlayAd extends BaseAd {
         NativeAdLoadListener listener = loadListener;
         if (listener == null) return;
         try {
-            listener.OnLoadingCompleted(errorCode, errorMessage);
+            listener.OnLoadingCompleted(
+                    errorCode
+                  , errorMessage
+                  , cachedCount
+                  , cacheSize);
         } catch (RuntimeException exception) {
             Log.e(TAG, "OnLoadingCompleted callback failed", exception);
         }
@@ -990,14 +994,11 @@ public final class OverlayAd extends BaseAd {
         }
 
         try {
-            boolean hasVideoContent = ad.getMediaContent() != null
-                    && ad.getMediaContent().hasVideoContent();
             int requestedPanelHeight =
                     OverlayAdContentView.ResolveInitialPanelHeight(
                             activity
                           , true
-                          , style.heightRatio
-                          , hasVideoContent);
+                          , style.heightRatio);
             boolean closeOnLeft = style.ResolveCloseOnLeft();
             OverlayAdActivity.CloseRelay closeRelay =
                     new OverlayAdActivity.CloseRelay();
@@ -1109,17 +1110,18 @@ public final class OverlayAd extends BaseAd {
         ForgetAd(shownAd);
         presentation = null;
 
-        // Unity runs the game callback on its main thread first, then the
-        // replacement Load. adConsumed distinguishes a completion that
-        // spent the cached ad from a Show rejected early.
+        // State first, completion second. It no longer decides anything -
+        // the completion carries the cache count itself, so a listener is
+        // right either way - but publishing the wider picture before the
+        // event that makes people act on it costs nothing and keeps the two
+        // in agreement for anyone watching the log.
+        NotifyCurrentState();
+        // adConsumed distinguishes a completion that spent the cached ad
+        // from a Show rejected early.
         NotifyCompleted(
                 onCompleted
               , errorMessage == null ? "" : errorMessage
               , true);
-        // The wrapper assumes a consumed show leaves nothing cached, which
-        // is no longer true once a replacement has been fetched during the
-        // show: the truth follows the completion so readiness is right.
-        NotifyCurrentState();
     }
 
     private void CleanupFailedPresentation() {
@@ -1145,13 +1147,16 @@ public final class OverlayAd extends BaseAd {
                 && currentPresentation.IsShowing();
     }
 
+    // The cache count is read here rather than passed in, so every
+    // completion reports the cache as it stands at the instant it leaves -
+    // there is no call site that could hand over a number from earlier.
     private void NotifyCompleted(
             NativeAdCompletedListener listener
           , String errorMessage
           , boolean adConsumed) {
         if (listener == null) return;
         try {
-            listener.OnAdCompleted(errorMessage, adConsumed);
+            listener.OnAdCompleted(errorMessage, adConsumed, cachedCount);
         } catch (RuntimeException exception) {
             Log.e(TAG, "OnAdCompleted callback failed", exception);
         }

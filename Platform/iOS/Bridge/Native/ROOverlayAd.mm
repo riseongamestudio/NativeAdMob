@@ -320,7 +320,10 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 
         self->_isAdLoading = NO;
         [self ro_notifyCurrentState];
-        [self notifyLoadingCompletedWithCode:kROLoadSuccessCode message:@""];
+        [self notifyLoadingCompletedWithCode:kROLoadSuccessCode
+                                    message:@""
+                                cachedCount:(int32_t)self->_cachedAds.count
+                                  cacheSize:(int32_t)self->_cacheSize];
         // One request per ad: this chains on until the cache is full, and
         // the last one simply finds no seat left. A turn later, never here:
         // starting the next load swaps _adLoader, and this ad's own loader
@@ -341,7 +344,9 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
         self->_isAdLoading = NO;
         [self ro_notifyCurrentState];
         [self notifyLoadingCompletedWithCode:(int32_t)error.code
-                                     message:error.localizedDescription];
+                                    message:error.localizedDescription
+                                cachedCount:(int32_t)self->_cachedAds.count
+                                  cacheSize:(int32_t)self->_cacheSize];
     }];
 }
 
@@ -679,14 +684,14 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     _activeNativeAd = nil;
     _presentation = nil;
 
+    // State first, completion second - the Android side carries the reason.
+    // It no longer decides anything, because the completion takes the cache
+    // count with it; it only keeps the two accounts in agreement.
+    [self ro_notifyCurrentState];
     [self ro_invokeCompleted:onCompleted
                       showId:completedShowId
                      message:errorMessage ?: @""
                   adConsumed:YES];
-    // The wrapper assumes a consumed show leaves nothing cached, which is
-    // no longer true once a replacement has been fetched during the show:
-    // the truth follows the completion so readiness is right.
-    [self ro_notifyCurrentState];
 }
 
 - (BOOL)ro_isShowing {
@@ -703,6 +708,10 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     [self notifyStateChangedWithReady:isReady loading:isLoading];
 }
 
+// The cache count is read here rather than passed in, so every completion
+// reports the cache as it stands at the instant it leaves - there is no
+// call site that could hand over a number from earlier. The Android side
+// reads it the same way, in NotifyCompleted.
 - (void)ro_invokeCompleted:(RONativeAdShowCompletedCallback)onCompleted
                     showId:(int32_t)showId
                    message:(NSString *)errorMessage
@@ -712,7 +721,8 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
             self.instanceId
           , showId
           , (errorMessage ?: @"").UTF8String
-          , adConsumed);
+          , adConsumed
+          , (int32_t)_cachedAds.count);
 }
 
 @end

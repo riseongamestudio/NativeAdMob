@@ -56,7 +56,8 @@ namespace RiseOn.NativeAdMob.iOS {
 
         public void Show(int showId) {
             if (handle == IntPtr.Zero) {
-                callbacks.OnShowCompleted(showId, "Ad released", false);
+                // Released: the cache went with it.
+                callbacks.OnShowCompleted(showId, "Ad released", false, 0);
                 return;
             }
 
@@ -86,8 +87,15 @@ namespace RiseOn.NativeAdMob.iOS {
         void INativeAdSharedHandlers.HandleLoadingStarted() {}
 
         void INativeAdSharedHandlers.HandleLoadingCompleted(
-            int errorCode, string errorMessage)
-            => callbacks.OnLoadingCompleted(errorCode, errorMessage);
+            int errorCode
+          , string errorMessage
+          , int cachedCount
+          , int cacheSize)
+            => callbacks.OnLoadingCompleted(
+                errorCode
+              , errorMessage
+              , cachedCount
+              , cacheSize);
 
         void INativeAdSharedHandlers.HandleAdPaid(
             string source
@@ -112,7 +120,9 @@ namespace RiseOn.NativeAdMob.iOS {
         internal void HandleShowCompleted(
             int showId
           , string errorMessage
-          , bool adConsumed)
-            => callbacks.OnShowCompleted(showId, errorMessage, adConsumed);
+          , bool adConsumed
+          , int cachedCount)
+            => callbacks.OnShowCompleted(
+                showId, errorMessage, adConsumed, cachedCount);
     }
 }

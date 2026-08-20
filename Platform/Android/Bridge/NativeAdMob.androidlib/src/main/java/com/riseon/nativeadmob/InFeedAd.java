@@ -500,7 +500,11 @@ public final class InFeedAd extends BaseAd {
         InFeedAdListener current = listener;
         if (current == null) return;
         try {
-            current.OnLoadingCompleted(errorCode, errorMessage);
+            current.OnLoadingCompleted(
+                    errorCode
+                  , errorMessage
+                  , cachedAds.size()
+                  , cacheSize);
         } catch (RuntimeException exception) {
             Log.e(TAG, "OnLoadingCompleted callback failed", exception);
         }

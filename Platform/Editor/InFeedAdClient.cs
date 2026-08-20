@@ -52,9 +52,14 @@ namespace RiseOn.NativeAdMob.Editor {
             previews[slotIndex] = EditorAd.Show(
                 config
               , () => previews[slotIndex] = null);
+            // The preview holds no cache: it builds an ad the moment one is
+            // asked for, so "one warm ad, room for one" is the honest
+            // reading of a state that never had a queue.
             callbacks.OnLoadingCompleted(
                 EDITOR_AD_SUCCESS_CODE
-              , string.Empty);
+              , string.Empty
+              , 1
+              , 1);
             callbacks.OnSlotDisplayed(slotIndex);
         }
 

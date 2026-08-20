@@ -1,7 +1,7 @@
 #import "ROOverlayAdPresentation.h"
 
 #import "ROInFeedAdPresentation.h"
-#import "RONativeCover.h"
+#import "ROCover.h"
 
 #import "ROOverlayAdContentView.h"
 
@@ -136,7 +136,7 @@ static NSString *const kROTag = @"Overlay";
         // changes nothing, and asking is still right, because an ad
         // outliving its cover must not leave the game running behind it.
         _askedForPause = YES;
-        RONativeCover_SetAdWantsPause(YES);
+        ROCover_SetAdWantsPause(YES);
         [host presentViewController:_presentedController
                            animated:NO
                          completion:nil];
@@ -156,7 +156,7 @@ static NSString *const kROTag = @"Overlay";
         // directly above the highest in-feed, so those two layers keep their
         // order no matter which was shown first. With neither up, index 0
         // leaves room for an in-feed to slide in underneath later.
-        UIView *anchor = RONativeCover_HalfScreenView();
+        UIView *anchor = ROHalfScreenCover_View();
         if (anchor == nil) {
             anchor = [ROInFeedAdPresentation ro_frontmostInFeedView];
         }
@@ -209,7 +209,7 @@ static NSString *const kROTag = @"Overlay";
     // full-screen one still on the glass.
     if (_askedForPause) {
         _askedForPause = NO;
-        RONativeCover_SetAdWantsPause(NO);
+        ROCover_SetAdWantsPause(NO);
     }
     if (presented != nil && presented.presentingViewController != nil) {
         [presented dismissViewControllerAnimated:NO completion:nil];
