@@ -41,7 +41,10 @@ namespace RiseOn.NativeAdMob.Editor {
         private const string SCRIM_OBJECT_NAME         = "Scrim";
         private const string CLOSE_OBJECT_NAME         = "Close";
         private const string COUNTDOWN_OBJECT_NAME     = "Countdown";
-        private const string CLOSE_TEXT                = "×";
+        // U+2715, the mark the device draws. U+00D7 - the multiplication
+        // sign that used to stand here - is a maths operator: thinner, and
+        // sitting on the maths axis rather than centred in its box.
+        private const string CLOSE_TEXT                = "✕";
 
         private const int FULLSCREEN_CANVAS_SORTING_ORDER = short.MaxValue;
         private const int NON_FULLSCREEN_CANVAS_SORTING_ORDER =
@@ -105,8 +108,13 @@ namespace RiseOn.NativeAdMob.Editor {
         private const int RATING_FONT_SIZE                  = 12;
         private const int BODY_FONT_SIZE                    = 13;
         private const int MEDIA_LABEL_FONT_SIZE             = 15;
-        private const int CLOSE_FONT_SIZE                   = 16;
-        private const int COUNTDOWN_FONT_SIZE               = 15;
+        // The device's own numbers, not a size that merely looks close:
+        // OverlayAdContentView draws these at CLOSE_TEXT_SIZE_SP 20 and
+        // COUNTDOWN_TEXT_SIZE_SP 18 inside a 30dp box. This canvas works in
+        // dp already, so sp carries over unchanged. Close is deliberately
+        // the larger of the two - that difference is part of the look.
+        private const int CLOSE_FONT_SIZE                   = 20;
+        private const int COUNTDOWN_FONT_SIZE               = 18;
         private const int CALL_TO_ACTION_FONT_SIZE          = 14;
         private const int CALL_TO_ACTION_HEIGHT_DP          = 44;
         private const float FULL_TIME_SCALE                 = 1f;
@@ -142,9 +150,6 @@ namespace RiseOn.NativeAdMob.Editor {
         private const float ATTRIBUTION_TEXT_BOX_RATIO      = 0.62f;
         private const int   ATTRIBUTION_TEXT_MIN_SIZE       = 4;
         private const int   ATTRIBUTION_TEXT_MAX_SIZE       = 12;
-        private const float CONTROL_GLYPH_BOX_RATIO         = 0.52f;
-        private const int   CONTROL_GLYPH_MIN_SIZE          = 8;
-        private const int   CONTROL_GLYPH_MAX_SIZE          = 24;
         private static readonly Vector2 ReferenceResolution =
                 new(360f, 800f);
         private static readonly Color SecondaryTextColor =
@@ -1179,13 +1184,7 @@ namespace RiseOn.NativeAdMob.Editor {
               , Color.white);
             Stretch(label.rectTransform);
             label.horizontalOverflow = HorizontalWrapMode.Overflow;
-            ScaleToBox(
-                label
-              , label.rectTransform
-              , CONTROL_GLYPH_BOX_RATIO
-              , CONTROL_GLYPH_MIN_SIZE
-              , CONTROL_GLYPH_MAX_SIZE
-              , followsShortSide: true);
+            label.verticalOverflow = VerticalWrapMode.Overflow;
             return button;
         }
 
@@ -1214,13 +1213,7 @@ namespace RiseOn.NativeAdMob.Editor {
               , Color.white);
             Stretch(label.rectTransform);
             label.horizontalOverflow = HorizontalWrapMode.Overflow;
-            ScaleToBox(
-                label
-              , label.rectTransform
-              , CONTROL_GLYPH_BOX_RATIO
-              , CONTROL_GLYPH_MIN_SIZE
-              , CONTROL_GLYPH_MAX_SIZE
-              , followsShortSide: true);
+            label.verticalOverflow = VerticalWrapMode.Overflow;
             return controlObject;
         }
 
