@@ -512,6 +512,27 @@ final class InFeedAdPresentation extends FrameLayout
         window.setBackgroundDrawable(
                 new ColorDrawable(Color.TRANSPARENT));
         window.setWindowAnimations(0);
+        // The same system-UI contract the game's surface keeps: lay out
+        // UNDER the navigation bar and the cutout. A slot is placed at
+        // absolute pixels the game computed against its own full-screen
+        // surface; a window that steps aside for a transiently visible
+        // bar is a cell that no longer sits where the game put it.
+        window.getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        if (android.os.Build.VERSION.SDK_INT
+                >= android.os.Build.VERSION_CODES.P) {
+            WindowManager.LayoutParams cutoutAttributes =
+                    window.getAttributes();
+            cutoutAttributes.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams
+                            .LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            window.setAttributes(cutoutAttributes);
+        }
         return true;
     }
 

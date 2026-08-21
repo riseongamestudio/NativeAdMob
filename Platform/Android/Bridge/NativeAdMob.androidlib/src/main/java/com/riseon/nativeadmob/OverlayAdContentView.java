@@ -2254,6 +2254,7 @@ final class OverlayAdContentView extends FrameLayout {
             changed |= SettleTextFitting(settleBody, 1);
             changed |= SettleTextFitting(settleAdvertiser, 2);
             if (!changed) break;
+            avoidancePlanDirty = true;
         }
         // Unconditional, OUTSIDE the loop: the plan the player first sees
         // must be computed from the content as it finally stands. When the
@@ -2401,6 +2402,7 @@ final class OverlayAdContentView extends FrameLayout {
           , Button callToAction
           , int panelHeight) {
         controlAvoidanceActive = true;
+        avoidancePlanDirty = true;
         avoidanceColumn = contentColumn;
         avoidanceMediaView = mediaView;
         avoidanceBodyView = body;
@@ -2423,6 +2425,15 @@ final class OverlayAdContentView extends FrameLayout {
     // requestLayout is pointless then - the measure that follows it is the
     // layout it would be asking for.
     private boolean planningInMeasure;
+    // The panel the current plan was drawn for, and whether content has
+    // moved since. onMeasure re-plans only when one of them says so: a
+    // plan recomputed on EVERY measure mutates children, every mutation
+    // asks for a layout, and a layout asked for from inside measure is a
+    // traversal next frame that measures again - a loop that never ends
+    // while the ad is up. Idempotence is what ends it.
+    private int plannedPanelWidth = -1;
+    private int plannedPanelHeight = -1;
+    private boolean avoidancePlanDirty;
 
     // The plan is drawn from the panel this view is actually being given,
     // inside the measure pass that precedes the first draw - never from a
@@ -2440,6 +2451,7 @@ final class OverlayAdContentView extends FrameLayout {
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int width = View.MeasureSpec.getSize(widthMeasureSpec);
         int height = View.MeasureSpec.getSize(heightMeasureSpec);
+        int panelHeight = height - getPaddingTop();
         if (controlAvoidanceActive
                 && !released
                 && View.MeasureSpec.getMode(widthMeasureSpec)
@@ -2447,12 +2459,13 @@ final class OverlayAdContentView extends FrameLayout {
                 && View.MeasureSpec.getMode(heightMeasureSpec)
                         != View.MeasureSpec.UNSPECIFIED
                 && width > 0
-                && height > 0) {
+                && panelHeight > 0
+                && (avoidancePlanDirty
+                        || width != plannedPanelWidth
+                        || panelHeight != plannedPanelHeight)) {
             planningInMeasure = true;
             try {
-                RecomputeMediaControlAvoidance(
-                        width
-                      , height - getPaddingTop());
+                RecomputeMediaControlAvoidance(width, panelHeight);
             } finally {
                 planningInMeasure = false;
             }
@@ -2698,8 +2711,16 @@ final class OverlayAdContentView extends FrameLayout {
                 (panelWidth - bestBoxWidth) / 2
                         - avoidanceColumn.getPaddingLeft();
         mediaLayoutParams.rightMargin = 0;
-        avoidanceMediaView.setLayoutParams(mediaLayoutParams);
-        if (!planningInMeasure) requestLayout();
+        plannedPanelWidth = panelWidth;
+        plannedPanelHeight = panelHeight;
+        avoidancePlanDirty = false;
+        // Inside measure the fields above are already what the measure
+        // that follows will read; asking for a layout there would only
+        // schedule the next traversal of the loop this guards against.
+        if (!planningInMeasure) {
+            avoidanceMediaView.setLayoutParams(mediaLayoutParams);
+            requestLayout();
+        }
     }
 
     // A media that ran out of height before it reached the sides is
@@ -2750,7 +2771,9 @@ final class OverlayAdContentView extends FrameLayout {
         // the lower stack - the +6px drift between first plan and every
         // replan, named by the replan log on device, 2026-08-21.
         mediaLayoutParams.bottomMargin = 0;
-        avoidanceMediaView.setLayoutParams(mediaLayoutParams);
+        // Written in place, never through setLayoutParams: that call asks
+        // for a layout unconditionally, and the measure below reads the
+        // child's live LayoutParams fields directly.
         avoidanceColumn.measure(
                 View.MeasureSpec.makeMeasureSpec(
                         panelWidth
@@ -2762,7 +2785,6 @@ final class OverlayAdContentView extends FrameLayout {
         mediaLayoutParams.width = previousWidth;
         mediaLayoutParams.height = previousHeight;
         mediaLayoutParams.bottomMargin = previousBottomMargin;
-        avoidanceMediaView.setLayoutParams(mediaLayoutParams);
         return lowerContentHeight;
     }
 
@@ -2886,7 +2908,11 @@ final class OverlayAdContentView extends FrameLayout {
         CloseGlyphDrawable(float density) {
             paint.setColor(Color.WHITE);
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeCap(Paint.Cap.ROUND);
+            // Square ends, not round: a round cap adds half a stroke of ink
+            // past each endpoint, which read as a longer mark than the
+            // Editor's corner-to-corner bars. Butt ends are the one shape
+            // all three renderers draw identically.
+            paint.setStrokeCap(Paint.Cap.BUTT);
             paint.setStrokeWidth(CLOSE_GLYPH_STROKE_DP * density);
         }
 

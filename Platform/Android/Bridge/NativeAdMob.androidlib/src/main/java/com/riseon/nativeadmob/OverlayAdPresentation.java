@@ -201,6 +201,29 @@ public final class OverlayAdPresentation
         window.addFlags(
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                         | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
+        // The same system-UI contract the game's surface and the
+        // HalfScreenCover window already keep: lay out UNDER the navigation
+        // bar and the cutout, and hide the bar the sticky way. Without it
+        // this window was the one object on screen that respected the bar -
+        // swipe it out of auto-hide, return from Recents, and the window
+        // manager parked the panel ABOVE the bar: a white strip where the
+        // buttons sit and the whole ad shoved up, until the next touch let
+        // the bar hide again and the panel fell back. Measured on a
+        // three-button Samsung, 2026-08-21.
+        window.getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            WindowManager.LayoutParams attributes = window.getAttributes();
+            attributes.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams
+                            .LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            window.setAttributes(attributes);
+        }
     }
 
     private void ConfigureWindowOrder(Window window) {
