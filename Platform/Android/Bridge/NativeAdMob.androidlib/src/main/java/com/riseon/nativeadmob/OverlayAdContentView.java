@@ -335,12 +335,12 @@ final class OverlayAdContentView extends FrameLayout {
         this.fakeCloseAutoDismiss = fakeCloseAutoDismiss;
         this.onClose = onClose;
         Build(requestedPanelHeight);
-        // Inset first, settle second: the settle finalizes the avoidance
-        // plan, and on a cutout device that plan must already know the top
-        // padding - planning at full height and correcting after the first
-        // paint is exactly the re-settle the settle exists to prevent.
-        ApplyFullscreenContentInset();
+        // Settle first, inset second - the order the device validated.
+        // The settle plans against displayMetrics.heightPixels, which on a
+        // cutout device already excludes the inset, so the plan and the
+        // first real layout agree without either knowing about the other.
         SettleContentBeforeLayout();
+        ApplyFullscreenContentInset();
     }
 
     static int ResolveInitialPanelHeight(
@@ -2274,12 +2274,17 @@ final class OverlayAdContentView extends FrameLayout {
             // than left for onSizeChanged to correct in front of the player.
             // The plan changes; the panel never does.
             if (controlAvoidanceActive) {
+                // avoidancePanelHeight as-is, NOT minus getPaddingTop().
+                // Measured on a cutout device: displayMetrics.heightPixels
+                // (2290) already excludes the 110px inset of a 2400px
+                // window, so it equals onSizeChanged's currentHeight minus
+                // paddingTop by itself. Subtracting the inset here again -
+                // tried once - made the settle plan on 2180 and the first
+                // real layout replan on 2290, a 110px step in front of the
+                // player on every fullscreen ad.
                 RecomputeMediaControlAvoidance(
                         settleColumnWidth
-                        // Minus the cutout inset, the same subtraction
-                        // onSizeChanged makes - the two passes must plan
-                        // against the same panel.
-                      , avoidancePanelHeight - getPaddingTop());
+                      , avoidancePanelHeight);
             }
         }
         // A plan that ended with nowhere to put the picture is not a plan.
