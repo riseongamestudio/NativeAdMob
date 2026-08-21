@@ -215,6 +215,20 @@ static void ROCentreUnderIcon(UIView *view) {
     BOOL _sideBodySpilled;
     BOOL _chromeTrimmedForMedia;
     BOOL _controlAvoidanceActive;
+    BOOL _layoutUnrenderable;
+    // The last avoidance pass found no band at the media's floor.
+    BOOL _avoidanceFoundNoBand;
+    BOOL _scrimLayoutActive;
+    BOOL _medialessLayoutActive;
+    // The panel a last-resort layout has to fit inside, kept for the
+    // overrun check at the end of the build.
+    CGFloat _lastResortPanelHeight;
+    // The fit pipeline pinned the icon to pay for the media and certified
+    // the fit at that size; the icon-follows-text rule yields to this.
+    // Owner's call, 2026-08: the spending decision wins.
+    BOOL _iconSpentForFit;
+    BOOL _mediaIsVideo;
+    UIView *_scrimVeil;
     BOOL _controlsAtEdgesBelowBadges;
     CGFloat _avoidancePanelHeight;
     HBLinearLayoutView *_sideRail;
@@ -306,6 +320,10 @@ static void ROCentreUnderIcon(UIView *view) {
     return _resolvedPanelHeight;
 }
 
+- (BOOL)layoutUnrenderable {
+    return _layoutUnrenderable;
+}
+
 - (void)releaseContent {
     if (_released) return;
     _released = YES;
@@ -391,6 +409,7 @@ static void ROCentreUnderIcon(UIView *view) {
     _minimumMediaSize = hasVideoContent
             ? kROMinVideoMediaSize
             : kROMinImageMediaSize;
+    _mediaIsVideo = hasVideoContent;
     _mediaAspectRatio = [self ro_mediaAspectRatio];
     CGSize hbScreen = UIScreen.mainScreen.bounds.size;
     CGFloat sidePanelHeight = _fullscreen
@@ -713,7 +732,6 @@ static void ROCentreUnderIcon(UIView *view) {
     _adChoicesReserve.userInteractionEnabled = NO;
     [_nativeAdView addSubview:_adChoicesReserve];
 
-    if (_hasDisplayableMedia) _nativeAdView.mediaView = _mediaView;
     _nativeAdView.iconView = _icon;
     _nativeAdView.headlineView = _headline;
     _nativeAdView.advertiserView = _advertiser;
@@ -749,6 +767,13 @@ static void ROCentreUnderIcon(UIView *view) {
         // frame is known.
         [self ro_enableControlAvoidanceWithPanelHeight:0];
     }
+    // Registered here, after the template is decided: the media-less
+    // fallback must not register the view at all - a registered MediaView
+    // below the video minimum is a violation no matter what is drawn
+    // inside it. Absent is legal; small is not.
+    if (_hasDisplayableMedia && !_medialessLayoutActive) {
+        _nativeAdView.mediaView = _mediaView;
+    }
     _nativeAdView.nativeAd = _nativeAd;
     [self addSubview:_nativeAdView];
 
@@ -773,6 +798,29 @@ static void ROCentreUnderIcon(UIView *view) {
     [self addSubview:_close];
 
     [self ro_resolveContentHeightWithRequestedPanelHeight:requestedPanelHeight];
+
+    // The last resort freed the text from sharing the panel with the
+    // picture, but not from the panel itself. The chrome is at its floors
+    // by now, so a column that still overruns the panel would clip its
+    // top row off screen - a headline half-shown is not shown. The owner
+    // reads this verdict at prepare time and drops the creative.
+    if ((_scrimLayoutActive || _medialessLayoutActive)
+            && _lastResortPanelHeight > 0) {
+        [_contentColumn ro_measureWithWidthSpec:
+                        HBMeasureSpecMake(
+                                HBMeasureSpecExactly
+                              , UIScreen.mainScreen.bounds.size.width)
+                                     heightSpec:
+                        HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
+        if (_contentColumn.ro_measuredSize.height
+                > _lastResortPanelHeight) {
+            _layoutUnrenderable = YES;
+            NSLog(@"%@: layout: UNRENDERABLE - last-resort text %g exceeds"
+                   " panel %g", kROTag
+                  , _contentColumn.ro_measuredSize.height
+                  , _lastResortPanelHeight);
+        }
+    }
 }
 
 - (void)ro_closeTapped {
@@ -1000,6 +1048,13 @@ static void ROCentreUnderIcon(UIView *view) {
             // half panel then runs the same maximiser as the full screen.
             [self ro_applyStripAvoidingFloors];
             [self ro_enableControlAvoidanceWithPanelHeight:panelHeight];
+            // The plan came back with nowhere to put the picture: the
+            // text alone has taken the panel. The panel is fixed, so the
+            // layout gives way instead.
+            if (_avoidanceFoundNoBand) {
+                _controlAvoidanceActive = NO;
+                [self ro_adoptLastResortLayoutWithPanelHeight:panelHeight];
+            }
             return;
         }
 
@@ -1008,7 +1063,13 @@ static void ROCentreUnderIcon(UIView *view) {
                 0, -kROHorizontalPadding, 0, -kROHorizontalPadding);
         [self ro_restoreOptionalRows];
     }
-    [self ro_runCollapsibleFitPipelineWithPanelHeight:panelHeight];
+    if ([self ro_runCollapsibleFitPipelineWithPanelHeight:panelHeight]) {
+        return;
+    }
+    // Every rung is spent: smallest scale, fewest body lines, optional
+    // rows dropped, media at its floor - and the column still does not
+    // fit. Stacking is what has run out, not room.
+    [self ro_adoptLastResortLayoutWithPanelHeight:panelHeight];
 }
 
 - (BOOL)ro_runCollapsibleFitPipelineWithPanelHeight:(CGFloat)panelHeight {
@@ -1253,6 +1314,7 @@ static void ROCentreUnderIcon(UIView *view) {
     if (!_iconHero && !_sideMediaLayout) {
         _icon.ro_layoutWidth = kROAvoidIconSize;
         _icon.ro_layoutHeight = kROAvoidIconSize;
+        _iconSpentForFit = YES;
     }
 }
 
@@ -1421,7 +1483,12 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
                                  heightSpec:
                     HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
     if (_hasDisplayableMedia && !_sideMediaLayout
-            && !_controlAvoidanceActive) {
+            && !_controlAvoidanceActive
+            // A last-resort layout took the media out of the column;
+            // sizing it as a column child again would wreck the layout it
+            // was moved into.
+            && !_scrimLayoutActive
+            && !_medialessLayoutActive) {
         // Controls and badges draw on top with their own opaque backgrounds,
         // and with media as the first child the strip can only ever cover
         // media, never text - so the inset's height belongs to the media.
@@ -1470,12 +1537,14 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
                         HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
     }
 
-    CGFloat requiredPanelHeight = _contentColumn.ro_measuredSize.height;
+    // The panel does not grow. The caller asked for a share of the
+    // screen and that share is the whole budget: content that will not
+    // fit is shrunk, dropped or sent down the last-resort ladder, never
+    // answered with a bigger panel. Android removed its widening on the
+    // same owner's call - the cover and the ad read one number again.
     _resolvedPanelHeight = _fullscreen
             ? screen.height
-            : MIN(
-                    screen.height
-                  , MAX(requestedPanelHeight, requiredPanelHeight));
+            : requestedPanelHeight;
 }
 
 // ---------------------------------------------------------------------------
@@ -1503,12 +1572,38 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
                                                 height:adFrame.size.height];
     }
 
-    [_contentColumn ro_measureWithWidthSpec:
-                    HBMeasureSpecMake(HBMeasureSpecExactly, adFrame.size.width)
-                                 heightSpec:
-                    HBMeasureSpecMake(HBMeasureSpecExactly, adFrame.size.height)];
-    [_contentColumn ro_layoutWithFrame:
-            CGRectMake(0, 0, adFrame.size.width, adFrame.size.height)];
+    if (_scrimLayoutActive || _medialessLayoutActive) {
+        CGRect innerFrame = CGRectMake(
+                0, 0, adFrame.size.width, adFrame.size.height);
+        if (_scrimLayoutActive) {
+            _mediaView.frame = innerFrame;
+            _scrimVeil.frame = innerFrame;
+        }
+        // The column no longer fills the panel: it wraps its text and
+        // hugs the bottom edge, over the veil.
+        [_contentColumn ro_measureWithWidthSpec:
+                        HBMeasureSpecMake(
+                                HBMeasureSpecExactly, adFrame.size.width)
+                                     heightSpec:
+                        HBMeasureSpecMake(HBMeasureSpecUnspecified, 0)];
+        CGFloat columnHeight = MIN(
+                _contentColumn.ro_measuredSize.height
+              , adFrame.size.height);
+        [_contentColumn ro_layoutWithFrame:CGRectMake(
+                0
+              , adFrame.size.height - columnHeight
+              , adFrame.size.width
+              , columnHeight)];
+    } else {
+        [_contentColumn ro_measureWithWidthSpec:
+                        HBMeasureSpecMake(
+                                HBMeasureSpecExactly, adFrame.size.width)
+                                     heightSpec:
+                        HBMeasureSpecMake(
+                                HBMeasureSpecExactly, adFrame.size.height)];
+        [_contentColumn ro_layoutWithFrame:
+                CGRectMake(0, 0, adFrame.size.width, adFrame.size.height)];
+    }
     if (_fallbackMediaImageView != nil) {
         _fallbackMediaImageView.frame = _mediaView.bounds;
     }
@@ -1621,6 +1716,15 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     _contentColumn.ro_gravity =
             HBGravityBottom | HBGravityCenterHorizontal;
     _mediaView.ro_layoutMargins = UIEdgeInsetsZero;
+    // The collapsible path computes its first plan here and now, so the
+    // NO BAND verdict exists while the last-resort ladder can still act
+    // on it. The fullscreen path passes 0 and keeps deferring to the
+    // layout pass, where its true frame is known.
+    if (panelHeight > 0) {
+        [self ro_recomputeMediaControlAvoidanceWithWidth:
+                        UIScreen.mainScreen.bounds.size.width
+                                                  height:panelHeight];
+    }
 }
 
 // Control avoidance, the Android transcription: the stack hugs the bottom,
@@ -1710,10 +1814,11 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     // because a picture reaching the panel's top edge reads as filling the
     // panel.
     CGFloat bestScore = -1;
-    CGFloat bestBoxWidth = MAX(panelWidth, _minimumMediaSize);
-    CGFloat bestBoxHeight = MAX(
-            _minimumMediaSize
-          , availableHeight - kROMediaLowerSeam);
+    // A box of nothing, not a box the size of the panel: the defaults are
+    // what survives when no placement is found, and a panel-sized default
+    // overflows the very panel this is trying to fit into.
+    CGFloat bestBoxWidth = 0;
+    CGFloat bestBoxHeight = 0;
     CGFloat bestTop = 0;
     CGFloat bestIntervalLeft = 0;
     CGFloat bestIntervalWidth = panelWidth;
@@ -1763,6 +1868,15 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
             bestIntervalWidth = intervalWidth;
             bestAtEdges = candidateEdges[index];
         }
+    }
+
+    // The sweep found nothing at the media's floor. The panel cannot
+    // grow, so the layout gives way instead: the caller reads this and
+    // reaches for the last-resort ladder.
+    _avoidanceFoundNoBand = bestScore < 0;
+    if (_avoidanceFoundNoBand) {
+        NSLog(@"%@: avoidance: NO BAND lower=%g panel=%g avail=%g"
+              , kROTag, lowerContentHeight, panelHeight, availableHeight);
     }
 
     if ([self ro_trimChromeForStarvedMediaWithBoxWidth:bestBoxWidth
@@ -1827,8 +1941,107 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     _mediaView.ro_layoutMargins = mediaMargins;
 }
 
+// One creative, one verdict: an image goes to the scrim, a video to the
+// media-less layout, and a creative that can do neither is declared
+// unshowable - the owner drops it and requests another, never shows it
+// badly. The Android side carries the full reasoning.
+- (void)ro_adoptLastResortLayoutWithPanelHeight:(CGFloat)panelHeight {
+    BOOL adopted = _hasDisplayableMedia
+            && (_mediaIsVideo
+                    ? [self ro_adoptMedialessVideoLayoutWithPanelHeight:
+                            panelHeight]
+                    : [self ro_applyScrimLayoutWithPanelHeight:panelHeight]);
+    _layoutUnrenderable = !adopted;
+    if (_layoutUnrenderable) {
+        NSLog(@"%@: layout: UNRENDERABLE - every template exhausted"
+              , kROTag);
+    }
+}
+
+// The scrim spends the panel twice: the picture takes the whole of it, a
+// veil goes over the picture, and the text sits on the veil instead of
+// underneath the picture - so the height the text needs is no longer
+// subtracted from the height the picture needs. The template in-feed
+// reaches for in a squarish cell, with the same veil. Never a video: a
+// player behind text it does not know about cannot keep its frame clear
+// of it, and the veil dims every frame besides.
+- (BOOL)ro_applyScrimLayoutWithPanelHeight:(CGFloat)panelHeight {
+    if (_mediaIsVideo) {
+        NSLog(@"%@: scrim layout: refused, media is video", kROTag);
+        return NO;
+    }
+    if (_scrimLayoutActive
+            || _medialessLayoutActive
+            || _nativeAdView == nil
+            || _mediaView.superview == nil) {
+        return NO;
+    }
+
+    _scrimLayoutActive = YES;
+    _lastResortPanelHeight = panelHeight;
+    [_mediaView removeFromSuperview];
+    [_nativeAdView insertSubview:_mediaView atIndex:0];
+    _mediaView.ro_layoutMargins = UIEdgeInsetsZero;
+
+    _scrimVeil = [[UIView alloc] init];
+    // The same grey in-feed's veil wears: black at 0xB3 alpha.
+    _scrimVeil.backgroundColor = [UIColor colorWithWhite:0 alpha:0.7];
+    _scrimVeil.userInteractionEnabled = NO;
+    [_nativeAdView insertSubview:_scrimVeil atIndex:1];
+
+    // The veil already separates the text from the picture; the block
+    // spends only a hair on each side and hugs the bottom. The top strip
+    // inset goes - a block at the bottom has no strip above it.
+    _contentColumn.ro_padding = UIEdgeInsetsMake(
+            kROHorizontalPadding
+          , kROHorizontalPadding
+          , kROHorizontalPadding
+          , kROHorizontalPadding);
+    _contentColumn.ro_gravity =
+            HBGravityBottom | HBGravityCenterHorizontal;
+    NSLog(@"%@: scrim layout: adopted", kROTag);
+    return YES;
+}
+
+// The road down for a video no layout can host at the SDK's 120pt floor:
+// a layout with NO media at all. Not a smaller video (does not render),
+// not a still image in the MediaView (registered-but-undersized is a
+// violation whatever is drawn inside), and not the scrim. The same
+// fallback in-feed reaches for, for the same creative.
+- (BOOL)ro_adoptMedialessVideoLayoutWithPanelHeight:(CGFloat)panelHeight {
+    if (_medialessLayoutActive
+            || _scrimLayoutActive
+            || _mediaView.superview == nil) {
+        return NO;
+    }
+
+    _medialessLayoutActive = YES;
+    _lastResortPanelHeight = panelHeight;
+    [_mediaView removeFromSuperview];
+    _mediaView.ro_gone = YES;
+    // Whatever the failed plans did to the column is undone: the
+    // creation-time padding and gravity come back, and the freed height
+    // goes to the text the pipeline is about to re-fit.
+    _contentColumn.ro_padding = UIEdgeInsetsMake(
+            kROControlStripHeight
+          , kROHorizontalPadding
+          , 0
+          , kROHorizontalPadding);
+    _contentColumn.ro_gravity =
+            HBGravityCenterHorizontal | HBGravityCenterVertical;
+    [self ro_restoreOptionalRows];
+    BOOL contentFits =
+            [self ro_runCollapsibleFitPipelineWithPanelHeight:panelHeight];
+    NSLog(@"%@: media-less video layout: adopted, fits=%d"
+          , kROTag, (int)contentFits);
+    return contentFits;
+}
+
 - (void)ro_matchIconSizeToIdentityText {
-    if (_icon.ro_gone || _sideMediaLayout) return;
+    // The pipeline pinned this icon to pay for the media and certified
+    // the fit at that size; growing it back here is what invalidated the
+    // certificate behind the pipeline's back on Android. Same rule here.
+    if (_icon.ro_gone || _sideMediaLayout || _iconSpentForFit) return;
 
     CGFloat textHeight = _identityText.ro_measuredSize.height;
     CGFloat rowWidth = _identityRow.ro_measuredSize.width;

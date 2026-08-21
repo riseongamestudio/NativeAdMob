@@ -95,7 +95,6 @@ final class InFeedAdSlot {
     private long lastSwapAtMs = NO_VISIBLE_TIMER;
     private boolean configured;
     private boolean visibleRequested;
-    private boolean layoutRetryScheduled;
     private int layoutFailStreak;
     private boolean layoutProven;
 
@@ -270,7 +269,6 @@ final class InFeedAdSlot {
         // posted from Hide on this same thread.
         Choreographer.getInstance()
                 .removeFrameCallback(hiddenSwapFrameCallback);
-        layoutRetryScheduled = false;
         visibleRequested = false;
         PauseVisibleTimer(activeEntry);
         DestroyEntry(materializingEntry);
@@ -569,18 +567,15 @@ final class InFeedAdSlot {
         CancelLayoutRetry();
         if (owner.released || !configured) return InFeedAd.NO_RETRY_SCHEDULED_MS;
 
-        layoutRetryScheduled = true;
         owner.main.postDelayed(layoutRetryRunnable, Math.max(0L, delayMs));
         return delayMs;
     }
 
     private void CancelLayoutRetry() {
         owner.main.removeCallbacks(layoutRetryRunnable);
-        layoutRetryScheduled = false;
     }
 
     private void HandleLayoutRetry() {
-        layoutRetryScheduled = false;
         if (owner.released || !configured) return;
         if (owner.HasCachedAd()) {
             PresentCachedAd();

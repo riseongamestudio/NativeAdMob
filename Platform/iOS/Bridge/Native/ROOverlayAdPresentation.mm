@@ -108,6 +108,10 @@ static NSString *const kROTag = @"Overlay";
     return _contentView != nil;
 }
 
+- (BOOL)isLayoutUnrenderable {
+    return _contentView != nil && _contentView.layoutUnrenderable;
+}
+
 - (BOOL)show {
     if (_dismissed || _showing) return NO;
     if (![self prepare]) return NO;
@@ -135,6 +139,13 @@ static NSString *const kROTag = @"Overlay";
         // A cover that is up has already stopped the game; asking again
         // changes nothing, and asking is still right, because an ad
         // outliving its cover must not leave the game running behind it.
+        // A host already presenting refuses the next presentation with
+        // nothing but a console log; this method then used to declare
+        // victory anyway - displayed fired, nothing on screen, no close
+        // and no completion ever coming. Refusing here, before the pause
+        // is asked for, lets the caller fail the show honestly.
+        if (host.presentedViewController != nil) return NO;
+
         _askedForPause = YES;
         ROCover_SetAdWantsPause(YES);
         [host presentViewController:_presentedController

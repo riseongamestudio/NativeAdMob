@@ -17,6 +17,14 @@ static const NSTimeInterval kROMaxCachedAdAge = 3600;
 // one second, doubling per miss, capped at 2^5.
 static const NSInteger kROMaxRetryExponent = 5;
 static const NSTimeInterval kRORetryBaseDelay = 1.0;
+// The layout class of retry: a creative this panel cannot show is one
+// creative's fault and the next one usually fits, so the first attempts go
+// out immediately. And one valve: while NOTHING has ever laid out here the
+// panel is the likelier culprit, and the unit settles into a slow poll
+// instead of burning requests. All three numbers are in-feed's.
+static const NSInteger kRORetryImmediateLayoutAttempts = 2;
+static const NSInteger kROMaxUnprovenLayoutFailures = 20;
+static const NSTimeInterval kROUnprovenLayoutRetryDelay = 300.0;
 
 static NSTimeInterval RONow(void) {
     return [NSProcessInfo processInfo].systemUptime;
@@ -140,6 +148,9 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     BOOL _retryScheduled;
     NSInteger _retryGeneration;
     NSInteger _noFillStreak;
+    NSInteger _layoutFailStreak;
+    // Whether anything has ever laid out in this placement.
+    BOOL _layoutProven;
 
     GADAdLoader *_adLoader;
     NSInteger _cacheSize;
@@ -286,6 +297,48 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     return [self ro_postRetryAfter:
             [ROOverlayAd ro_backoffDelayForStreak:_noFillStreak
                                 immediateAttempts:0]];
+}
+
+- (NSTimeInterval)ro_scheduleLayoutRetry {
+    [self ro_cancelRetry];
+    if (self.released) return -1.0;
+
+    ++_layoutFailStreak;
+    if (!_layoutProven
+            && _layoutFailStreak >= kROMaxUnprovenLayoutFailures) {
+        NSLog(@"%@: %ld creatives in a row could not be laid out in this"
+               " panel and none has ever rendered here; falling back to a"
+               " slow poll", kROTag, (long)_layoutFailStreak);
+        return [self ro_postRetryAfter:kROUnprovenLayoutRetryDelay];
+    }
+    return [self ro_postRetryAfter:
+            [ROOverlayAd
+                ro_backoffDelayForStreak:_layoutFailStreak
+               immediateAttempts:kRORetryImmediateLayoutAttempts]];
+}
+
+// A creative that no layout could show. It leaves the cache, the seat it
+// held is refilled by the layout retry, and the successor is vetted at
+// once - ro_prepareHeadFace runs its own verdict, so an unrenderable run
+// sweeps the whole cache, bounded by its size.
+- (void)ro_dropUnrenderableAd:(GADNativeAd *)ad {
+    if (ad == nil) return;
+
+    for (NSUInteger index = 0; index < _cachedAds.count; ++index) {
+        if (_cachedAds[index].ad == ad) {
+            [_cachedAds removeObjectAtIndex:index];
+            break;
+        }
+    }
+    @synchronized (_ownedAds) {
+        [_ownedAds removeObject:ad];
+    }
+    NSTimeInterval retryDelay = [self ro_scheduleLayoutRetry];
+    NSLog(@"%@: layout: dropped unrenderable creative, cache %ld/%ld,"
+           " retry in %.0fms", kROTag, (long)_cachedAds.count
+          , (long)_cacheSize, retryDelay * 1000.0);
+    [self ro_notifyCurrentState];
+    [self ro_prepareHeadFace];
 }
 
 - (NSTimeInterval)ro_postRetryAfter:(NSTimeInterval)delay {
@@ -521,12 +574,34 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
         }
         self->_presentation = createdPresentation;
 
+        // The prepared-face path already refused unrenderable creatives;
+        // this is the path for an ad that never had a face - built seconds
+        // before its show, exactly when a creative that fits no layout
+        // must NOT slip through.
+        if ([createdPresentation isLayoutUnrenderable]) {
+            [createdPresentation releasePresentation];
+            self->_presentation = nil;
+            NSTimeInterval retryDelay = [self ro_scheduleLayoutRetry];
+            NSLog(@"%@: layout: refused unrenderable creative at show,"
+                   " retry in %.0fms", kROTag, retryDelay * 1000.0);
+            [self ro_completePresentationForAd:shownAd
+                                       message:@"Creative cannot be laid"
+                                                " out in this panel"];
+            return;
+        }
+        self->_layoutProven = YES;
+        self->_layoutFailStreak = 0;
+
         if (![createdPresentation show]) {
             [createdPresentation releasePresentation];
             if (self->_presentation == createdPresentation) {
                 self->_presentation = nil;
             }
-            [self ro_completePresentationForAd:shownAd message:@""];
+            // A non-empty message: the wrapper turns it into a display
+            // failure. The empty string that stood here reported a show
+            // that never reached the screen as a normal close.
+            [self ro_completePresentationForAd:shownAd
+                                       message:@"Failed to present ad"];
         }
     }];
 }
@@ -717,6 +792,18 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
         [createdPresentation releasePresentation];
         return;
     }
+
+    // Prepare built the whole view, so the verdict is already in. A
+    // creative no layout can show is dropped here, with the ad still in
+    // the cache and nothing on screen - the one moment refusing it costs
+    // the player nothing.
+    if ([createdPresentation isLayoutUnrenderable]) {
+        [createdPresentation releasePresentation];
+        [self ro_dropUnrenderableAd:ad];
+        return;
+    }
+    _layoutProven = YES;
+    _layoutFailStreak = 0;
 
     _preparedPresentation = createdPresentation;
     _preparedNativeAd = ad;

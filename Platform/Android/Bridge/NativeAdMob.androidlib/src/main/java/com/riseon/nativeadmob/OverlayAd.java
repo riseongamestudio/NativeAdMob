@@ -548,6 +548,12 @@ public final class OverlayAd extends BaseAd {
                 + cachedCount + "/" + cacheSize
                 + ", retry in " + retryDelayMs + "ms");
         NotifyCurrentState();
+        // The next ad is head now, and it earns its face - and with it its
+        // own verdict - immediately, not on whatever path happens to ask
+        // next. This recurses when the successor is unrenderable too, and
+        // that is the point: the whole cache is vetted in one sweep, bounded
+        // by its own size.
+        RefreshHeadFace();
     }
 
     private void DoLoadAd(
@@ -613,11 +619,25 @@ public final class OverlayAd extends BaseAd {
                             NotifyLoadingCompleted(0, "");
                             // One request per ad: this chains on until the
                             // cache is full, and the last one simply finds
-                            // no seat left.
-                            StartLoad(
-                                    activity
-                                  , requestAdUnitId
-                                  , configuredStyle);
+                            // no seat left. A refusal with seats still open
+                            // means the captured Activity died mid-chain;
+                            // the retry re-arms, because nobody outside is
+                            // going to call Load again - the same promise
+                            // in-feed's RequestLoad keeps.
+                            if (!StartLoad(
+                                        activity
+                                      , requestAdUnitId
+                                      , configuredStyle)
+                                    && !released
+                                    && configured
+                                    && !isAdLoading
+                                    && !retryScheduled
+                                    && cachedAds.size() < cacheSize) {
+                                PostRetry(
+                                        InFeedAd.BackoffDelayMs(
+                                            Math.max(1, noFillStreak)
+                                          , 0));
+                            }
                         }
 
                         @Override
@@ -708,6 +728,11 @@ public final class OverlayAd extends BaseAd {
             });
 
             if (requestedShowStyle.fullscreen) {
+                // NOTE - deliberately no IsLayoutUnrenderable station on
+                // this path. The panel is the entire screen; mandatory
+                // chrome that outgrows a whole display does not exist in
+                // practice, so the full-screen layout's one job is to look
+                // good, not to fight for room. Owner's call, 2026-08.
                 ReleasePreparedPresentation();
                 PreparedFullScreenContent preparedContent =
                         TakePreparedFullScreenContent(activity, shownAd);
@@ -755,12 +780,36 @@ public final class OverlayAd extends BaseAd {
                 }
                 presentation = createdPresentation;
 
+                // The prepared-face path already refused unrenderable
+                // creatives, but this is the path for an ad that never had
+                // a face - built seconds before its show, which is exactly
+                // when a creative that fits no layout must NOT slip through.
+                if (createdPresentation.IsLayoutUnrenderable()) {
+                    createdPresentation.Release();
+                    presentation = null;
+                    long retryDelayMs = ScheduleLayoutRetry();
+                    Log.i(TAG, "layout: refused unrenderable creative at"
+                            + " show, retry in " + retryDelayMs + "ms");
+                    CompletePresentation(
+                            shownAd
+                          , "Creative cannot be laid out in this panel");
+                    return;
+                }
+                layoutProven = true;
+                layoutFailStreak = 0;
+
                 if (!createdPresentation.Show()) {
                     createdPresentation.Release();
                     if (presentation == createdPresentation) {
                         presentation = null;
                     }
-                    CompletePresentation(shownAd, "");
+                    // A non-empty message: the wrapper turns it into
+                    // OnAdDisplayFailed. The empty string that stood here
+                    // reported a show that never reached the screen as a
+                    // normal close.
+                    CompletePresentation(
+                            shownAd
+                          , "Failed to show ad presentation");
                 }
             } catch (RuntimeException exception) {
                 Log.e(TAG, "Failed to materialize native ad", exception);

@@ -45,7 +45,11 @@ namespace RiseOn.NativeAdMob.Android {
         public void OnSlotShowNotReady(int slotIndex)
             => callbacks.OnSlotShowNotReady(slotIndex);
 
-        public void OnSlotDisplayFailed(
+        // Named for the Java interface method, not the C# callback it
+        // forwards to: AndroidJavaProxy dispatches by name, and the old
+        // OnSlotDisplayFailed name silently swallowed every slot failure
+        // Java tried to report.
+        public void OnSlotPresentationFailed(
             int slotIndex
           , int errorCode
           , string errorMessage)

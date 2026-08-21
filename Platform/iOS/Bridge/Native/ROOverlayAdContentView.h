@@ -34,6 +34,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, readonly) CGFloat resolvedPanelHeight;
 
+// YES when every layout the ladder knows was tried and none can show this
+// creative in this panel - the stacked pipeline failed, the scrim was
+// refused or overrun (image), or the media-less fallback overran (video).
+// Read after the view is built; the owner drops the ad instead of showing
+// it badly.
+@property (nonatomic, readonly) BOOL layoutUnrenderable;
+
 // GADNativeAdView needs to outlive nothing: releasing detaches and drops it.
 - (void)releaseContent;
 

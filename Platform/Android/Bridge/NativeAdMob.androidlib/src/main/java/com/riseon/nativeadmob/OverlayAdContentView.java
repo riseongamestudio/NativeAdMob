@@ -54,6 +54,17 @@ final class OverlayAdContentView extends FrameLayout {
             super.onWindowFocusChanged(hasWindowFocus);
             if (hasWindowFocus) clickCommitted = false;
         }
+
+        // The half-screen window is FLAG_NOT_FOCUSABLE, so the focus hook
+        // above is deaf there - the same deafness the redirect close had -
+        // and one genuine click left the call to action dead for the rest
+        // of the show. Visibility does not need focus: coming back from
+        // the browser makes this window visible again on either path.
+        @Override
+        protected void onWindowVisibilityChanged(int visibility) {
+            super.onWindowVisibilityChanged(visibility);
+            if (visibility == View.VISIBLE) clickCommitted = false;
+        }
     }
 
     private static final String TAG = "OverlayAd";
@@ -193,11 +204,11 @@ final class OverlayAdContentView extends FrameLayout {
     // Extra ground the strip-avoiding layout may give before it surrenders
     // and lets the corner controls overlay the media instead.
     private static final int AVOID_CALL_TO_ACTION_HEIGHT_DP = 36;
-    private static final int AVOID_ICON_SIZE_DP = 28;
     // Ratio first: the panel is the height the game asked for. Media needs its
     // policy minimum plus a usable row of content under it; a panel that
     // cannot host that drops the media rather than growing past the request,
     // and only a panel under the absolute floor is ever grown - minimally.
+    private static final int AVOID_ICON_SIZE_DP = 28;
     private static final int MIN_MEDIA_LOWER_CONTENT_DP = 88;
     private static final int MIN_PANEL_HEIGHT_DP = 48;
     // Below this the panel is a strip, and the strip is one row: icon and
@@ -227,7 +238,19 @@ final class OverlayAdContentView extends FrameLayout {
     private Button avoidanceCallToAction;
     private LinearLayout avoidanceIdentityRow;
     private boolean chromeTrimmedForMedia;
+    // The fit pipeline SPENT the icon - pinned it to the avoidance floor to
+    // buy room for the media - and certified the fit with that size. The
+    // settle's icon-follows-text rule yields to this: growing the icon back
+    // is what used to invalidate the certificate behind the pipeline's back
+    // and demote creatives that had already fit. Owner's call, 2026-08:
+    // the spending decision wins.
+    private boolean iconSpentForFit;
     private boolean scrimLayoutActive;
+    private boolean medialessLayoutActive;
+    // The panel a last-resort layout - scrim or media-less - has to fit
+    // inside, kept for the check the settle runs after the text has taken
+    // its final shape.
+    private int lastResortPanelHeight;
     private boolean mediaIsVideo;
     // Every layout was tried and none can show this creative in this panel.
     // The ad is not renderable here and the only answer is a different ad.
@@ -263,6 +286,9 @@ final class OverlayAdContentView extends FrameLayout {
     private final int backgroundColor;
     private final Runnable onClose;
     private CountDownTimer timer;
+    // Whether the visibility hook stopped a running countdown; only then
+    // does becoming visible restart one.
+    private boolean countdownPausedWhileHidden;
     private SingleClickNativeAdContainer nativeAdContainer;
     private NativeAdView nativeAdView;
     private TextView countdown;
@@ -309,8 +335,12 @@ final class OverlayAdContentView extends FrameLayout {
         this.fakeCloseAutoDismiss = fakeCloseAutoDismiss;
         this.onClose = onClose;
         Build(requestedPanelHeight);
-        SettleContentBeforeLayout();
+        // Inset first, settle second: the settle finalizes the avoidance
+        // plan, and on a cutout device that plan must already know the top
+        // padding - planning at full height and correcting after the first
+        // paint is exactly the re-settle the settle exists to prevent.
         ApplyFullscreenContentInset();
+        SettleContentBeforeLayout();
     }
 
     static int ResolveInitialPanelHeight(
@@ -434,6 +464,22 @@ final class OverlayAdContentView extends FrameLayout {
         super.onWindowVisibilityChanged(visibility);
         if (visibility != View.VISIBLE && redirectPending) {
             RunCloseFromRedirect();
+        }
+        // The countdown buys watch time, and a backgrounded ad is not being
+        // watched. iOS has held the remaining time across resign-active
+        // from the start; the Dialog window here never gets an Activity
+        // pause of its own, so visibility - which every window gets -
+        // carries the duty for both paths. countDownRemainingMs is kept
+        // current by the timer's own ticks, so cancelling freezes it.
+        if (visibility != View.VISIBLE) {
+            if (timer != null) {
+                timer.cancel();
+                timer = null;
+                countdownPausedWhileHidden = true;
+            }
+        } else if (countdownPausedWhileHidden) {
+            countdownPausedWhileHidden = false;
+            if (!released) StartCountdown();
         }
     }
 
@@ -993,9 +1039,6 @@ final class OverlayAdContentView extends FrameLayout {
                   , adChoicesReserveHeight
                   , Gravity.TOP | Gravity.END));
 
-        if (hasDisplayableMedia) {
-            nativeAdView.setMediaView(mediaView);
-        }
         nativeAdView.setIconView(icon);
         nativeAdView.setHeadlineView(headline);
         nativeAdView.setAdvertiserView(advertiser);
@@ -1087,6 +1130,13 @@ final class OverlayAdContentView extends FrameLayout {
                   , iconHero ? null : icon
                   , callToAction
                   , displayMetrics.heightPixels);
+        }
+        // Registered here, after the template is decided, because the
+        // media-less fallback must not register the view at all: a
+        // registered MediaView below the video minimum is a violation no
+        // matter what is drawn inside it. Absent is legal; small is not.
+        if (hasDisplayableMedia && !medialessLayoutActive) {
+            nativeAdView.setMediaView(mediaView);
         }
         nativeAdView.setNativeAd(nativeAd);
         nativeAdContainer = new SingleClickNativeAdContainer(context);
@@ -1190,7 +1240,9 @@ final class OverlayAdContentView extends FrameLayout {
               , contentColumn
               , mediaView);
         if (hasDisplayableMedia && !sideMediaLayout
-                && !controlAvoidanceActive) {
+                && !controlAvoidanceActive
+                && !scrimLayoutActive
+                && !medialessLayoutActive) {
             ObserveMediaSize(
                     minimumMediaSize
                   , contentColumn
@@ -1286,11 +1338,29 @@ final class OverlayAdContentView extends FrameLayout {
                 // media may only be reparented before setNativeAd binds it.
                 if (avoidanceFoundNoBand) {
                     controlAvoidanceActive = false;
-                    layoutUnrenderable = !ApplyScrimLayout(
-                            contentColumn
-                          , mediaView
-                          , density
-                          , horizontalPadding);
+                    layoutUnrenderable = mediaIsVideo
+                            ? !AdoptMedialessVideoLayout(
+                                    displayMetrics
+                                  , horizontalPadding
+                                  , minimumMediaSize
+                                  , mediaAspectRatio
+                                  , requestedPanelHeight
+                                  , density
+                                  , contentColumn
+                                  , mediaView
+                                  , identityRow
+                                  , headline
+                                  , advertiser
+                                  , starRating
+                                  , body
+                                  , icon
+                                  , callToAction)
+                            : !ApplyScrimLayout(
+                                    contentColumn
+                                  , mediaView
+                                  , density
+                                  , horizontalPadding
+                                  , requestedPanelHeight);
                 }
                 return;
             }
@@ -1329,14 +1399,96 @@ final class OverlayAdContentView extends FrameLayout {
         // is no longer subtracted from the height the picture needs. This
         // is the template in-feed reaches for in a squarish cell, for the
         // same reason and with the same veil.
-        layoutUnrenderable = !ApplyScrimLayout(
-                contentColumn
-              , mediaView
-              , density
-              , horizontalPadding);
+        layoutUnrenderable = mediaIsVideo
+                ? !AdoptMedialessVideoLayout(
+                        displayMetrics
+                      , horizontalPadding
+                      , minimumMediaSize
+                      , mediaAspectRatio
+                      , requestedPanelHeight
+                      , density
+                      , contentColumn
+                      , mediaView
+                      , identityRow
+                      , headline
+                      , advertiser
+                      , starRating
+                      , body
+                      , icon
+                      , callToAction)
+                : !ApplyScrimLayout(
+                        contentColumn
+                      , mediaView
+                      , density
+                      , horizontalPadding
+                      , requestedPanelHeight);
         if (layoutUnrenderable) {
             Log.i(TAG, "layout: UNRENDERABLE - every template exhausted");
         }
+    }
+
+    // The road down for a video that no layout can host at the SDK's
+    // 120dp floor: a layout with NO media at all - icon, headline, body,
+    // call to action. Not a smaller video (does not render), not a still
+    // image in the MediaView (registered-but-undersized is a violation
+    // whatever is drawn inside), and not the scrim (a veil over a player
+    // is a viewability problem). The same fallback in-feed reaches for,
+    // for the same creative, for the same reasons.
+    private boolean AdoptMedialessVideoLayout(
+            DisplayMetrics displayMetrics
+          , int horizontalPadding
+          , int minimumMediaSize
+          , float mediaAspectRatio
+          , int requestedPanelHeight
+          , float density
+          , LinearLayout contentColumn
+          , MediaView mediaView
+          , LinearLayout identityRow
+          , TextView headline
+          , TextView advertiser
+          , NativeAdStarRatingView starRating
+          , TextView body
+          , ImageView icon
+          , Button callToAction) {
+        if (medialessLayoutActive
+                || scrimLayoutActive
+                || mediaView == null
+                || !(mediaView.getParent() instanceof ViewGroup)) {
+            return false;
+        }
+
+        medialessLayoutActive = true;
+        lastResortPanelHeight = requestedPanelHeight;
+        ((ViewGroup) mediaView.getParent()).removeView(mediaView);
+        // Whatever the failed plans did to the column is undone: the
+        // creation-time padding and gravity come back, and the freed height
+        // goes to the text the pipeline is about to re-fit.
+        contentColumn.setPadding(
+                horizontalPadding
+              , (int) (CONTROL_STRIP_HEIGHT_DP * density)
+              , horizontalPadding
+              , 0);
+        contentColumn.setGravity(Gravity.CENTER);
+        RestoreOptionalRows(advertiser, starRating, body);
+        boolean contentFits = RunCollapsibleFitPipeline(
+                displayMetrics
+              , horizontalPadding
+              , minimumMediaSize
+              , mediaAspectRatio
+              , false
+              , requestedPanelHeight
+              , density
+              , contentColumn
+              , mediaView
+              , identityRow
+              , headline
+              , advertiser
+              , starRating
+              , body
+              , icon
+              , callToAction);
+        Log.i(TAG, "media-less video layout: adopted, fits=" + contentFits);
+        return contentFits;
     }
 
     // Turns the built column into the scrim template in place. The column is
@@ -1348,7 +1500,8 @@ final class OverlayAdContentView extends FrameLayout {
             LinearLayout contentColumn
           , MediaView mediaView
           , float density
-          , int horizontalPadding) {
+          , int horizontalPadding
+          , int panelHeight) {
         // Never a video. A player behind text it does not know about cannot
         // keep its controls or its frame clear of them, and the veil dims
         // every frame of it besides. In-feed draws the same line: the scrim
@@ -1365,6 +1518,7 @@ final class OverlayAdContentView extends FrameLayout {
         }
 
         scrimLayoutActive = true;
+        lastResortPanelHeight = panelHeight;
         mediaAvoidsControlStrip = false;
         ((ViewGroup) mediaView.getParent()).removeView(mediaView);
         nativeAdView.addView(
@@ -1840,7 +1994,7 @@ final class OverlayAdContentView extends FrameLayout {
     // The floors the strip-avoiding layout stands on: a shorter call to
     // action and a smaller icon. The separating paddings between rows are
     // never touched - they are the seams of the layout, not chrome.
-    private static void ApplyStripAvoidingFloors(
+    private void ApplyStripAvoidingFloors(
             float density
           , ImageView icon
           , Button callToAction) {
@@ -1855,6 +2009,7 @@ final class OverlayAdContentView extends FrameLayout {
             iconLayoutParams.width = iconSize;
             iconLayoutParams.height = iconSize;
             icon.setLayoutParams(iconLayoutParams);
+            iconSpentForFit = true;
         }
     }
 
@@ -2121,7 +2276,35 @@ final class OverlayAdContentView extends FrameLayout {
             if (controlAvoidanceActive) {
                 RecomputeMediaControlAvoidance(
                         settleColumnWidth
-                      , avoidancePanelHeight);
+                        // Minus the cutout inset, the same subtraction
+                        // onSizeChanged makes - the two passes must plan
+                        // against the same panel.
+                      , avoidancePanelHeight - getPaddingTop());
+            }
+        }
+        // A plan that ended with nowhere to put the picture is not a plan.
+        // The scrim is out of reach by now - the ad is already bound - so
+        // the creative is declared unshowable and travels the same road as
+        // the fit pipeline's failures: dropped by whoever prepared it,
+        // never a 0x0 media in front of the player.
+        if (controlAvoidanceActive && avoidanceFoundNoBand) {
+            layoutUnrenderable = true;
+            Log.i(TAG, "layout: UNRENDERABLE - no band left after settle");
+        }
+        // The scrim freed the text from sharing the panel with the picture,
+        // but not from the panel itself. By now the pipeline has already
+        // shrunk the chrome to its floors, so a column that still overruns
+        // the panel would simply clip its top row off screen - a headline
+        // half-shown is not shown. The creative is unshowable here.
+        if ((scrimLayoutActive || medialessLayoutActive)
+                && lastResortPanelHeight > 0) {
+            int lastResortColumnHeight =
+                    MeasureColumnHeight(settleColumn, settleColumnWidth);
+            if (lastResortColumnHeight > lastResortPanelHeight) {
+                layoutUnrenderable = true;
+                Log.i(TAG, "layout: UNRENDERABLE - last-resort text "
+                        + lastResortColumnHeight + " exceeds panel "
+                        + lastResortPanelHeight);
             }
         }
     }
@@ -2129,7 +2312,10 @@ final class OverlayAdContentView extends FrameLayout {
     private boolean SettleIconSize() {
         if (settleIcon == null
                 || settleIdentityText == null
-                || settleIdentityRow == null) {
+                || settleIdentityRow == null
+                // The pipeline pinned this icon to pay for the media and
+                // certified the fit at that size; the beauty rule yields.
+                || iconSpentForFit) {
             return false;
         }
 
@@ -2379,64 +2565,65 @@ final class OverlayAdContentView extends FrameLayout {
         int bestIntervalLeft = 0;
         int bestIntervalWidth = panelWidth;
         boolean bestEdges = false;
-        // Two sweeps. The first honours the media's floor; the second, run
-        // only if the first found nothing, drops the floor to a single
-        // pixel. The panel is fixed and cannot be asked to grow, so a media
-        // below its preferred size is the answer - the picture takes the
-        // room that exists instead of demanding room that does not.
-        for (int sweep = 0; sweep < 2 && bestScore < 0L; ++sweep) {
-            int mediaFloor = sweep == 0 ? avoidanceMinimumMediaSize : 1;
-            for (int[] candidate : candidates) {
-                int top = candidate[0];
-                int intervalLeft = Math.max(0, candidate[1]);
-                int intervalRight = Math.min(panelWidth, candidate[2]);
-                // The picture stays on the panel's centre line, so what a
-                // candidate really offers is twice its narrower half:
-                // growing past that would push the media off centre, not
-                // make it bigger.
-                int panelCentre = panelWidth / 2;
-                int intervalWidth = 2 * Math.min(
-                        panelCentre - intervalLeft
-                      , intervalRight - panelCentre);
-                if (intervalWidth < mediaFloor) continue;
+        // One sweep, at the media's honest floor. The floor IS the
+        // definition of a picture worth showing: 120dp is the SDK's
+        // line below which video does not render, 48dp is this pack's
+        // line below which an image reads as debris. A second sweep
+        // used to lower the floor to a single pixel - which ranked a
+        // sliver of picture ABOVE the scrim, where the same picture is
+        // panel-sized. Below the floor the answer is a better layout
+        // or a better creative, never a smaller picture: NO BAND sends
+        // an image to the scrim and a video to the drop.
+        int mediaFloor = avoidanceMinimumMediaSize;
+        for (int[] candidate : candidates) {
+            int top = candidate[0];
+            int intervalLeft = Math.max(0, candidate[1]);
+            int intervalRight = Math.min(panelWidth, candidate[2]);
+            // The picture stays on the panel's centre line, so what a
+            // candidate really offers is twice its narrower half:
+            // growing past that would push the media off centre, not
+            // make it bigger.
+            int panelCentre = panelWidth / 2;
+            int intervalWidth = 2 * Math.min(
+                    panelCentre - intervalLeft
+                  , intervalRight - panelCentre);
+            if (intervalWidth < mediaFloor) continue;
 
-                int bandHeight = availableHeight - top - mediaSeam;
-                if (bandHeight < mediaFloor) continue;
+            int bandHeight = availableHeight - top - mediaSeam;
+            if (bandHeight < mediaFloor) continue;
 
-                int boxWidth;
-                int boxHeight;
-                if (mediaAspectReported) {
-                    boxHeight = Math.min(
-                            bandHeight
-                          , Math.round(
-                                intervalWidth / avoidanceMediaAspect));
-                    boxWidth = Math.min(
-                            intervalWidth
-                          , Math.round(boxHeight * avoidanceMediaAspect));
-                    if (boxWidth < mediaFloor || boxHeight < mediaFloor) {
-                        continue;
-                    }
-                } else {
-                    boxWidth = intervalWidth;
-                    boxHeight = bandHeight;
+            int boxWidth;
+            int boxHeight;
+            if (mediaAspectReported) {
+                boxHeight = Math.min(
+                        bandHeight
+                      , Math.round(
+                            intervalWidth / avoidanceMediaAspect));
+                boxWidth = Math.min(
+                        intervalWidth
+                      , Math.round(boxHeight * avoidanceMediaAspect));
+                if (boxWidth < mediaFloor || boxHeight < mediaFloor) {
+                    continue;
                 }
+            } else {
+                boxWidth = intervalWidth;
+                boxHeight = bandHeight;
+            }
 
-                long score = (long) boxWidth * boxHeight;
-                if (score > bestScore
-                        || (score == bestScore && top < bestTop)) {
-                    bestScore = score;
-                    bestBoxWidth = boxWidth;
-                    bestBoxHeight = boxHeight;
-                    bestTop = top;
-                    bestIntervalLeft = intervalLeft;
-                    bestIntervalWidth = intervalWidth;
-                    bestEdges = candidate[3] == 1;
-                }
+            long score = (long) boxWidth * boxHeight;
+            if (score > bestScore
+                    || (score == bestScore && top < bestTop)) {
+                bestScore = score;
+                bestBoxWidth = boxWidth;
+                bestBoxHeight = boxHeight;
+                bestTop = top;
+                bestIntervalLeft = intervalLeft;
+                bestIntervalWidth = intervalWidth;
+                bestEdges = candidate[3] == 1;
             }
         }
-
-        // Both sweeps found nothing: the lower stack alone has eaten the
-        // panel and there is no band left at all. The media collapses to
+        // The sweep found nothing: the lower stack alone has eaten the
+        // panel and no band at or above the floor is left. The media collapses to
         // nothing and the text keeps the room - which is the whole contract
         // now, the same one in-feed lives under. Nothing overflows and
         // nothing asks for a bigger panel.
@@ -2833,7 +3020,13 @@ final class OverlayAdContentView extends FrameLayout {
         // Only a media-free layout keeps it, because there the top row is
         // text.
         if (hasDisplayableMedia && !sideMediaLayout
-                && !controlAvoidanceActive) {
+                && !controlAvoidanceActive
+                // A last-resort layout took the media out of the column;
+                // sizing it as a column child again would cast its
+                // FrameLayout params to LinearLayout ones and crash the
+                // build - measured nowhere, found by review.
+                && !scrimLayoutActive
+                && !medialessLayoutActive) {
             if (!mediaAvoidsControlStrip) SetTopInset(contentColumn, 0);
             SizeMediaForBudget(
                     displayMetrics

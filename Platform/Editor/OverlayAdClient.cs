@@ -56,15 +56,22 @@ namespace RiseOn.NativeAdMob.Editor {
                     config.Snapshot()
                   , () => {
                         preview = null;
-                        // This client keeps a cache of one, and the show
-                        // just spent it. Nothing refills it until Load is
-                        // called again, so the count is flatly zero.
-                        callbacks.OnShowCompleted(showId, string.Empty, true, 0);
+                        // Not a flat zero: OnDisplayed below triggers the
+                        // wrapper's replacement Load, which this client
+                        // serves instantly - so by the time the preview
+                        // closes the seat is usually already refilled.
+                        // Reporting zero here overwrote that truth and
+                        // stranded IsReady at false for the whole session,
+                        // because the follow-up Load found adReady already
+                        // true and returned without republishing state.
+                        callbacks.OnShowCompleted(
+                            showId, string.Empty, true, adReady ? 1 : 0);
                     });
                 callbacks.OnDisplayed();
             } catch (Exception exception) {
                 Debug.LogException(exception);
-                callbacks.OnShowCompleted(showId, exception.Message, true, 0);
+                callbacks.OnShowCompleted(
+                    showId, exception.Message, true, adReady ? 1 : 0);
             }
         }
 

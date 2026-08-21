@@ -31,6 +31,9 @@ NS_ASSUME_NONNULL_BEGIN
 // Builds the content without showing it - Dialog.create() on Android, and
 // what PreparePresentation warms up while the ad waits.
 - (BOOL)prepare;
+// Prepare builds the whole content view, so the verdict is already in by
+// the time it returns - the mirror of Android's IsLayoutUnrenderable.
+- (BOOL)isLayoutUnrenderable;
 - (BOOL)show;
 - (BOOL)isShowing;
 - (void)dismiss;
