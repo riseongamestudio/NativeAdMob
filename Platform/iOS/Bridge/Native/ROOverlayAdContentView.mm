@@ -12,7 +12,7 @@ static const CGFloat kROMinVideoMediaSize = 120;
 static const CGFloat kROMinImageMediaSize = 48;
 // The close mark's geometry - the same two numbers the Android side draws
 // with, for the same reason: U+2715 has no single font behind it.
-static const CGFloat kROCloseGlyphSpanRatio = 0.5;
+static const CGFloat kROCloseGlyphSpanRatio = 0.44;
 static const CGFloat kROCloseGlyphStroke = 2.5;
 // A probe value only, for the fit checks that need a number. It never
 // frames the media: a creative with an unreported ratio is handed the

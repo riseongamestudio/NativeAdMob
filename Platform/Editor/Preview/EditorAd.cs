@@ -1157,65 +1157,89 @@ namespace RiseOn.NativeAdMob.Editor {
 
         // The close mark's geometry, the device's own two numbers: it spans
         // this share of the box's shorter side, in strokes this thick.
-        private const float CLOSE_GLYPH_SPAN_RATIO = .5f;
+        private const float CLOSE_GLYPH_SPAN_RATIO = .44f;
         private const float CLOSE_GLYPH_STROKE_DP  = 2.5f;
 
         // Drawn, not typed - the device draws two strokes because U+2715 has
         // no single font behind it across OEMs, so a typed mark never looks
         // the same twice. The preview mirrors the geometry with two bars.
+        // Rasterized once, the way the device draws it: every pixel takes
+        // its alpha from its distance to the two strokes - a capsule field,
+        // so the round caps and the anti-aliasing fall out of the geometry
+        // instead of being glued on from sprites. One Image, one sprite,
+        // the same silhouette Android's Canvas and iOS's CAShapeLayer paint.
+        private static Sprite closeGlyphSprite;
+
+        private static Sprite CloseGlyphSprite() {
+            if (closeGlyphSprite != null) return closeGlyphSprite;
+
+            // Four texels per unit keeps the edge crisp at any preview scale.
+            const int texelsPerUnit = 4;
+            var size   = Mathf.RoundToInt(CONTROL_SIZE_DP * texelsPerUnit);
+            var centre = new Vector2(size * .5f, size * .5f);
+            var half   = size * CLOSE_GLYPH_SPAN_RATIO * .5f;
+            var radius = CLOSE_GLYPH_STROKE_DP * texelsPerUnit * .5f;
+            var a1 = centre + new Vector2(-half, -half);
+            var b1 = centre + new Vector2( half,  half);
+            var a2 = centre + new Vector2(-half,  half);
+            var b2 = centre + new Vector2( half, -half);
+
+            var pixels = new Color32[size * size];
+            for (var y = 0; y < size; ++y) {
+                for (var x = 0; x < size; ++x) {
+                    var p = new Vector2(x + .5f, y + .5f);
+                    var d = Mathf.Min(
+                        DistanceToSegment(p, a1, b1)
+                      , DistanceToSegment(p, a2, b2));
+                    // One texel of falloff past the stroke's edge.
+                    var alpha = Mathf.Clamp01(radius + .5f - d);
+                    pixels[y * size + x] = new Color32(
+                        255, 255, 255, (byte)Mathf.RoundToInt(alpha * 255f));
+                }
+            }
+
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false) {
+                wrapMode   = TextureWrapMode.Clamp
+              , filterMode = FilterMode.Bilinear
+              , hideFlags  = HideFlags.HideAndDontSave
+            };
+            texture.SetPixels32(pixels);
+            texture.Apply();
+
+            closeGlyphSprite = Sprite.Create(
+                texture
+              , new Rect(0f, 0f, size, size)
+              , new Vector2(.5f, .5f)
+              , texelsPerUnit);
+            closeGlyphSprite.hideFlags = HideFlags.HideAndDontSave;
+            return closeGlyphSprite;
+        }
+
+        private static float DistanceToSegment(Vector2 p, Vector2 a, Vector2 b) {
+            var ab = b - a;
+            var t  = Mathf.Clamp01(Vector2.Dot(p - a, ab) / ab.sqrMagnitude);
+            return Vector2.Distance(p, a + ab * t);
+        }
+
+        // The close mark drawn, not typed - U+2715 has no single font behind
+        // it across OEMs, so the device strokes it and the preview rasterizes
+        // the same strokes.
         private static void DrawCloseGlyph(Button closeButton) {
             var label = closeButton.GetComponentInChildren<Text>();
             if (label != null) label.text = string.Empty;
 
-            var box  = closeButton.GetComponent<RectTransform>();
-            var span = CONTROL_SIZE_DP * CLOSE_GLYPH_SPAN_RATIO;
-            foreach (var angle in new[] { 45f, -45f }) {
-                var bar = new GameObject(
-                    "CloseStroke"
-                  , typeof(RectTransform)
-                  , typeof(Image));
-                bar.transform.SetParent(box, false);
+            var glyph = new GameObject(
+                "CloseGlyph"
+              , typeof(RectTransform)
+              , typeof(Image));
+            glyph.transform.SetParent(closeButton.transform, false);
+            Stretch(glyph.GetComponent<RectTransform>());
 
-                var rect = bar.GetComponent<RectTransform>();
-                rect.anchorMin        = new Vector2(.5f, .5f);
-                rect.anchorMax        = new Vector2(.5f, .5f);
-                rect.pivot            = new Vector2(.5f, .5f);
-                rect.anchoredPosition = Vector2.zero;
-                // A bar from corner to corner of a span-by-span square.
-                rect.sizeDelta        = new Vector2(span * 1.4142f, CLOSE_GLYPH_STROKE_DP);
-                rect.localRotation    = Quaternion.Euler(0f, 0f, angle);
-
-                var image = bar.GetComponent<Image>();
-                image.color         = Color.white;
-                image.raycastTarget = false;
-            }
-
-            // The device strokes with round caps - half a stroke of ink past
-            // each endpoint. The bars above end square, so each of the four
-            // ends gets a dot of the stroke's diameter: the same silhouette
-            // the device draws, built from the one round sprite Unity ships.
-            var cap = Resources.GetBuiltinResource<Sprite>("UI/Skin/Knob.psd");
-            foreach (var corner in new[] {
-                         new Vector2( 1f,  1f), new Vector2(-1f, -1f)
-                       , new Vector2( 1f, -1f), new Vector2(-1f,  1f) }) {
-                var dot = new GameObject(
-                    "CloseStrokeCap"
-                  , typeof(RectTransform)
-                  , typeof(Image));
-                dot.transform.SetParent(box, false);
-
-                var rect = dot.GetComponent<RectTransform>();
-                rect.anchorMin        = new Vector2(.5f, .5f);
-                rect.anchorMax        = new Vector2(.5f, .5f);
-                rect.pivot            = new Vector2(.5f, .5f);
-                rect.anchoredPosition = corner * (span * .5f);
-                rect.sizeDelta        = new Vector2(CLOSE_GLYPH_STROKE_DP, CLOSE_GLYPH_STROKE_DP);
-
-                var image = dot.GetComponent<Image>();
-                image.sprite        = cap;
-                image.color         = Color.white;
-                image.raycastTarget = false;
-            }
+            var image = glyph.GetComponent<Image>();
+            image.sprite         = CloseGlyphSprite();
+            image.color          = Color.white;
+            image.preserveAspect = true;
+            image.raycastTarget  = false;
         }
 
         private static Button CreateControlButton(

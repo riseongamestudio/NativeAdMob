@@ -86,7 +86,7 @@ final class OverlayAdContentView extends FrameLayout {
     // The close mark's geometry: it spans this share of its box's shorter
     // side, in strokes this thick. Numbers, not a glyph - see
     // CloseGlyphDrawable for why.
-    private static final float CLOSE_GLYPH_SPAN_RATIO = 0.5f;
+    private static final float CLOSE_GLYPH_SPAN_RATIO = 0.44f;
     private static final float CLOSE_GLYPH_STROKE_DP = 2.5f;
     private static final float COUNTDOWN_TEXT_SIZE_SP = 18f;
     private static final String CTA_BACKGROUND_COLOR = "#FF2196F3";
