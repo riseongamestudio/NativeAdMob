@@ -10,6 +10,10 @@ static const CGFloat kROMinVideoMediaSize = 120;
 // The 120pt floor is video's; a creative with no video keeps its picture
 // in shorter panels instead of handing the band to the icon.
 static const CGFloat kROMinImageMediaSize = 48;
+// The close mark's geometry - the same two numbers the Android side draws
+// with, for the same reason: U+2715 has no single font behind it.
+static const CGFloat kROCloseGlyphSpanRatio = 0.5;
+static const CGFloat kROCloseGlyphStroke = 2.5;
 // A probe value only, for the fit checks that need a number. It never
 // frames the media: a creative with an unreported ratio is handed the
 // whole band and renders inside it as it pleases.
@@ -197,6 +201,7 @@ static void ROCentreUnderIcon(UIView *view) {
     UIView *_adChoicesReserve;
     HBPaddedLabel *_countdown;
     HBPaddedLabel *_close;
+    CAShapeLayer *_closeGlyph;
 
     BOOL _hasDisplayableMedia;
     BOOL _sideMediaLayout;
@@ -773,10 +778,18 @@ static void ROCentreUnderIcon(UIView *view) {
                                             textSize:18
                                      backgroundAlpha:0.4
                                      backgroundWhite:0];
-    _close = [self ro_createControlLabelWithText:@"✕"
+    _close = [self ro_createControlLabelWithText:@""
                                         textSize:20
                                  backgroundAlpha:0.66
                                  backgroundWhite:0];
+    // Drawn, not typed - see the Android CloseGlyphDrawable. The path is
+    // laid each time the control's frame is, in ro_layoutCloseGlyph.
+    _closeGlyph = [CAShapeLayer layer];
+    _closeGlyph.strokeColor = UIColor.whiteColor.CGColor;
+    _closeGlyph.fillColor = UIColor.clearColor.CGColor;
+    _closeGlyph.lineWidth = kROCloseGlyphStroke;
+    _closeGlyph.lineCap = kCALineCapRound;
+    [_close.layer addSublayer:_closeGlyph];
     _close.hidden = YES;
     _close.userInteractionEnabled = YES;
     _close.isAccessibilityElement = YES;
@@ -1641,6 +1654,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
           , controlY
           , controlSize
           , controlSize);
+    [self ro_layoutCloseGlyph];
     _countdown.frame = CGRectMake(
             numberLeft
                     ? leftControlInset
@@ -2078,6 +2092,23 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
 // ---------------------------------------------------------------------------
 // Countdown
 // ---------------------------------------------------------------------------
+
+- (void)ro_layoutCloseGlyph {
+    if (_closeGlyph == nil) return;
+
+    CGRect bounds = _close.bounds;
+    _closeGlyph.frame = bounds;
+    CGFloat half = MIN(bounds.size.width, bounds.size.height)
+            * kROCloseGlyphSpanRatio / 2;
+    CGFloat centreX = CGRectGetMidX(bounds);
+    CGFloat centreY = CGRectGetMidY(bounds);
+    UIBezierPath *path = [UIBezierPath bezierPath];
+    [path moveToPoint:CGPointMake(centreX - half, centreY - half)];
+    [path addLineToPoint:CGPointMake(centreX + half, centreY + half)];
+    [path moveToPoint:CGPointMake(centreX - half, centreY + half)];
+    [path addLineToPoint:CGPointMake(centreX + half, centreY - half)];
+    _closeGlyph.path = path.CGPath;
+}
 
 - (void)ro_startCountdown {
     if (_countdown == nil || _close == nil) return;

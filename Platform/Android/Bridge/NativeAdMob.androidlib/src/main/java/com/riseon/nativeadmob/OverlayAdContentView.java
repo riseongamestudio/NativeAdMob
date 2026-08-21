@@ -2,9 +2,16 @@ package com.riseon.nativeadmob;
 
 import android.content.Context;
 import android.content.res.ColorStateList;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ColorFilter;
+import android.graphics.Paint;
+import android.graphics.PixelFormat;
+import android.graphics.Rect;
 import android.graphics.Typeface;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.LayerDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.os.Build;
@@ -76,6 +83,11 @@ final class OverlayAdContentView extends FrameLayout {
     // Sized to fill the chip: a mark lost in the middle of its box leaves
     // the box reading as empty space.
     private static final float CLOSE_TEXT_SIZE_SP = 20f;
+    // The close mark's geometry: it spans this share of its box's shorter
+    // side, in strokes this thick. Numbers, not a glyph - see
+    // CloseGlyphDrawable for why.
+    private static final float CLOSE_GLYPH_SPAN_RATIO = 0.5f;
+    private static final float CLOSE_GLYPH_STROKE_DP = 2.5f;
     private static final float COUNTDOWN_TEXT_SIZE_SP = 18f;
     private static final String CTA_BACKGROUND_COLOR = "#FF2196F3";
     private static final String CTA_BORDER_COLOR = "#FF1565C0";
@@ -1164,9 +1176,10 @@ final class OverlayAdContentView extends FrameLayout {
 
         close = CreateControlView(
                 context
-              , "\u2715"
+              , ""
               , CLOSE_TEXT_SIZE_SP
               , CLOSE_BACKGROUND_COLOR);
+        ApplyCloseGlyph(close, density);
         close.setVisibility(View.GONE);
         close.setContentDescription(CLOSE_CONTENT_DESCRIPTION);
         FrameLayout.LayoutParams closeLayoutParams =
@@ -2406,35 +2419,45 @@ final class OverlayAdContentView extends FrameLayout {
               , panelHeight);
     }
 
+    // True while onMeasure is drawing the plan: the recompute's own
+    // requestLayout is pointless then - the measure that follows it is the
+    // layout it would be asking for.
+    private boolean planningInMeasure;
+
+    // The plan is drawn from the panel this view is actually being given,
+    // inside the measure pass that precedes the first draw - never from a
+    // number guessed before layout and corrected on screen a frame later.
+    //
+    // The guess used to be displayMetrics.heightPixels, and it matched the
+    // real window on one device only because that OEM happens to report
+    // the height with the cutout already taken out; a second device
+    // reported it differently and every fullscreen ad stepped right after
+    // its first paint. The post()ed onSizeChanged repair that stood here
+    // was the step itself. Measure is the one place the real size exists
+    // before anything is drawn, and planning here means the children are
+    // measured, laid out and painted against the final plan the first time.
     @Override
-    protected void onSizeChanged(
-            int width
-          , int height
-          , int oldWidth
-          , int oldHeight) {
-        super.onSizeChanged(width, height, oldWidth, oldHeight);
-        if (controlAvoidanceActive && width > 0 && height > 0) {
-            // Never recompute inside the layout pass. The probe measures
-            // poke the column directly, and a requestLayout issued
-            // mid-layout is dropped - the column then stays laid out at the
-            // probe's collapsed size, media at zero and the button clipped.
-            // Deferred one frame, both the probe and its repair land.
-            post(() -> {
-                if (!controlAvoidanceActive || released) return;
-
-                int currentWidth = getWidth();
-                int currentHeight = getHeight();
-                if (currentWidth <= 0 || currentHeight <= 0) return;
-
-                // The panel's real height, never the requested one: the
-                // window is sized to what the content resolved to, which
-                // can exceed the request, and measuring against the smaller
-                // number leaves that difference as a gap above the media.
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        int width = View.MeasureSpec.getSize(widthMeasureSpec);
+        int height = View.MeasureSpec.getSize(heightMeasureSpec);
+        if (controlAvoidanceActive
+                && !released
+                && View.MeasureSpec.getMode(widthMeasureSpec)
+                        != View.MeasureSpec.UNSPECIFIED
+                && View.MeasureSpec.getMode(heightMeasureSpec)
+                        != View.MeasureSpec.UNSPECIFIED
+                && width > 0
+                && height > 0) {
+            planningInMeasure = true;
+            try {
                 RecomputeMediaControlAvoidance(
-                        currentWidth
-                      , currentHeight - getPaddingTop());
-            });
+                        width
+                      , height - getPaddingTop());
+            } finally {
+                planningInMeasure = false;
+            }
         }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     }
 
     private void RecomputeMediaControlAvoidance(
@@ -2676,7 +2699,7 @@ final class OverlayAdContentView extends FrameLayout {
                         - avoidanceColumn.getPaddingLeft();
         mediaLayoutParams.rightMargin = 0;
         avoidanceMediaView.setLayoutParams(mediaLayoutParams);
-        requestLayout();
+        if (!planningInMeasure) requestLayout();
     }
 
     // A media that ran out of height before it reached the sides is
@@ -2848,6 +2871,62 @@ final class OverlayAdContentView extends FrameLayout {
                 Color.parseColor(ATTRIBUTION_BACKGROUND_COLOR));
         attribution.setBackground(background);
         return attribution;
+    }
+
+    // The close mark drawn, not typed. U+2715 is not in Roboto, so every
+    // OEM resolves it from whatever symbol font it ships - each with its
+    // own em-box, advance and weight - and the same sp came out a different
+    // size on every device, and a different size RELATIVE TO THE DIGITS
+    // beside it, which come from yet another font the OEM chose. Two
+    // strokes on a canvas have no font to fall back to: the mark spans the
+    // same share of its box, at the same stroke, on every device there is.
+    private static final class CloseGlyphDrawable extends Drawable {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        CloseGlyphDrawable(float density) {
+            paint.setColor(Color.WHITE);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStrokeWidth(CLOSE_GLYPH_STROKE_DP * density);
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            Rect bounds = getBounds();
+            float centreX = bounds.exactCenterX();
+            float centreY = bounds.exactCenterY();
+            float half = Math.min(bounds.width(), bounds.height())
+                    * CLOSE_GLYPH_SPAN_RATIO / 2f;
+            canvas.drawLine(
+                    centreX - half, centreY - half
+                  , centreX + half, centreY + half
+                  , paint);
+            canvas.drawLine(
+                    centreX - half, centreY + half
+                  , centreX + half, centreY - half
+                  , paint);
+        }
+
+        @Override
+        public void setAlpha(int alpha) {
+            paint.setAlpha(alpha);
+        }
+
+        @Override
+        public void setColorFilter(ColorFilter colorFilter) {
+            paint.setColorFilter(colorFilter);
+        }
+
+        @Override
+        public int getOpacity() {
+            return PixelFormat.TRANSLUCENT;
+        }
+    }
+
+    private static void ApplyCloseGlyph(TextView close, float density) {
+        close.setBackground(new LayerDrawable(new Drawable[] {
+                new ColorDrawable(Color.parseColor(CLOSE_BACKGROUND_COLOR))
+              , new CloseGlyphDrawable(density) }));
     }
 
     private TextView CreateControlView(

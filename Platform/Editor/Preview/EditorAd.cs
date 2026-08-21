@@ -1121,6 +1121,7 @@ namespace RiseOn.NativeAdMob.Editor {
               , CLOSE_TEXT
               , CLOSE_FONT_SIZE
               , closeOnLeft);
+            DrawCloseGlyph(closeButton);
             // Closes at once, where a device waits for the redirect to take
             // the screen before closing. There is nothing to wait for here:
             // opening a URL hands it to the desktop browser and the Editor
@@ -1152,6 +1153,42 @@ namespace RiseOn.NativeAdMob.Editor {
             var countdownFinished = config.Close.Cooldown <= 0;
             closeButton.gameObject.SetActive(countdownFinished);
             countdownControl.SetActive(!countdownFinished);
+        }
+
+        // The close mark's geometry, the device's own two numbers: it spans
+        // this share of the box's shorter side, in strokes this thick.
+        private const float CLOSE_GLYPH_SPAN_RATIO = .5f;
+        private const float CLOSE_GLYPH_STROKE_DP  = 2.5f;
+
+        // Drawn, not typed - the device draws two strokes because U+2715 has
+        // no single font behind it across OEMs, so a typed mark never looks
+        // the same twice. The preview mirrors the geometry with two bars.
+        private static void DrawCloseGlyph(Button closeButton) {
+            var label = closeButton.GetComponentInChildren<Text>();
+            if (label != null) label.text = string.Empty;
+
+            var box  = closeButton.GetComponent<RectTransform>();
+            var span = CONTROL_SIZE_DP * CLOSE_GLYPH_SPAN_RATIO;
+            foreach (var angle in new[] { 45f, -45f }) {
+                var bar = new GameObject(
+                    "CloseStroke"
+                  , typeof(RectTransform)
+                  , typeof(Image));
+                bar.transform.SetParent(box, false);
+
+                var rect = bar.GetComponent<RectTransform>();
+                rect.anchorMin        = new Vector2(.5f, .5f);
+                rect.anchorMax        = new Vector2(.5f, .5f);
+                rect.pivot            = new Vector2(.5f, .5f);
+                rect.anchoredPosition = Vector2.zero;
+                // A bar from corner to corner of a span-by-span square.
+                rect.sizeDelta        = new Vector2(span * 1.4142f, CLOSE_GLYPH_STROKE_DP);
+                rect.localRotation    = Quaternion.Euler(0f, 0f, angle);
+
+                var image = bar.GetComponent<Image>();
+                image.color         = Color.white;
+                image.raycastTarget = false;
+            }
         }
 
         private static Button CreateControlButton(
