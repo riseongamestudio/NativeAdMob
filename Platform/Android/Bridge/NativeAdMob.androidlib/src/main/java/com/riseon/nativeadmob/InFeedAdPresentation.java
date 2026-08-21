@@ -713,12 +713,6 @@ final class InFeedAdPresentation extends FrameLayout
                             observer.removeOnPreDrawListener(this);
                         }
                         layoutReady = true;
-                        Log.i(
-                                TAG
-                              , "In-feed layout ready "
-                                        + DescribePlan(activePlan)
-                                        + " for "
-                                        + DescribeRequestedRect());
                         if (!readyNotified && listener != null) {
                             readyNotified = true;
                             listener.OnReady();

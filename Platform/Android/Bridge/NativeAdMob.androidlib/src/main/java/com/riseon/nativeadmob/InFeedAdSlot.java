@@ -161,11 +161,6 @@ final class InFeedAdSlot {
             return;
         }
 
-        Log.i(
-                TAG
-              , "Show[" + index + "]: active=" + Describe(activeEntry)
-                        + " materializing=" + Describe(materializingEntry)
-                        + " cached=" + owner.CachedCount());
         visibleRequested = true;
 
         RemoveExpiredMaterializingEntry();
@@ -211,11 +206,6 @@ final class InFeedAdSlot {
     void Hide() {
         if (owner.released) return;
 
-        Log.i(
-                TAG
-              , "Hide[" + index + "]: active=" + Describe(activeEntry)
-                        + " materializing=" + Describe(materializingEntry)
-                        + " cached=" + owner.CachedCount());
         visibleRequested = false;
         owner.main.removeCallbacks(refreshRunnable);
         PauseVisibleTimer(activeEntry);

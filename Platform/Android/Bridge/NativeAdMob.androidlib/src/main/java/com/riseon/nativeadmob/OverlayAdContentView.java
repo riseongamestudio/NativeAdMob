@@ -258,8 +258,6 @@ final class OverlayAdContentView extends FrameLayout {
     // The last avoidance pass could not place the picture anywhere inside
     // the panel. The panel cannot grow, so the layout changes instead.
     private boolean avoidanceFoundNoBand;
-    // The last plan printed, so repeats of an unchanged one stay quiet.
-    private String lastAvoidancePlan;
     // What the pre-layout settle has to reach. These used to be captured by
     // layout-change listeners, which is exactly what made the panel move
     // after it was already on screen; the settle needs them from outside.
@@ -623,17 +621,6 @@ final class OverlayAdContentView extends FrameLayout {
                         displayMetrics
                       , mediaAspectRatio
                       , sidePanelHeight);
-        // One line per build: every layout decision and its inputs, so a
-        // screenshot of a wrong layout always arrives with its numbers.
-        Log.i(TAG, "Overlay layout: fullscreen=" + fullscreen
-                + " media=" + hasDisplayableMedia
-                + " video=" + hasVideoContent
-                + " side=" + sideMediaLayout
-                + " ticker=" + tickerLayout
-                + " iconHero=" + iconHero
-                + " aspect=" + mediaAspectRatio
-                + " reported=" + mediaAspectReported
-                + " panel=" + requestedPanelHeight);
 
         ConfigureBackground();
 
@@ -832,14 +819,6 @@ final class OverlayAdContentView extends FrameLayout {
                 railGap = sidePaddingBudget / 2;
                 sideRowRightPadding = sidePaddingBudget - railGap;
             }
-            Log.i(
-                    TAG
-                  , "Side-media layout: media "
-                            + sideMediaWidth + "x" + sideMediaHeight
-                            + " padding " + sideRowLeftInsetPx
-                            + "/" + railGap + "/" + sideRowRightPadding
-                            + " of " + sidePaddingBudget
-                            + " in panel height " + sidePanelHeight);
 
             contentColumn.setPadding(0, 0, 0, 0);
             LinearLayout sideRow = new LinearLayout(context);
@@ -1422,9 +1401,6 @@ final class OverlayAdContentView extends FrameLayout {
                       , density
                       , horizontalPadding
                       , requestedPanelHeight);
-        if (layoutUnrenderable) {
-            Log.i(TAG, "layout: UNRENDERABLE - every template exhausted");
-        }
     }
 
     // The road down for a video that no layout can host at the SDK's
@@ -1487,7 +1463,6 @@ final class OverlayAdContentView extends FrameLayout {
               , body
               , icon
               , callToAction);
-        Log.i(TAG, "media-less video layout: adopted, fits=" + contentFits);
         return contentFits;
     }
 
@@ -1507,8 +1482,7 @@ final class OverlayAdContentView extends FrameLayout {
         // every frame of it besides. In-feed draws the same line: the scrim
         // template is only ever evaluated for a still main image.
         if (mediaIsVideo) {
-            Log.i(TAG, "scrim layout: refused, media is video");
-            return false;
+                return false;
         }
         if (scrimLayoutActive
                 || nativeAdView == null
@@ -1557,7 +1531,6 @@ final class OverlayAdContentView extends FrameLayout {
         contentColumn.setPadding(scrimPad, scrimPad, scrimPad, scrimPad);
         contentColumn.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         contentColumn.setClipToPadding(false);
-        Log.i(TAG, "scrim layout: adopted, pad=" + scrimPad);
         return true;
     }
 
@@ -2268,24 +2241,29 @@ final class OverlayAdContentView extends FrameLayout {
             changed |= SettleTextFitting(settleBody, 1);
             changed |= SettleTextFitting(settleAdvertiser, 2);
             if (!changed) break;
-
-            // The avoidance plan was drawn against the content as it was;
-            // the content just moved, so the plan is redrawn here rather
-            // than left for onSizeChanged to correct in front of the player.
-            // The plan changes; the panel never does.
-            if (controlAvoidanceActive) {
-                // avoidancePanelHeight as-is, NOT minus getPaddingTop().
-                // Measured on a cutout device: displayMetrics.heightPixels
-                // (2290) already excludes the 110px inset of a 2400px
-                // window, so it equals onSizeChanged's currentHeight minus
-                // paddingTop by itself. Subtracting the inset here again -
-                // tried once - made the settle plan on 2180 and the first
-                // real layout replan on 2290, a 110px step in front of the
-                // player on every fullscreen ad.
-                RecomputeMediaControlAvoidance(
-                        settleColumnWidth
-                      , avoidancePanelHeight);
-            }
+        }
+        // Unconditional, OUTSIDE the loop: the plan the player first sees
+        // must be computed from the content as it finally stands. When the
+        // loop changed nothing - a pinned icon exits it on the first pass -
+        // it used to leave without ever re-planning, and onSizeChanged
+        // then corrected the plan on screen: the exact jolt this whole
+        // pass exists to prevent. The drift that made the passes disagree
+        // was the media seam double-count, since fixed at its source in
+        // MeasureLowerContent; this recompute stays regardless, because
+        // the invariant must not depend on every future drift having
+        // already been found.
+        //
+        // avoidancePanelHeight as-is, NOT minus getPaddingTop(). Measured
+        // on a cutout device: displayMetrics.heightPixels (2290) already
+        // excludes the 110px inset of a 2400px window, so it equals
+        // onSizeChanged's currentHeight minus paddingTop by itself.
+        // Subtracting it here again - tried once - made the settle plan on
+        // 2180 and the first real layout replan on 2290, a 110px step on
+        // every fullscreen ad.
+        if (controlAvoidanceActive) {
+            RecomputeMediaControlAvoidance(
+                    settleColumnWidth
+                  , avoidancePanelHeight);
         }
         // A plan that ended with nowhere to put the picture is not a plan.
         // The scrim is out of reach by now - the ad is already bound - so
@@ -2294,7 +2272,6 @@ final class OverlayAdContentView extends FrameLayout {
         // never a 0x0 media in front of the player.
         if (controlAvoidanceActive && avoidanceFoundNoBand) {
             layoutUnrenderable = true;
-            Log.i(TAG, "layout: UNRENDERABLE - no band left after settle");
         }
         // The scrim freed the text from sharing the panel with the picture,
         // but not from the panel itself. By now the pipeline has already
@@ -2307,9 +2284,6 @@ final class OverlayAdContentView extends FrameLayout {
                     MeasureColumnHeight(settleColumn, settleColumnWidth);
             if (lastResortColumnHeight > lastResortPanelHeight) {
                 layoutUnrenderable = true;
-                Log.i(TAG, "layout: UNRENDERABLE - last-resort text "
-                        + lastResortColumnHeight + " exceeds panel "
-                        + lastResortPanelHeight);
             }
         }
     }
@@ -2633,11 +2607,6 @@ final class OverlayAdContentView extends FrameLayout {
         // now, the same one in-feed lives under. Nothing overflows and
         // nothing asks for a bigger panel.
         avoidanceFoundNoBand = bestScore < 0L;
-        if (avoidanceFoundNoBand) {
-            Log.i(TAG, "avoidance: NO BAND lower=" + lowerContentHeight
-                    + " panel=" + panelHeight
-                    + " avail=" + availableHeight);
-        }
 
         if (TrimChromeForStarvedMedia(
                 bestBoxWidth
@@ -2686,23 +2655,6 @@ final class OverlayAdContentView extends FrameLayout {
                 availableHeight = grownAvailable;
                 slack = grownSlack;
             }
-        }
-        // One line per PLAN, not per pass. The settle runs this two or three
-        // times and onSizeChanged once more, all of them landing on the same
-        // answer now - printing that answer four times says nothing the
-        // first one did not. A second line for one ad means the layout moved
-        // after it had settled, which is the one thing worth a log here.
-        String plan = "Avoidance: panel=" + panelWidth + "x" + panelHeight
-                + " lower=" + lowerContentHeight
-                + " avail=" + availableHeight
-                + " box=" + bestBoxWidth + "x" + bestBoxHeight
-                + " top=" + bestTop
-                + " intervalLeft=" + bestIntervalLeft
-                + " slack=" + slack
-                + " edges=" + bestEdges;
-        if (!plan.equals(lastAvoidancePlan)) {
-            lastAvoidancePlan = plan;
-            Log.i(TAG, plan);
         }
         controlsAtEdgesBelowBadges = bestEdges;
         avoidanceColumn.setPadding(
@@ -2765,8 +2717,16 @@ final class OverlayAdContentView extends FrameLayout {
           , LinearLayout.LayoutParams mediaLayoutParams) {
         int previousWidth = mediaLayoutParams.width;
         int previousHeight = mediaLayoutParams.height;
+        int previousBottomMargin = mediaLayoutParams.bottomMargin;
         mediaLayoutParams.width = 0;
         mediaLayoutParams.height = 0;
+        // The margin collapses with the view. The seam the plan hangs
+        // under the media is already accounted for explicitly in the band
+        // and slack arithmetic; once the first plan had installed it as
+        // this margin, every later measure counted it a SECOND time inside
+        // the lower stack - the +6px drift between first plan and every
+        // replan, named by the replan log on device, 2026-08-21.
+        mediaLayoutParams.bottomMargin = 0;
         avoidanceMediaView.setLayoutParams(mediaLayoutParams);
         avoidanceColumn.measure(
                 View.MeasureSpec.makeMeasureSpec(
@@ -2778,6 +2738,7 @@ final class OverlayAdContentView extends FrameLayout {
         int lowerContentHeight = avoidanceColumn.getMeasuredHeight();
         mediaLayoutParams.width = previousWidth;
         mediaLayoutParams.height = previousHeight;
+        mediaLayoutParams.bottomMargin = previousBottomMargin;
         avoidanceMediaView.setLayoutParams(mediaLayoutParams);
         return lowerContentHeight;
     }

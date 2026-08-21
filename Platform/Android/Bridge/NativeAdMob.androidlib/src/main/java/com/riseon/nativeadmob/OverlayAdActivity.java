@@ -225,10 +225,6 @@ public final class OverlayAdActivity extends Activity {
                       , requestedPanelHeight
                       , () -> CompletePresentation(""));
             }
-            Log.i(TAG, "Show timeline: content attached +"
-                    + (SystemClock.uptimeMillis()
-                            - session.showRequestedAtMs)
-                    + "ms (prebuilt: " + (prebuilt ? "yes" : "no") + ")");
             setContentView(
                     contentView
                   , new ViewGroup.LayoutParams(
@@ -250,10 +246,6 @@ public final class OverlayAdActivity extends Activity {
         contentView.OnPresented(session.GetRemainingCountdownMs());
         if (!presented) {
             presented = true;
-            Log.i(TAG, "Show timeline: presented +"
-                    + (SystemClock.uptimeMillis()
-                            - session.showRequestedAtMs)
-                    + "ms");
             NotifyDisplayed(sessionId, session);
         }
     }

@@ -437,11 +437,6 @@ static void ROCentreUnderIcon(UIView *view) {
 
     // One line per build: every layout decision and its inputs, so a
     // screenshot of a wrong layout always arrives with its numbers.
-    NSLog(@"%@: Overlay layout: fullscreen=%d media=%d video=%d side=%d "
-            "ticker=%d iconHero=%d aspect=%g reported=%d panel=%g"
-          , kROTag, _fullscreen, _hasDisplayableMedia, hasVideoContent
-          , _sideMediaLayout, _tickerLayout, _iconHero
-          , _mediaAspectRatio, _mediaAspectReported, requestedPanelHeight);
 
     [self ro_configureBackground];
 
@@ -603,11 +598,6 @@ static void ROCentreUnderIcon(UIView *view) {
             railGap = sidePaddingBudget / 2;
             sideRowRightPadding = railGap;
         }
-        NSLog(@"%@: Side-media layout: media %gx%g padding %g/%g/%g of %g"
-                " in panel height %g"
-              , kROTag, sideMediaWidth, sideMediaHeight, _sideRowLeftInset
-              , railGap, sideRowRightPadding, sidePaddingBudget
-              , sidePanelHeight);
 
         _contentColumn.ro_padding = UIEdgeInsetsZero;
         HBLinearLayoutView *sideRow = [[HBLinearLayoutView alloc] init];
@@ -815,10 +805,6 @@ static void ROCentreUnderIcon(UIView *view) {
         if (_contentColumn.ro_measuredSize.height
                 > _lastResortPanelHeight) {
             _layoutUnrenderable = YES;
-            NSLog(@"%@: layout: UNRENDERABLE - last-resort text %g exceeds"
-                   " panel %g", kROTag
-                  , _contentColumn.ro_measuredSize.height
-                  , _lastResortPanelHeight);
         }
     }
 }
@@ -1696,9 +1682,15 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     CGFloat previousWidth = _mediaView.ro_layoutWidth;
     CGFloat previousHeight = _mediaView.ro_layoutHeight;
     CGFloat previousWeight = _mediaView.ro_layoutWeight;
+    UIEdgeInsets previousMargins = _mediaView.ro_layoutMargins;
     _mediaView.ro_layoutWidth = 0;
     _mediaView.ro_layoutHeight = 0;
     _mediaView.ro_layoutWeight = 0;
+    // The margins collapse with the view - the seam under the media is
+    // accounted for explicitly in the band arithmetic, and leaving it
+    // here counted it twice from the second measure on. The Android side
+    // carries the on-device attribution of this exact drift.
+    _mediaView.ro_layoutMargins = UIEdgeInsetsZero;
     [_contentColumn ro_measureWithWidthSpec:
                     HBMeasureSpecMake(HBMeasureSpecExactly, panelWidth)
                                  heightSpec:
@@ -1707,6 +1699,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     _mediaView.ro_layoutWidth = previousWidth;
     _mediaView.ro_layoutHeight = previousHeight;
     _mediaView.ro_layoutWeight = previousWeight;
+    _mediaView.ro_layoutMargins = previousMargins;
     return lowerContentHeight;
 }
 
@@ -1874,10 +1867,6 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     // grow, so the layout gives way instead: the caller reads this and
     // reaches for the last-resort ladder.
     _avoidanceFoundNoBand = bestScore < 0;
-    if (_avoidanceFoundNoBand) {
-        NSLog(@"%@: avoidance: NO BAND lower=%g panel=%g avail=%g"
-              , kROTag, lowerContentHeight, panelHeight, availableHeight);
-    }
 
     if ([self ro_trimChromeForStarvedMediaWithBoxWidth:bestBoxWidth
                                         intervalWidth:bestIntervalWidth]) {
@@ -1916,11 +1905,6 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
             slack = grownSlack;
         }
     }
-    NSLog(@"%@: Avoidance: panel=%gx%g lower=%g avail=%g box=%gx%g top=%g "
-            "intervalLeft=%g slack=%g edges=%d"
-          , kROTag, panelWidth, panelHeight, lowerContentHeight
-          , availableHeight, bestBoxWidth, bestBoxHeight, bestTop
-          , bestIntervalLeft, slack, bestAtEdges);
     _controlsAtEdgesBelowBadges = bestAtEdges;
     columnPadding.top = bestTop;
     columnPadding.bottom = slack / 2;
@@ -1952,10 +1936,6 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
                             panelHeight]
                     : [self ro_applyScrimLayoutWithPanelHeight:panelHeight]);
     _layoutUnrenderable = !adopted;
-    if (_layoutUnrenderable) {
-        NSLog(@"%@: layout: UNRENDERABLE - every template exhausted"
-              , kROTag);
-    }
 }
 
 // The scrim spends the panel twice: the picture takes the whole of it, a
@@ -1967,7 +1947,6 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
 // of it, and the veil dims every frame besides.
 - (BOOL)ro_applyScrimLayoutWithPanelHeight:(CGFloat)panelHeight {
     if (_mediaIsVideo) {
-        NSLog(@"%@: scrim layout: refused, media is video", kROTag);
         return NO;
     }
     if (_scrimLayoutActive
@@ -1999,7 +1978,6 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
           , kROHorizontalPadding);
     _contentColumn.ro_gravity =
             HBGravityBottom | HBGravityCenterHorizontal;
-    NSLog(@"%@: scrim layout: adopted", kROTag);
     return YES;
 }
 
@@ -2032,8 +2010,6 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     [self ro_restoreOptionalRows];
     BOOL contentFits =
             [self ro_runCollapsibleFitPipelineWithPanelHeight:panelHeight];
-    NSLog(@"%@: media-less video layout: adopted, fits=%d"
-          , kROTag, (int)contentFits);
     return contentFits;
 }
 
