@@ -1189,6 +1189,33 @@ namespace RiseOn.NativeAdMob.Editor {
                 image.color         = Color.white;
                 image.raycastTarget = false;
             }
+
+            // The device strokes with round caps - half a stroke of ink past
+            // each endpoint. The bars above end square, so each of the four
+            // ends gets a dot of the stroke's diameter: the same silhouette
+            // the device draws, built from the one round sprite Unity ships.
+            var cap = Resources.GetBuiltinResource<Sprite>("UI/Skin/Knob.psd");
+            foreach (var corner in new[] {
+                         new Vector2( 1f,  1f), new Vector2(-1f, -1f)
+                       , new Vector2( 1f, -1f), new Vector2(-1f,  1f) }) {
+                var dot = new GameObject(
+                    "CloseStrokeCap"
+                  , typeof(RectTransform)
+                  , typeof(Image));
+                dot.transform.SetParent(box, false);
+
+                var rect = dot.GetComponent<RectTransform>();
+                rect.anchorMin        = new Vector2(.5f, .5f);
+                rect.anchorMax        = new Vector2(.5f, .5f);
+                rect.pivot            = new Vector2(.5f, .5f);
+                rect.anchoredPosition = corner * (span * .5f);
+                rect.sizeDelta        = new Vector2(CLOSE_GLYPH_STROKE_DP, CLOSE_GLYPH_STROKE_DP);
+
+                var image = dot.GetComponent<Image>();
+                image.sprite        = cap;
+                image.color         = Color.white;
+                image.raycastTarget = false;
+            }
         }
 
         private static Button CreateControlButton(

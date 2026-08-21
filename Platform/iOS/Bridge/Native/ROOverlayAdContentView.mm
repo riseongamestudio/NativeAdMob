@@ -788,7 +788,7 @@ static void ROCentreUnderIcon(UIView *view) {
     _closeGlyph.strokeColor = UIColor.whiteColor.CGColor;
     _closeGlyph.fillColor = UIColor.clearColor.CGColor;
     _closeGlyph.lineWidth = kROCloseGlyphStroke;
-    _closeGlyph.lineCap = kCALineCapButt;
+    _closeGlyph.lineCap = kCALineCapRound;
     [_close.layer addSublayer:_closeGlyph];
     _close.hidden = YES;
     _close.userInteractionEnabled = YES;

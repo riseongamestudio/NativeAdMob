@@ -2908,11 +2908,10 @@ final class OverlayAdContentView extends FrameLayout {
         CloseGlyphDrawable(float density) {
             paint.setColor(Color.WHITE);
             paint.setStyle(Paint.Style.STROKE);
-            // Square ends, not round: a round cap adds half a stroke of ink
-            // past each endpoint, which read as a longer mark than the
-            // Editor's corner-to-corner bars. Butt ends are the one shape
-            // all three renderers draw identically.
-            paint.setStrokeCap(Paint.Cap.BUTT);
+            // Round ends: half a stroke of ink past each endpoint. The
+            // Editor preview mirrors it with a dot on every bar end - the
+            // device is never dressed down to what the preview finds easy.
+            paint.setStrokeCap(Paint.Cap.ROUND);
             paint.setStrokeWidth(CLOSE_GLYPH_STROKE_DP * density);
         }
 
