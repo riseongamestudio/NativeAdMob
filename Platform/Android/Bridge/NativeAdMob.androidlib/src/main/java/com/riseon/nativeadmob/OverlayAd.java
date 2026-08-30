@@ -242,14 +242,21 @@ public final class OverlayAd extends BaseAd {
         loadListener = null;
     }
 
+    // Every Notify* below hands its event to AdEventDispatcher instead of
+    // crossing into C# on the calling thread - see the note on that class.
+    // Arguments read from mutable state are snapshotted into locals BEFORE
+    // the post, so each event carries the values of the moment it left,
+    // not of the moment the queue got around to it.
     private void NotifyLoadingStarted() {
         NativeAdLoadListener listener = loadListener;
         if (listener == null) return;
-        try {
-            listener.OnLoadingStarted();
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnLoadingStarted callback failed", exception);
-        }
+        AdEventDispatcher.Post(() -> {
+            try {
+                listener.OnLoadingStarted();
+            } catch (RuntimeException exception) {
+                Log.e(TAG, "OnLoadingStarted callback failed", exception);
+            }
+        });
     }
 
     private void NotifyStateChanged(
@@ -257,21 +264,25 @@ public final class OverlayAd extends BaseAd {
           , boolean isLoading) {
         NativeAdLoadListener listener = loadListener;
         if (listener == null) return;
-        try {
-            listener.OnStateChanged(isReady, isLoading);
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnStateChanged callback failed", exception);
-        }
+        AdEventDispatcher.Post(() -> {
+            try {
+                listener.OnStateChanged(isReady, isLoading);
+            } catch (RuntimeException exception) {
+                Log.e(TAG, "OnStateChanged callback failed", exception);
+            }
+        });
     }
 
     private void NotifyShowNotReady() {
         NativeAdLoadListener listener = loadListener;
         if (listener == null) return;
-        try {
-            listener.OnShowNotReady();
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnShowNotReady callback failed", exception);
-        }
+        AdEventDispatcher.Post(() -> {
+            try {
+                listener.OnShowNotReady();
+            } catch (RuntimeException exception) {
+                Log.e(TAG, "OnShowNotReady callback failed", exception);
+            }
+        });
     }
 
     private void NotifyLoadingCompleted(
@@ -279,15 +290,19 @@ public final class OverlayAd extends BaseAd {
           , String errorMessage) {
         NativeAdLoadListener listener = loadListener;
         if (listener == null) return;
-        try {
-            listener.OnLoadingCompleted(
-                    errorCode
-                  , errorMessage
-                  , cachedCount
-                  , cacheSize);
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnLoadingCompleted callback failed", exception);
-        }
+        int cachedCountNow = cachedCount;
+        int cacheSizeNow = cacheSize;
+        AdEventDispatcher.Post(() -> {
+            try {
+                listener.OnLoadingCompleted(
+                        errorCode
+                      , errorMessage
+                      , cachedCountNow
+                      , cacheSizeNow);
+            } catch (RuntimeException exception) {
+                Log.e(TAG, "OnLoadingCompleted callback failed", exception);
+            }
+        });
     }
 
     @Override
@@ -299,26 +314,30 @@ public final class OverlayAd extends BaseAd {
           , int precision) {
         NativeAdLoadListener listener = loadListener;
         if (listener == null) return;
-        try {
-            listener.OnAdPaid(
-                    source
-                  , paidAdUnitId
-                  , value
-                  , currencyCode
-                  , precision);
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnAdPaid callback failed", exception);
-        }
+        AdEventDispatcher.Post(() -> {
+            try {
+                listener.OnAdPaid(
+                        source
+                      , paidAdUnitId
+                      , value
+                      , currencyCode
+                      , precision);
+            } catch (RuntimeException exception) {
+                Log.e(TAG, "OnAdPaid callback failed", exception);
+            }
+        });
     }
 
     private void NotifyDisplayed() {
         NativeAdLoadListener listener = loadListener;
         if (listener == null) return;
-        try {
-            listener.OnDisplayed();
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnDisplayed callback failed", exception);
-        }
+        AdEventDispatcher.Post(() -> {
+            try {
+                listener.OnDisplayed();
+            } catch (RuntimeException exception) {
+                Log.e(TAG, "OnDisplayed callback failed", exception);
+            }
+        });
     }
 
     private void NotifyPresentationFailed(
@@ -326,11 +345,13 @@ public final class OverlayAd extends BaseAd {
           , String errorMessage) {
         NativeAdLoadListener listener = loadListener;
         if (listener == null) return;
-        try {
-            listener.OnPresentationFailed(errorCode, errorMessage);
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnPresentationFailed callback failed", exception);
-        }
+        AdEventDispatcher.Post(() -> {
+            try {
+                listener.OnPresentationFailed(errorCode, errorMessage);
+            } catch (RuntimeException exception) {
+                Log.e(TAG, "OnPresentationFailed callback failed", exception);
+            }
+        });
     }
 
     public synchronized void Configure(
@@ -1353,15 +1374,21 @@ public final class OverlayAd extends BaseAd {
     // The cache count is read here rather than passed in, so every
     // completion reports the cache as it stands at the instant it leaves -
     // there is no call site that could hand over a number from earlier.
+    // "The instant it leaves" is the instant of the post, which is why the
+    // count goes into a local before the event enters the queue.
     private void NotifyCompleted(
             NativeAdCompletedListener listener
           , String errorMessage
           , boolean adConsumed) {
         if (listener == null) return;
-        try {
-            listener.OnAdCompleted(errorMessage, adConsumed, cachedCount);
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnAdCompleted callback failed", exception);
-        }
+        int cachedCountNow = cachedCount;
+        AdEventDispatcher.Post(() -> {
+            try {
+                listener.OnAdCompleted(
+                        errorMessage, adConsumed, cachedCountNow);
+            } catch (RuntimeException exception) {
+                Log.e(TAG, "OnAdCompleted callback failed", exception);
+            }
+        });
     }
 }

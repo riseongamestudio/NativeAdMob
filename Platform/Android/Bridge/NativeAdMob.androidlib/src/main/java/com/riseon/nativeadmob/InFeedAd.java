@@ -484,14 +484,20 @@ public final class InFeedAd extends BaseAd {
                 + " | retry=" + retryDescription;
     }
 
+    // Every Notify* below hands its event to AdEventDispatcher instead of
+    // crossing into C# on the calling thread - see the note on that class.
+    // Arguments read from mutable state are snapshotted into locals BEFORE
+    // the post, so each event carries the values of the moment it left.
     private void NotifyLoadingStarted() {
         InFeedAdListener current = listener;
         if (current == null) return;
-        try {
-            current.OnLoadingStarted();
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnLoadingStarted callback failed", exception);
-        }
+        AdEventDispatcher.Post(() -> {
+            try {
+                current.OnLoadingStarted();
+            } catch (RuntimeException exception) {
+                Log.e(TAG, "OnLoadingStarted callback failed", exception);
+            }
+        });
     }
 
     private void NotifyLoadingCompleted(
@@ -499,15 +505,19 @@ public final class InFeedAd extends BaseAd {
           , String errorMessage) {
         InFeedAdListener current = listener;
         if (current == null) return;
-        try {
-            current.OnLoadingCompleted(
-                    errorCode
-                  , errorMessage
-                  , cachedAds.size()
-                  , cacheSize);
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnLoadingCompleted callback failed", exception);
-        }
+        int cachedCountNow = cachedAds.size();
+        int cacheSizeNow = cacheSize;
+        AdEventDispatcher.Post(() -> {
+            try {
+                current.OnLoadingCompleted(
+                        errorCode
+                      , errorMessage
+                      , cachedCountNow
+                      , cacheSizeNow);
+            } catch (RuntimeException exception) {
+                Log.e(TAG, "OnLoadingCompleted callback failed", exception);
+            }
+        });
     }
 
     @Override
@@ -519,36 +529,42 @@ public final class InFeedAd extends BaseAd {
           , int precision) {
         InFeedAdListener current = listener;
         if (current == null) return;
-        try {
-            current.OnAdPaid(
-                    source
-                  , paidAdUnitId
-                  , value
-                  , currencyCode
-                  , precision);
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnAdPaid callback failed", exception);
-        }
+        AdEventDispatcher.Post(() -> {
+            try {
+                current.OnAdPaid(
+                        source
+                      , paidAdUnitId
+                      , value
+                      , currencyCode
+                      , precision);
+            } catch (RuntimeException exception) {
+                Log.e(TAG, "OnAdPaid callback failed", exception);
+            }
+        });
     }
 
     void NotifySlotDisplayed(int slotIndex) {
         InFeedAdListener current = listener;
         if (current == null) return;
-        try {
-            current.OnSlotDisplayed(slotIndex);
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnSlotDisplayed callback failed", exception);
-        }
+        AdEventDispatcher.Post(() -> {
+            try {
+                current.OnSlotDisplayed(slotIndex);
+            } catch (RuntimeException exception) {
+                Log.e(TAG, "OnSlotDisplayed callback failed", exception);
+            }
+        });
     }
 
     void NotifySlotShowNotReady(int slotIndex) {
         InFeedAdListener current = listener;
         if (current == null) return;
-        try {
-            current.OnSlotShowNotReady(slotIndex);
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnSlotShowNotReady callback failed", exception);
-        }
+        AdEventDispatcher.Post(() -> {
+            try {
+                current.OnSlotShowNotReady(slotIndex);
+            } catch (RuntimeException exception) {
+                Log.e(TAG, "OnSlotShowNotReady callback failed", exception);
+            }
+        });
     }
 
     void NotifySlotPresentationFailed(
@@ -557,13 +573,16 @@ public final class InFeedAd extends BaseAd {
           , String errorMessage) {
         InFeedAdListener current = listener;
         if (current == null) return;
-        try {
-            current.OnSlotPresentationFailed(
-                    slotIndex
-                  , errorCode
-                  , errorMessage);
-        } catch (RuntimeException exception) {
-            Log.e(TAG, "OnSlotPresentationFailed callback failed", exception);
-        }
+        AdEventDispatcher.Post(() -> {
+            try {
+                current.OnSlotPresentationFailed(
+                        slotIndex
+                      , errorCode
+                      , errorMessage);
+            } catch (RuntimeException exception) {
+                Log.e(TAG, "OnSlotPresentationFailed callback failed"
+                      , exception);
+            }
+        });
     }
 }
