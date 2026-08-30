@@ -3,6 +3,7 @@ package com.riseon.nativeadmob;
 import android.app.Activity;
 import android.app.Application;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
@@ -175,6 +176,18 @@ public final class OverlayAdActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Requested here, not in the manifest: Android 8.0 (API 26 only)
+        // crashes a translucent activity that declares a fixed orientation,
+        // from super.onCreate, before any code of ours runs. Measured in
+        // production: IllegalStateException "Only fullscreen opaque
+        // activities can request orientation", 7 users. On API 26 the
+        // request is skipped; a translucent activity there follows the
+        // orientation of the opaque activity beneath it - the portrait
+        // game - so the ad stays portrait either way.
+        if (Build.VERSION.SDK_INT != Build.VERSION_CODES.O) {
+            setRequestedOrientation(
+                    ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        }
         ConfigureActivityTransitions(this);
         RegisterBackCallback();
 

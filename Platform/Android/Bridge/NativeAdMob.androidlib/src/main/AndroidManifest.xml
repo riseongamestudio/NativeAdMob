@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <!-- No android:screenOrientation here. Android 8.0 (API 26 only)
+             throws "Only fullscreen opaque activities can request
+             orientation" from Activity.onCreate when a translucent activity
+             declares a fixed orientation - a hard crash before any of our
+             code runs. onCreate requests portrait at runtime instead,
+             skipping API 26, where a translucent activity follows the
+             orientation of the opaque activity beneath it (the portrait
+             game) anyway. -->
         <activity
             android:name="com.riseon.nativeadmob.OverlayAdActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
@@ -9,7 +17,6 @@
             android:exported="false"
             android:hardwareAccelerated="true"
             android:launchMode="standard"
-            android:screenOrientation="portrait"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <!-- The full-screen cover. An Activity because only an Activity on
              top pauses the game below; the half-screen cover is a window and
