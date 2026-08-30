@@ -123,7 +123,17 @@ public final class OverlayAdActivity extends Activity {
             if (targetSession == null || targetSession.completed) return false;
         }
 
-        return StartSessionIntent(hostActivity, targetSessionId);
+        if (!StartSessionIntent(hostActivity, targetSessionId)) return false;
+
+        // The initial start needs the same arrival proof the restore path
+        // has always had: startActivity from a backgrounded app succeeds as
+        // a call and is silently discarded by the system (Android 10+
+        // background-launch restriction), so the return value above proves
+        // nothing about the Activity ever opening.
+        MAIN.postDelayed(
+                () -> VerifyInitialAttach(targetSessionId)
+              , RESTORE_ATTACH_TIMEOUT_MS);
+        return true;
     }
 
     static boolean IsSessionActive(String targetSessionId) {
@@ -759,6 +769,32 @@ public final class OverlayAdActivity extends Activity {
             targetSession.restoreStartInFlight = false;
         }
         RetryOrFailRestore(targetSession);
+    }
+
+    // The missing entrance check for the very first start. The player taps
+    // through the ad into the browser, the interstitial closes itself
+    // behind the browser, the end card start goes into the void - and the
+    // session used to dangle behind the black cover forever. Measured in
+    // production: "the game blacks out during a ad after coming back to
+    // the game." A session that missed its entrance is marked
+    // restorePending and handed to the restore machinery: host
+    // backgrounded, the resumed-host watcher reopens the end card the
+    // moment the player returns; host still in front, the restore loop
+    // retries now and completes with an error when it cannot land. The
+    // invariant either way: a started session attaches, is restored on
+    // resume, or completes with an error - it never dangles.
+    private static void VerifyInitialAttach(String targetSessionId) {
+        Session targetSession;
+        synchronized (SESSION_LOCK) {
+            targetSession = SESSIONS.get(targetSessionId);
+            if (targetSession == null
+                    || targetSession.completed
+                    || targetSession.activity != null) {
+                return;
+            }
+            targetSession.restorePending = true;
+        }
+        ScheduleSessionRestore(targetSession, RESTORE_DELAY_MS);
     }
 
     private static void VerifyRestoreAttached(String targetSessionId) {
