@@ -31,6 +31,7 @@ NSTimeInterval ROInFeedBackoffDelay(
     NSString *_adUnitId;
     NSInteger _cacheSize;
     int32_t _backgroundColor;
+    CGFloat _roundCorner;
     NSArray<ROInFeedAdSlot *> *_slots;
     NSMutableArray<ROInFeedCachedAd *> *_cachedAds;
     // OwnsAd runs inside the SDK's paid-event callback, off whatever thread
@@ -58,6 +59,7 @@ static NSTimeInterval RONow(void) {
                        slotCount:(NSInteger)slotCount
                        cacheSize:(NSInteger)cacheSize
                  backgroundColor:(int32_t)backgroundColor
+                     roundCorner:(CGFloat)roundCornerPt
                       instanceId:(int32_t)instanceId {
     self = [super initWithInstanceId:instanceId];
     if (self == nil) return nil;
@@ -68,6 +70,7 @@ static NSTimeInterval RONow(void) {
             kROMaxCacheSize
           , cacheSize < 1 ? boundedSlotCount + 1 : cacheSize);
     _backgroundColor = backgroundColor;
+    _roundCorner = MAX(0, roundCornerPt);
     _cachedAds = [NSMutableArray array];
     _ownedAds = [NSHashTable weakObjectsHashTable];
     _inFeedCallbacksLock = [NSObject new];
@@ -438,6 +441,10 @@ static NSTimeInterval RONow(void) {
 
 - (float)slotBackgroundColor {
     return _backgroundColor;
+}
+
+- (CGFloat)slotRoundCorner {
+    return _roundCorner;
 }
 
 - (NSString *)unitAdUnitId {

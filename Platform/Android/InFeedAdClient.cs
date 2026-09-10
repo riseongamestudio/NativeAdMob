@@ -25,7 +25,8 @@ namespace RiseOn.NativeAdMob.Android {
               , settings.AdUnitId
               , settings.SlotCount
               , settings.CacheSize
-              , AdColor.Pack(settings.BackgroundColor));
+              , AdColor.Pack(settings.BackgroundColor)
+              , settings.RoundCornerPx);
             listener = new InFeedAdListenerProxy(callbacks);
             javaObject.Call(
                 JAVA_SET_LISTENER_METHOD

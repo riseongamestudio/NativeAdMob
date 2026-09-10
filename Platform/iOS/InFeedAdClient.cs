@@ -17,6 +17,7 @@ namespace RiseOn.NativeAdMob.iOS {
               , settings.SlotCount
               , settings.CacheSize
               , AdColor.Pack(settings.BackgroundColor)
+              , settings.RoundCornerPx
               , instanceId);
             if (handle == IntPtr.Zero) return;
 

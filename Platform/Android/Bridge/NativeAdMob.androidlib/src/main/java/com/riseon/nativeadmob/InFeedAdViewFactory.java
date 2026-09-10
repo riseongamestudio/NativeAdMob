@@ -116,6 +116,13 @@ final class InFeedAdViewFactory {
     private static final float CELL_SPACING_RATIO = 0.02f;
     private static final float CELL_CTA_PADDING_RATIO = 0.035f;
     private static final float CELL_EDGE_PADDING_RATIO = 0.015f;
+    // How far a straight-edged asset has to stand back from a rounded
+    // corner of radius r so that its own corner just touches the arc: the
+    // arc's centre sits r in from both edges, the asset's corner sits d in
+    // from both, and the two are r apart exactly when (r - d) * sqrt(2) =
+    // r, so d = r * (1 - 1 / sqrt(2)). Less and the corner is cut off;
+    // more and the cell wastes border it was never asked for.
+    private static final double CORNER_INSET_RATIO = 1d - Math.sqrt(0.5d);
 
     // The height handed to the button is a minimum; the row it sits in
     // stretches it well past that, and a label sized from the minimum then sits
@@ -195,16 +202,28 @@ final class InFeedAdViewFactory {
     private final NativeAd nativeAd;
     private final float density;
     private final int slotShortSidePx;
+    // The clearance every asset keeps from the cell's rounded corners; 0
+    // on a square cell. Spent once, as the outer column's padding on every
+    // template but the scrim one, where the background picture is meant
+    // to run under the curve and only the block in front stands back.
+    private final int cornerInsetPx;
 
     InFeedAdViewFactory(
             Activity activity
           , NativeAd nativeAd
           , float density
-          , int slotShortSidePx) {
+          , int slotShortSidePx
+          , int roundCornerPx) {
         this.activity = activity;
         this.nativeAd = nativeAd;
         this.density = density;
         this.slotShortSidePx = Math.max(1, slotShortSidePx);
+        this.cornerInsetPx = CornerInsetForRadius(roundCornerPx);
+    }
+
+    static int CornerInsetForRadius(int roundCornerPx) {
+        if (roundCornerPx <= 0) return 0;
+        return (int) Math.ceil(roundCornerPx * CORNER_INSET_RATIO);
     }
 
     ProbeLayout CreateProbe(
@@ -421,11 +440,13 @@ final class InFeedAdViewFactory {
         return Dp(120);
     }
 
-    // Edge inset only, and the slot is already bounded by the card it sits in,
-    // so this buys nothing that the surrounding layout does not already give.
-    // On a 96dp slot the old roomy value spent 8% of the width on it.
+    // The slot is already bounded by the card it sits in, so a tier's own
+    // edge inset bought nothing (on a 96dp slot the old roomy value spent
+    // 8% of the width on it). The one inset the cell keeps is the corner
+    // clearance, the same on every tier: what the outer column spends, and
+    // so what the engine has to budget for on both sides.
     int PaddingForTier(int tier) {
-        return 0;
+        return cornerInsetPx;
     }
 
     int GapForTier(int tier) {
@@ -510,10 +531,16 @@ final class InFeedAdViewFactory {
         views.outer = outer;
         outer.setOrientation(LinearLayout.VERTICAL);
         outer.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL);
-        outer.setPadding(0, 0, 0, 0);
+        // The corner clearance, spent here once for everything the column
+        // holds - media band, side rail, texts, button. The scrim template
+        // spends none: its picture is the cell's background and runs under
+        // the curve; the block in front adds the clearance to its own pad.
+        boolean mediaIsBackground = plan.template
+                == InFeedAdLayoutEngine.TEMPLATE_MEDIA_BACKGROUND;
+        int outerInset = mediaIsBackground ? 0 : cornerInsetPx;
+        outer.setPadding(outerInset, outerInset, outerInset, outerInset);
 
-        if (plan.template
-                == InFeedAdLayoutEngine.TEMPLATE_MEDIA_BACKGROUND) {
+        if (mediaIsBackground) {
             View backgroundMedia = CreateMediaView(
                     plan
                   , views
@@ -570,8 +597,9 @@ final class InFeedAdViewFactory {
             // side - a tiny cell cannot afford more.
             // A hair of breathing room, sized by the cell instead of
             // by the tier: enough that the text is not printed onto the
-            // very edge, never enough to read as a border.
-            int scrimPad = CellEdgePaddingPx();
+            // very edge, never enough to read as a border. Plus the corner
+            // clearance the outer column did not spend on this template.
+            int scrimPad = CellEdgePaddingPx() + cornerInsetPx;
             scrim.setPadding(scrimPad, scrimPad, scrimPad, scrimPad);
 
             views.headline = CreateText(
@@ -942,24 +970,24 @@ final class InFeedAdViewFactory {
             return;
         }
 
-        int edgePadding = PaddingForTier(plan.tier);
         // Only the badge strip is reserved - the badges have to stay visible.
-        // Everything else meets the slot edge, the way the badges already do.
+        // Everything else meets the column's edge, the way the badges
+        // already do; the corner clearance is the outer column's padding,
+        // spent once, so nothing is added here.
         int topPadding = views.insetContentAvoidsBadges
                 ? BadgeHeightPx(plan)
                 : 0;
-        views.insetContent.setPadding(
-                edgePadding
-              , topPadding
-              , edgePadding
-              , edgePadding);
+        views.insetContent.setPadding(0, topPadding, 0, 0);
     }
 
     private void ConfigureBadgeOverlays(
             AssetViews views
           , InFeedAdLayoutEngine.LayoutPlan plan) {
         int badgeHeight = BadgeHeightPx(plan);
-        int edgeInset = CONTENT_EDGE_INSET_PX;
+        // The badges sit on the root, outside the outer column, so they
+        // carry the corner clearance themselves - on every template, the
+        // scrim one included: only the picture runs under the curve.
+        int edgeInset = CONTENT_EDGE_INSET_PX + cornerInsetPx;
         if (views.attribution != null) {
             int attributionWidth = AttributionWidthPx(plan, badgeHeight);
             views.attribution.setTextSize(

@@ -54,7 +54,8 @@ NS_ASSUME_NONNULL_BEGIN
 @interface ROInFeedAdViewFactory : NSObject
 
 - (instancetype)initWithNativeAd:(GADNativeAd *)nativeAd
-                 slotShortSidePt:(CGFloat)slotShortSidePt;
+                 slotShortSidePt:(CGFloat)slotShortSidePt
+                   roundCornerPt:(CGFloat)roundCornerPt;
 
 - (ROInFeedProbeLayout *)createProbeForPlan:(ROInFeedLayoutPlan *)plan;
 - (void)configureProbeLayout:(ROInFeedProbeLayout *)probe

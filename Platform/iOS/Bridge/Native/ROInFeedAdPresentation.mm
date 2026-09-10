@@ -41,6 +41,7 @@ static void *kRORootBoundsContext = &kRORootBoundsContext;
     CGFloat _requestedWidth;
     CGFloat _requestedHeight;
     int32_t _backgroundColor;
+    CGFloat _roundCorner;
     __weak id<ROInFeedPresentationListener> _listener;
 
     ROInFeedAdViewFactory *_viewFactory;
@@ -98,6 +99,7 @@ static void *kRORootBoundsContext = &kRORootBoundsContext;
                                      width:(CGFloat)widthPt
                                     height:(CGFloat)heightPt
                            backgroundColor:(int32_t)backgroundColor
+                               roundCorner:(CGFloat)roundCornerPt
                                   listener:(id<ROInFeedPresentationListener>)listener {
     self = [super initWithFrame:CGRectZero];
     if (self == nil) return nil;
@@ -109,13 +111,19 @@ static void *kRORootBoundsContext = &kRORootBoundsContext;
     _requestedWidth = MAX(1, widthPt);
     _requestedHeight = MAX(1, heightPt);
     _backgroundColor = backgroundColor;
+    // A radius past half the short side is a pill that no longer has
+    // straight edges to inset from; the cell caps it there.
+    _roundCorner = MAX(
+            0
+          , MIN(roundCornerPt, MIN(_requestedWidth, _requestedHeight) / 2));
     _listener = listener;
     _visibleRequested = YES;
     _layoutPlans = [NSMutableArray array];
 
     _viewFactory = [[ROInFeedAdViewFactory alloc]
             initWithNativeAd:nativeAd
-             slotShortSidePt:MIN(_requestedWidth, _requestedHeight)];
+             slotShortSidePt:MIN(_requestedWidth, _requestedHeight)
+               roundCornerPt:_roundCorner];
     _validator = [[ROInFeedAdLayoutValidator alloc]
             initWithNativeAd:nativeAd
                  viewFactory:_viewFactory];
@@ -136,6 +144,14 @@ static void *kRORootBoundsContext = &kRORootBoundsContext;
                    green:(((uint32_t)_backgroundColor >> 8) & 0xFF) / 255.0
                     blue:((uint32_t)_backgroundColor & 0xFF) / 255.0
                    alpha:(((uint32_t)_backgroundColor >> 24) & 0xFF) / 255.0];
+    // The rounded backdrop doubles as the clip (clipsToBounds follows the
+    // layer's corner radius): everything inside the cell is cut to the
+    // same curve, which is what lets the scrim layout's background picture
+    // fill the cell edge to edge and still end at the corner. The assets
+    // in front keep clear of the curve on their own (the view factory's
+    // corner inset). A transparent colour still clips - the shape is the
+    // layer's, not the paint's.
+    self.layer.cornerRadius = _roundCorner;
     self.clipsToBounds = YES;
 
     // Read once rather than assumed: a slot built while the app is coming

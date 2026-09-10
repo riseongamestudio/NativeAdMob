@@ -1028,7 +1028,7 @@ final class InFeedAdLayoutEngine {
             return plan;
         }
 
-        int contentWidth = plan.width;
+        int contentWidth = ContentWidth(plan);
         int maxMediaWidth = contentWidth;
         if (IsMediaSide(plan.template)) {
             maxMediaWidth -= viewFactory.GapForTier(plan.tier)
@@ -1038,7 +1038,7 @@ final class InFeedAdLayoutEngine {
 
         double maxScale = Math.min(
                 maxMediaWidth / (double) plan.mediaWidth
-              , plan.height / (double) plan.mediaHeight);
+              , ContentHeight(plan) / (double) plan.mediaHeight);
         if (maxScale <= 1.0) return plan;
 
         int baseWidth = plan.mediaWidth;
@@ -1105,6 +1105,20 @@ final class InFeedAdLayoutEngine {
         return plan;
     }
 
+    // What the outer column leaves for content once the corner clearance
+    // is spent on both sides: the width and height every media size is
+    // resolved against, so a media band planned here lands inside the
+    // column's padding instead of running over it into the corner. The
+    // background template is the one exception and reads plan.width and
+    // plan.height itself - its picture is meant to fill the cell.
+    private int ContentWidth(LayoutPlan plan) {
+        return plan.width - 2 * viewFactory.PaddingForTier(plan.tier);
+    }
+
+    private int ContentHeight(LayoutPlan plan) {
+        return plan.height - 2 * viewFactory.PaddingForTier(plan.tier);
+    }
+
     private boolean ResolveMediaDimensions(LayoutPlan plan) {
         if (!plan.showMedia) {
             plan.mediaWidth = 0;
@@ -1112,7 +1126,7 @@ final class InFeedAdLayoutEngine {
             return true;
         }
 
-        int contentWidth = plan.width;
+        int contentWidth = ContentWidth(plan);
         if (contentWidth <= 0) {
             RecordRejection(
                     plan.template

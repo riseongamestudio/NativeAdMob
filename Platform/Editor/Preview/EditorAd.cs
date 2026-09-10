@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 namespace RiseOn.NativeAdMob.Editor {
@@ -31,6 +32,8 @@ namespace RiseOn.NativeAdMob.Editor {
         private const string AD_CHOICES_URL            = "https://support.google.com/My-Ad-Center-Help/answer/12155764";
         private const string AD_CHOICES_CLICK_LOG_TEXT = "Native AdChoices preview click";
         private const string PANEL_OBJECT_NAME         = "Native Ad Panel";
+        private const string BACKDROP_OBJECT_NAME      = "Backdrop";
+        private const string CONTENT_AREA_OBJECT_NAME  = "Content Area";
         private const string CONTENT_OBJECT_NAME       = "Content";
         private const string DETAILS_OBJECT_NAME       = "Details";
         private const string IDENTITY_ROW_OBJECT_NAME  = "Identity Row";
@@ -133,6 +136,12 @@ namespace RiseOn.NativeAdMob.Editor {
         private const float IN_FEED_SCRIM_PADDING_RATIO     = 0.015f;
         private const int   IN_FEED_SCRIM_PADDING_MIN_DP    = 1;
         private const int   IN_FEED_SCRIM_PADDING_MAX_DP    = 4;
+        // How far a straight-edged asset has to stand back from a rounded
+        // corner of radius r so that its own corner just touches the arc:
+        // d = r * (1 - 1 / sqrt 2). The device's number, computed the
+        // device's way (ceil in pixels) before it is scaled for the canvas.
+        private static readonly float IN_FEED_CORNER_INSET_RATIO =
+                1f - Mathf.Sqrt(.5f);
         // Text is sized by the box it sits in. The same preview draws a 96dp
         // feed cell and a full screen, so one point size cannot serve both:
         // it looks lost in the roomy box and cramped in the tight one. These
@@ -174,6 +183,9 @@ namespace RiseOn.NativeAdMob.Editor {
         private RectTransform attributionRect;
         private RectTransform adChoicesRect;
         private Image panelGraphic;
+        // In-feed only: the clearance every asset keeps from the rounded
+        // corners, in canvas units; 0 on a square cell.
+        private float inFeedCornerInset;
         private EditorAdaptiveLayoutGroup contentLayout;
         private LayoutElement mediaLayoutElement;
         private LayoutElement detailsLayoutElement;
@@ -317,7 +329,104 @@ namespace RiseOn.NativeAdMob.Editor {
                         TEST_AD_CLICK_URL
                       , CLICK_LOG_TEXT));
             }
+            if (config.Mode == EditorAdMode.InFeed
+                    && config.RoundCornerPx > 0) {
+                ApplyRoundedCorners(panelObject, panel, config);
+            }
             return panel;
+        }
+
+        // The device rounds the cell's backdrop and clips everything inside
+        // to the same curve. Here the panel's Image carries the curve as a
+        // sliced sprite and a Mask cuts the children to it; the visible
+        // backdrop moves to a child, because a Mask reads the alpha of its
+        // own graphic - a transparent colour, a real answer on the device,
+        // would otherwise erase the mask along with the paint.
+        private void ApplyRoundedCorners(
+            GameObject panelObject
+          , RectTransform panel
+          , EditorAdConfig config) {
+            panelGraphic.sprite = RoundedRectSprite(
+                config.RoundCornerPx / ResolveUiScale());
+            panelGraphic.type = Image.Type.Sliced;
+            panelGraphic.color = Color.white;
+            var mask = panelObject.AddComponent<Mask>();
+            mask.showMaskGraphic = false;
+
+            var backdropObject = new GameObject(
+                BACKDROP_OBJECT_NAME
+              , typeof(RectTransform)
+              , typeof(Image));
+            backdropObject.transform.SetParent(panel, false);
+            backdropObject.transform.SetAsFirstSibling();
+            Stretch(backdropObject.GetComponent<RectTransform>());
+            var backdrop = backdropObject.GetComponent<Image>();
+            backdrop.color = config.BackgroundColor;
+            backdrop.raycastTarget = false;
+        }
+
+        // One sliced sprite per radius: the four corner cells hold the arc,
+        // the centre stretches. Rasterized from the rounded box's distance
+        // field, the way the close glyph is, so the edge is anti-aliased
+        // at any preview scale.
+        private static readonly Dictionary<int, Sprite> roundedRectSprites =
+                new();
+
+        private static Sprite RoundedRectSprite(float radius) {
+            const int texelsPerUnit = 4;
+            var r = Mathf.Max(1, Mathf.RoundToInt(radius * texelsPerUnit));
+            if (roundedRectSprites.TryGetValue(r, out var cached)
+                    && cached != null) {
+                return cached;
+            }
+
+            var size = 2 * r + 2;
+            var half = new Vector2(size * .5f, size * .5f);
+            var pixels = new Color32[size * size];
+            for (var y = 0; y < size; ++y) {
+                for (var x = 0; x < size; ++x) {
+                    var p = new Vector2(x + .5f, y + .5f) - half;
+                    var q = new Vector2(Mathf.Abs(p.x), Mathf.Abs(p.y))
+                          - half
+                          + Vector2.one * r;
+                    var d = Vector2.Max(q, Vector2.zero).magnitude
+                          + Mathf.Min(Mathf.Max(q.x, q.y), 0f)
+                          - r;
+                    var alpha = Mathf.Clamp01(.5f - d);
+                    pixels[y * size + x] = new Color32(
+                        255, 255, 255, (byte)Mathf.RoundToInt(alpha * 255f));
+                }
+            }
+
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false) {
+                wrapMode   = TextureWrapMode.Clamp
+              , filterMode = FilterMode.Bilinear
+              , hideFlags  = HideFlags.HideAndDontSave
+            };
+            texture.SetPixels32(pixels);
+            texture.Apply();
+
+            var sprite = Sprite.Create(
+                texture
+              , new Rect(0f, 0f, size, size)
+              , new Vector2(.5f, .5f)
+              , texelsPerUnit
+              , 0
+              , SpriteMeshType.FullRect
+              , new Vector4(r, r, r, r));
+            sprite.hideFlags = HideFlags.HideAndDontSave;
+            roundedRectSprites[r] = sprite;
+            return sprite;
+        }
+
+        // The device's number, computed the device's way - ceil in pixels -
+        // then scaled for the canvas.
+        private static float ResolveInFeedCornerInset(
+            EditorAdConfig config
+          , float uiScale) {
+            if (config.RoundCornerPx <= 0) return 0f;
+            return Mathf.Ceil(config.RoundCornerPx * IN_FEED_CORNER_INSET_RATIO)
+                 / uiScale;
         }
 
         private static void ApplyPanelRect(
@@ -700,6 +809,12 @@ namespace RiseOn.NativeAdMob.Editor {
             var cellWidth = Mathf.Max(1f, config.SizePx.x / uiScale);
             var cellHeight = Mathf.Max(1f, config.SizePx.y / uiScale);
             var shortSide = Mathf.Min(cellWidth, cellHeight);
+            // The corner clearance, and the cell that is left inside it:
+            // what the device's outer column measures against once it has
+            // spent the clearance as its padding.
+            inFeedCornerInset = ResolveInFeedCornerInset(config, uiScale);
+            var innerWidth = Mathf.Max(1f, cellWidth - 2f * inFeedCornerInset);
+            var innerHeight = Mathf.Max(1f, cellHeight - 2f * inFeedCornerInset);
             var tier = ResolveInFeedTier(shortSide);
             var gap = ResolveInFeedGap(tier);
             var headlineHeight =
@@ -716,8 +831,28 @@ namespace RiseOn.NativeAdMob.Editor {
                   + headlineHeight
                   + callToActionBandHeight
                   + 4 * gap;
-            var scrimTemplate = cellHeight < mediaBandEstimate
-                    || cellWidth < IN_FEED_MEDIA_FLOOR_DP;
+            var scrimTemplate = innerHeight < mediaBandEstimate
+                    || innerWidth < IN_FEED_MEDIA_FLOOR_DP;
+
+            // Where the column's content lives. On the scrim template the
+            // picture is the cell's background and runs under the curve, so
+            // everything stays on the panel and only the text block stands
+            // back; every other template stands its whole column back from
+            // the corners, the way the device pads its outer column.
+            var contentArea = panel;
+            if (!scrimTemplate && inFeedCornerInset > 0f) {
+                var contentAreaObject = new GameObject(
+                    CONTENT_AREA_OBJECT_NAME
+                  , typeof(RectTransform));
+                contentAreaObject.transform.SetParent(panel, false);
+                contentArea = contentAreaObject.GetComponent<RectTransform>();
+                contentArea.anchorMin = Vector2.zero;
+                contentArea.anchorMax = Vector2.one;
+                contentArea.offsetMin =
+                        new(inFeedCornerInset, inFeedCornerInset);
+                contentArea.offsetMax =
+                        new(-inFeedCornerInset, -inFeedCornerInset);
+            }
 
             // The media: the whole cell on the scrim template, the top band
             // of the column otherwise.
@@ -727,7 +862,7 @@ namespace RiseOn.NativeAdMob.Editor {
               , typeof(CanvasRenderer)
               , typeof(EditorMediaGraphic)
               , typeof(Button));
-            mediaObject.transform.SetParent(panel, false);
+            mediaObject.transform.SetParent(contentArea, false);
             var mediaRect = mediaObject.GetComponent<RectTransform>();
             var mediaGraphic =
                     mediaObject.GetComponent<EditorMediaGraphic>();
@@ -797,7 +932,7 @@ namespace RiseOn.NativeAdMob.Editor {
                     0f
                   , Mathf.Max(
                         IN_FEED_MEDIA_FLOOR_DP
-                      , cellHeight - lowerEstimate));
+                      , innerHeight - lowerEstimate));
             }
 
             // The bottom stack: icon by the device's shared-line floor, the
@@ -807,7 +942,7 @@ namespace RiseOn.NativeAdMob.Editor {
               , typeof(RectTransform)
               , typeof(VerticalLayoutGroup)
               , typeof(ContentSizeFitter));
-            contentObject.transform.SetParent(panel, false);
+            contentObject.transform.SetParent(contentArea, false);
             var content = contentObject.GetComponent<RectTransform>();
             content.anchorMin = new(0f, 0f);
             content.anchorMax = new(1f, 0f);
@@ -816,15 +951,18 @@ namespace RiseOn.NativeAdMob.Editor {
             content.sizeDelta = new(0f, 0f);
 
             var stack = contentObject.GetComponent<VerticalLayoutGroup>();
-            // The device spends nothing here: PaddingForTier returns 0 and
-            // the comment says why - the slot is already bounded by the card
-            // it sits in, so an inset buys nothing. Only the scrim template
-            // insets its block, because there the text sits over the media.
+            // The device spends no tier inset here - the slot is already
+            // bounded by the card it sits in. The column's only inset is
+            // the corner clearance, and the content area above already
+            // carries it. The scrim template is the exception: its block
+            // sits over the media on the panel itself, so it pads by its
+            // own hair of room plus the clearance the column did not spend.
             var pad = scrimTemplate
                     ? Mathf.Clamp(
                         Mathf.RoundToInt(shortSide * IN_FEED_SCRIM_PADDING_RATIO)
                       , IN_FEED_SCRIM_PADDING_MIN_DP
                       , IN_FEED_SCRIM_PADDING_MAX_DP)
+                      + Mathf.RoundToInt(inFeedCornerInset)
                     : 0;
             stack.padding = new(pad, pad, pad, pad);
             stack.spacing = gap;
@@ -1628,16 +1766,19 @@ namespace RiseOn.NativeAdMob.Editor {
                   , Mathf.Min(
                         ATTRIBUTION_WIDTH_DP
                       , availableAttributionWidth));
+                // The badges sit on the panel, outside the content area, so
+                // they carry the corner clearance themselves - on the scrim
+                // template too: only the picture runs under the curve.
                 if (attributionRect != null) {
                     SetTopLeftRect(
                         attributionRect
-                      , default
+                      , new(inFeedCornerInset, -inFeedCornerInset)
                       , new(attributionWidth, badgeSize));
                 }
                 if (adChoicesRect != null) {
                     SetTopRightRect(
                         adChoicesRect
-                      , default
+                      , new(-inFeedCornerInset, -inFeedCornerInset)
                       , new(badgeSize, badgeSize));
                 }
                 return;

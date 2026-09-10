@@ -317,6 +317,7 @@ final class InFeedAdSlot {
                       , rect.widthPx
                       , rect.heightPx
                       , owner.BackgroundColor()
+                      , owner.RoundCornerPx()
                       , new NativeAdPresentation.Listener() {
                             @Override
                             public void OnReady() {

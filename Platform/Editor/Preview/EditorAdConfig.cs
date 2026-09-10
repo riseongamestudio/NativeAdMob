@@ -12,6 +12,8 @@ namespace RiseOn.NativeAdMob.Editor {
         internal CloseSettings             Close             { get; private set; }
         internal float                     HeightRatio       { get; }
         internal Color                     BackgroundColor   { get; }
+        /// <summary>In-feed only: the cell's corner radius in pixels.</summary>
+        internal int                       RoundCornerPx     { get; }
         internal Vector2Int                PositionPx        { get; private set; }
         internal Vector2Int                SizePx            { get; }
         internal bool                      AllowsVideo       { get; }
@@ -23,6 +25,7 @@ namespace RiseOn.NativeAdMob.Editor {
           , in CloseSettings controls
           , float heightRatio
           , Color backgroundColor
+          , int roundCornerPx
           , Vector2Int positionPx
           , Vector2Int sizePx
           , bool allowsVideo) {
@@ -32,6 +35,7 @@ namespace RiseOn.NativeAdMob.Editor {
             Close = controls;
             HeightRatio     = heightRatio;
             BackgroundColor = backgroundColor;
+            RoundCornerPx   = Mathf.Max(0, roundCornerPx);
             PositionPx      = positionPx;
             SizePx          = sizePx;
             AllowsVideo     = allowsVideo;
@@ -52,6 +56,7 @@ namespace RiseOn.NativeAdMob.Editor {
               , controls
               , ResolveRatio(heightRatio, DEFAULT_HEIGHT_RATIO)
               , backgroundColor
+              , 0
               , default
               , default
               , true);
@@ -61,7 +66,8 @@ namespace RiseOn.NativeAdMob.Editor {
             string adUnitId
           , Vector2Int positionPx
           , Vector2Int sizePx
-          , Color backgroundColor) {
+          , Color backgroundColor
+          , int roundCornerPx) {
             return new(
                 adUnitId
               , EditorAdMode.InFeed
@@ -69,6 +75,7 @@ namespace RiseOn.NativeAdMob.Editor {
               , default
               , default
               , backgroundColor
+              , roundCornerPx
               , positionPx
               , sizePx
               , true);
@@ -90,6 +97,7 @@ namespace RiseOn.NativeAdMob.Editor {
               , Close
               , HeightRatio
               , BackgroundColor
+              , RoundCornerPx
               , PositionPx
               , SizePx
               , AllowsVideo);

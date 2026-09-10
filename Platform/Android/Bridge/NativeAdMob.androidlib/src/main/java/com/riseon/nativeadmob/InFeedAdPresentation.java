@@ -5,6 +5,7 @@ import android.app.Dialog;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.os.IBinder;
 import android.os.SystemClock;
 import android.text.TextUtils;
@@ -13,6 +14,7 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewOutlineProvider;
 import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.view.WindowManager;
@@ -40,6 +42,7 @@ final class InFeedAdPresentation extends FrameLayout
     private final int requestedWidth;
     private final int requestedHeight;
     private final int backgroundColor;
+    private final int roundCornerPx;
     private final NativeAdPresentation.Listener listener;
     private final InFeedAdViewFactory viewFactory;
     private final InFeedAdLayoutValidator validator;
@@ -90,6 +93,7 @@ final class InFeedAdPresentation extends FrameLayout
           , int widthPx
           , int heightPx
           , int backgroundColor
+          , int roundCornerPx
           , NativeAdPresentation.Listener listener) {
         super(activity);
         this.activity = activity;
@@ -99,6 +103,11 @@ final class InFeedAdPresentation extends FrameLayout
         this.requestedWidth = widthPx;
         this.requestedHeight = heightPx;
         this.backgroundColor = backgroundColor;
+        // A radius past half the short side is a pill that no longer has
+        // straight edges to inset from; the cell caps it there.
+        this.roundCornerPx = Math.max(
+                0
+              , Math.min(roundCornerPx, Math.min(widthPx, heightPx) / 2));
         this.listener = listener;
 
         float density =
@@ -107,7 +116,8 @@ final class InFeedAdPresentation extends FrameLayout
                 activity
               , nativeAd
               , density
-              , Math.min(widthPx, heightPx));
+              , Math.min(widthPx, heightPx)
+              , this.roundCornerPx);
         validator = new InFeedAdLayoutValidator(
                 nativeAd
               , density
@@ -937,7 +947,26 @@ final class InFeedAdPresentation extends FrameLayout
     // a real answer here, not an unset value - a feed cell that wants no
     // backdrop of its own asks for exactly that.
     private void ConfigureBackground() {
-        setBackgroundColor(backgroundColor);
+        if (roundCornerPx <= 0) {
+            setBackgroundColor(backgroundColor);
+            setClipToOutline(false);
+            return;
+        }
+        // The rounded backdrop doubles as the clip: everything inside the
+        // cell is cut to the same curve, which is what lets the scrim
+        // layout's background picture fill the cell edge to edge and still
+        // end at the corner. The assets in front keep clear of the curve
+        // on their own (InFeedAdViewFactory's corner inset); the clip is
+        // only ever visible on the one view that is meant to run under it.
+        // A transparent colour still clips - the outline is the shape, not
+        // the paint.
+        GradientDrawable background = new GradientDrawable();
+        background.setShape(GradientDrawable.RECTANGLE);
+        background.setColor(backgroundColor);
+        background.setCornerRadius(roundCornerPx);
+        setBackground(background);
+        setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+        setClipToOutline(true);
     }
 
     private void LogAdjustmentIfNeeded(

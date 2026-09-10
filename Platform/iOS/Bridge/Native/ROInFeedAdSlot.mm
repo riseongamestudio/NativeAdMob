@@ -354,6 +354,7 @@ static NSTimeInterval RONow(void) {
                                          width:_rect.width
                                         height:_rect.height
                                backgroundColor:[owner slotBackgroundColor]
+                                   roundCorner:[owner slotRoundCorner]
                                       listener:self];
     entry.presentation = presentation;
     _materializingEntry = entry;

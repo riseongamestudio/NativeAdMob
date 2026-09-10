@@ -25,6 +25,14 @@ namespace RiseOn.NativeAdMob {
             /// answer here: a feed cell that wants no backdrop asks for it.
             /// </summary>
             public Color BackgroundColor;
+            /// <summary>
+            /// Radius of the cell's rounded corners, in pixels; 0 keeps them
+            /// square. Every asset keeps clear of the curve - inset by just
+            /// enough that its own corner touches the arc - except the
+            /// background picture of the scrim layout, which fills the cell
+            /// and is clipped by the curve instead.
+            /// </summary>
+            public int RoundCornerPx;
         }
 
         /// <summary>

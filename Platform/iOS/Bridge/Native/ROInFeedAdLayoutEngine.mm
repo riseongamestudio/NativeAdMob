@@ -768,7 +768,7 @@ static const NSInteger kRONudgeTextMaxSteps = 5;
         return;
     }
 
-    CGFloat maxMediaWidth = plan.width;
+    CGFloat maxMediaWidth = [self ro_contentWidthForPlan:plan];
     if (ROInFeedTemplateIsMediaSide(plan.layoutTemplate)) {
         maxMediaWidth -= [_viewFactory gapForTier:plan.tier]
                 + [self ro_requiredTextSlotWidthForPlan:plan];
@@ -777,7 +777,7 @@ static const NSInteger kRONudgeTextMaxSteps = 5;
 
     CGFloat maxScale = MIN(
             maxMediaWidth / plan.mediaWidth
-          , plan.height / plan.mediaHeight);
+          , [self ro_contentHeightForPlan:plan] / plan.mediaHeight);
     if (maxScale <= 1) return;
 
     CGFloat baseWidth = plan.mediaWidth;
@@ -829,6 +829,20 @@ static const NSInteger kRONudgeTextMaxSteps = 5;
     plan.measuredContentHeight = bestNaturalHeight;
 }
 
+// What the outer column leaves for content once the corner clearance is
+// spent on both sides: the width and height every media size is resolved
+// against, so a media band planned here lands inside the column's padding
+// instead of running over it into the corner. The background template is
+// the one exception and reads plan.width and plan.height itself - its
+// picture is meant to fill the cell.
+- (CGFloat)ro_contentWidthForPlan:(ROInFeedLayoutPlan *)plan {
+    return plan.width - 2 * [_viewFactory paddingForTier:plan.tier];
+}
+
+- (CGFloat)ro_contentHeightForPlan:(ROInFeedLayoutPlan *)plan {
+    return plan.height - 2 * [_viewFactory paddingForTier:plan.tier];
+}
+
 - (CGFloat)ro_requiredTextSlotWidthForPlan:(ROInFeedLayoutPlan *)plan {
     if (ROInFeedTemplateIsMediaSide(plan.layoutTemplate)) {
         return [_viewFactory minimumMediaLeftTextSlotWidthForPlan:plan];
@@ -844,7 +858,7 @@ static const NSInteger kRONudgeTextMaxSteps = 5;
         return YES;
     }
 
-    CGFloat contentWidth = plan.width;
+    CGFloat contentWidth = [self ro_contentWidthForPlan:plan];
     if (contentWidth <= 0) {
         [self ro_recordRejectionForTemplate:plan.layoutTemplate
                                        tier:plan.tier

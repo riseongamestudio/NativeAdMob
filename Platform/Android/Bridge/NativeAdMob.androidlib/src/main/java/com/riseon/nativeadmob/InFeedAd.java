@@ -50,6 +50,7 @@ public final class InFeedAd extends BaseAd {
     private final String adUnitId;
     private final int cacheSize;
     private final int backgroundColor;
+    private final int roundCornerPx;
     private final InFeedAdSlot[] slots;
     private Activity activity;
     private final ArrayDeque<CachedAd> cachedAds = new ArrayDeque<>();
@@ -69,7 +70,8 @@ public final class InFeedAd extends BaseAd {
           , String adUnitId
           , int slotCount
           , int cacheSize
-          , int backgroundColor) {
+          , int backgroundColor
+          , int roundCornerPx) {
         if (adUnitId == null || adUnitId.trim().isEmpty()) {
             throw new IllegalArgumentException(
                     "InFeedAd requires a non-empty adUnitId");
@@ -84,6 +86,7 @@ public final class InFeedAd extends BaseAd {
                 MAX_CACHE_SIZE
               , cacheSize < 1 ? slotCount + 1 : cacheSize);
         this.backgroundColor = backgroundColor;
+        this.roundCornerPx = Math.max(0, roundCornerPx);
         this.activity = currentActivity;
         InFeedAdSlot[] createdSlots = new InFeedAdSlot[slotCount];
         for (int i = 0; i < slotCount; ++i) {
@@ -460,6 +463,10 @@ public final class InFeedAd extends BaseAd {
 
     int BackgroundColor() {
         return backgroundColor;
+    }
+
+    int RoundCornerPx() {
+        return roundCornerPx;
     }
 
     String AdUnitId() {

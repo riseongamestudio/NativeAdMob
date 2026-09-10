@@ -31,6 +31,7 @@ NS_ASSUME_NONNULL_BEGIN
                                      width:(CGFloat)widthPt
                                     height:(CGFloat)heightPt
                            backgroundColor:(int32_t)backgroundColor
+                               roundCorner:(CGFloat)roundCornerPt
                                   listener:(id<ROInFeedPresentationListener>)listener;
 
 - (BOOL)show;

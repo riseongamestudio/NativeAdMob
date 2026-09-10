@@ -54,6 +54,7 @@ NSTimeInterval ROInFeedBackoffDelay(
 - (void)requestLoad;
 - (void)destroyAd:(nullable GADNativeAd *)ad;
 - (float)slotBackgroundColor;
+- (CGFloat)slotRoundCorner;
 - (NSString *)unitAdUnitId;
 - (NSInteger)noFillStreak;
 - (void)notifySlotDisplayed:(NSInteger)slotIndex;

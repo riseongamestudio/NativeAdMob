@@ -63,6 +63,13 @@ static const double kROMaxStarRating = 5;
 static const CGFloat kROCellSpacingRatio = 0.02f;
 static const CGFloat kROCellCtaPaddingRatio = 0.035f;
 static const CGFloat kROCellEdgePaddingRatio = 0.015f;
+// How far a straight-edged asset has to stand back from a rounded corner
+// of radius r so that its own corner just touches the arc: the arc's
+// centre sits r in from both edges, the asset's corner sits d in from
+// both, and the two are r apart exactly when (r - d) * sqrt(2) = r, so
+// d = r * (1 - 1 / sqrt(2)). Less and the corner is cut off; more and the
+// cell wastes border it was never asked for.
+static const double kROCornerInsetRatio = 1.0 - M_SQRT1_2;
 
 static UIColor *ROInFeedArgb(uint32_t argb) {
     return [UIColor colorWithRed:((argb >> 16) & 0xFF) / 255.0
@@ -176,15 +183,24 @@ static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
     GADNativeAd *_nativeAd;
     CGFloat _slotShortSide;
     CGFloat _screenScale;
+    // The clearance every asset keeps from the cell's rounded corners; 0
+    // on a square cell. Spent once, as the outer column's padding on every
+    // template but the scrim one, where the background picture is meant
+    // to run under the curve and only the block in front stands back.
+    CGFloat _cornerInset;
 }
 
 - (instancetype)initWithNativeAd:(GADNativeAd *)nativeAd
-                 slotShortSidePt:(CGFloat)slotShortSidePt {
+                 slotShortSidePt:(CGFloat)slotShortSidePt
+                   roundCornerPt:(CGFloat)roundCornerPt {
     self = [super init];
     if (self == nil) return nil;
     _nativeAd = nativeAd;
     _slotShortSide = MAX(1, slotShortSidePt);
     _screenScale = MAX(1, UIScreen.mainScreen.nativeScale);
+    _cornerInset = roundCornerPt <= 0
+            ? 0
+            : ceil(roundCornerPt * kROCornerInsetRatio);
     return self;
 }
 
@@ -263,9 +279,12 @@ static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
     return 120;
 }
 
-// Edge inset buys nothing the surrounding layout does not already give.
+// The slot is already bounded by the card it sits in, so a tier's own edge
+// inset bought nothing. The one inset the cell keeps is the corner
+// clearance, the same on every tier: what the outer column spends, and so
+// what the engine has to budget for on both sides.
 - (CGFloat)paddingForTier:(ROInFeedTier)tier {
-    return 0;
+    return _cornerInset;
 }
 
 - (CGFloat)gapForTier:(ROInFeedTier)tier {
@@ -559,8 +578,17 @@ static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
     views.outer = outer;
     outer.ro_vertical = YES;
     outer.ro_gravity = HBGravityTop | HBGravityCenterHorizontal;
+    // The corner clearance, spent here once for everything the column
+    // holds - media band, side rail, texts, button. The scrim template
+    // spends none: its picture is the cell's background and runs under the
+    // curve; the block in front adds the clearance to its own pad.
+    BOOL mediaIsBackground =
+            plan.layoutTemplate == ROInFeedTemplateMediaBackground;
+    CGFloat outerInset = mediaIsBackground ? 0 : _cornerInset;
+    outer.ro_padding = UIEdgeInsetsMake(
+            outerInset, outerInset, outerInset, outerInset);
 
-    if (plan.layoutTemplate == ROInFeedTemplateMediaBackground) {
+    if (mediaIsBackground) {
         UIView *backgroundMedia = [self ro_createMediaViewForPlan:plan
                                                             views:views
                                                             probe:probe
@@ -607,8 +635,9 @@ static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
         // side - a tiny cell cannot afford more.
         // A hair of breathing room, sized by the cell instead of by the
         // tier: enough that the text is not printed onto the very edge,
-        // never enough to read as a border.
-        CGFloat scrimPad = [self ro_cellEdgePadding];
+        // never enough to read as a border. Plus the corner clearance the
+        // outer column did not spend on this template.
+        CGFloat scrimPad = [self ro_cellEdgePadding] + _cornerInset;
         scrim.ro_padding = UIEdgeInsetsMake(
                 scrimPad, scrimPad, scrimPad, scrimPad);
 
@@ -923,13 +952,14 @@ static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
         return;
     }
 
-    CGFloat edgePadding = [self paddingForTier:plan.tier];
     // Only the badge strip is reserved - the badges have to stay visible.
+    // Everything else meets the column's edge, the way the badges already
+    // do; the corner clearance is the outer column's padding, spent once,
+    // so nothing is added here.
     CGFloat topPadding = views.insetContentAvoidsBadges
             ? [self ro_badgeHeightForPlan:plan]
             : 0;
-    container.ro_padding = UIEdgeInsetsMake(
-            topPadding, edgePadding, edgePadding, edgePadding);
+    container.ro_padding = UIEdgeInsetsMake(topPadding, 0, 0, 0);
 }
 
 - (void)ro_configureBadgeOverlays:(ROInFeedAssetViews *)views
@@ -947,6 +977,11 @@ static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
         views.attribution.ro_layoutWidth = attributionWidth;
         views.attribution.ro_layoutHeight = badgeHeight;
         views.attribution.ro_layoutGravity = HBGravityTop | HBGravityLeft;
+        // The badges sit on the root, outside the outer column, so they
+        // carry the corner clearance themselves - on every template, the
+        // scrim one included: only the picture runs under the curve.
+        views.attribution.ro_layoutMargins =
+                UIEdgeInsetsMake(_cornerInset, _cornerInset, 0, 0);
     }
     if (views.adChoicesReserve != nil) {
         CGFloat reserveWidth = MAX(
@@ -956,6 +991,8 @@ static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
         views.adChoicesReserve.ro_layoutWidth = MIN(reserveWidth, maximumWidth);
         views.adChoicesReserve.ro_layoutHeight = badgeHeight;
         views.adChoicesReserve.ro_layoutGravity = HBGravityTop | HBGravityRight;
+        views.adChoicesReserve.ro_layoutMargins =
+                UIEdgeInsetsMake(_cornerInset, 0, 0, _cornerInset);
     }
 }
 
