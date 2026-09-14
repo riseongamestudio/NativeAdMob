@@ -30,7 +30,9 @@ namespace RiseOn.NativeAdMob {
             /// square. Every asset keeps clear of the curve - inset by just
             /// enough that its own corner touches the arc - except the
             /// background picture of the scrim layout, which fills the cell
-            /// and is clipped by the curve instead.
+            /// and is clipped by the curve instead. This is where the unit
+            /// starts; Initialize carries a radius of its own for a caller
+            /// that only knows it once the cell is measured.
             /// </summary>
             public int RoundCornerPx;
         }
@@ -62,6 +64,7 @@ namespace RiseOn.NativeAdMob {
 
         private readonly Item[] items;
         private bool            initialized;
+        private int             roundCornerPx;
         private readonly Action[] pendingOnDisplayed;
         private IInFeedAdClient client;
 
@@ -81,12 +84,31 @@ namespace RiseOn.NativeAdMob {
             lock (nativeAdStateLock) {
                 if (releasedManaged) return;
 
-                for (var i = 0; i < items.Length; ++i) {
-                    pendingOnDisplayed[i] = null;
-                    client?.ConfigureSlot(i, default, sizePx);
-                }
-                initialized = true;
+                ConfigureEverySlot(sizePx, roundCornerPx);
             }
+        }
+
+        /// <summary>
+        /// The same, with the cell's corner radius. The radius travels with
+        /// the size because a caller measuring a cell on screen only learns
+        /// both at that moment, and the unit it draws from may have been
+        /// built long before - warmed at start-up, say.
+        /// </summary>
+        public void Initialize(Vector2Int sizePx, int roundCornerPx) {
+            lock (nativeAdStateLock) {
+                if (releasedManaged) return;
+
+                ConfigureEverySlot(sizePx, Mathf.Max(0, roundCornerPx));
+            }
+        }
+
+        private void ConfigureEverySlot(Vector2Int sizePx, int cornerPx) {
+            roundCornerPx = cornerPx;
+            for (var i = 0; i < items.Length; ++i) {
+                pendingOnDisplayed[i] = null;
+                client?.ConfigureSlot(i, default, sizePx, cornerPx);
+            }
+            initialized = true;
         }
 
         public InFeedAd(in Settings settings) : base(settings.AdUnitId, FORMAT) {
@@ -100,6 +122,7 @@ namespace RiseOn.NativeAdMob {
             items = new Item[settings.SlotCount];
             for (var i = 0; i < items.Length; ++i) items[i] = new Item(this, i);
             pendingOnDisplayed = new Action[items.Length];
+            roundCornerPx = Mathf.Max(0, settings.RoundCornerPx);
 
             var platform = AdPlatformRegistry.Installed;
             if (platform == null) {

@@ -30,6 +30,7 @@ static const NSTimeInterval kRONoTimestamp = -1;
 @property (nonatomic) CGFloat y;
 @property (nonatomic) CGFloat width;
 @property (nonatomic) CGFloat height;
+@property (nonatomic) CGFloat roundCorner;
 @end
 
 @implementation ROInFeedAdSlotRect
@@ -116,19 +117,22 @@ static NSTimeInterval RONow(void) {
 - (void)configureWithX:(CGFloat)xPt
                      y:(CGFloat)yPt
                  width:(CGFloat)widthPt
-                height:(CGFloat)heightPt {
+                height:(CGFloat)heightPt
+           roundCorner:(CGFloat)roundCornerPt {
     ROInFeedAdSlotRect *newRect = [[ROInFeedAdSlotRect alloc] init];
     newRect.x = xPt;
     newRect.y = yPt;
     newRect.width = MAX(1, widthPt);
     newRect.height = MAX(1, heightPt);
+    newRect.roundCorner = MAX(0, roundCornerPt);
     ROInFeedAdSlotRect *oldRect = _rect;
     BOOL rectChanged = _configured
             && (oldRect == nil
                     || oldRect.x != newRect.x
                     || oldRect.y != newRect.y
                     || oldRect.width != newRect.width
-                    || oldRect.height != newRect.height);
+                    || oldRect.height != newRect.height
+                    || oldRect.roundCorner != newRect.roundCorner);
 
     _visibleRequested = NO;
     [_refreshTimer invalidate];
@@ -354,7 +358,7 @@ static NSTimeInterval RONow(void) {
                                          width:_rect.width
                                         height:_rect.height
                                backgroundColor:[owner slotBackgroundColor]
-                                   roundCorner:[owner slotRoundCorner]
+                                   roundCorner:_rect.roundCorner
                                       listener:self];
     entry.presentation = presentation;
     _materializingEntry = entry;

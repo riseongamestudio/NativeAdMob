@@ -349,6 +349,18 @@ namespace RiseOn.NativeAdMob.Editor {
             panelGraphic.sprite = RoundedRectSprite(
                 config.RoundCornerPx / ResolveUiScale());
             panelGraphic.type = Image.Type.Sliced;
+            // A sliced sprite's border is divided by sprite.pixelsPerUnit /
+            // canvas.referencePixelsPerUnit before it is drawn. The sprite
+            // below is rasterized at a few texels per unit, so that ratio
+            // would blow its border up a hundredfold and leave the mask a
+            // blob with no straight edges at all. The multiplier cancels the
+            // canvas half of the ratio exactly, which puts the border back
+            // in the units the sprite was drawn in.
+            var canvas = GetComponent<Canvas>();
+            if (canvas != null) {
+                panelGraphic.pixelsPerUnitMultiplier =
+                        canvas.referencePixelsPerUnit;
+            }
             panelGraphic.color = Color.white;
             var mask = panelObject.AddComponent<Mask>();
             mask.showMaskGraphic = false;
@@ -956,13 +968,16 @@ namespace RiseOn.NativeAdMob.Editor {
             // the corner clearance, and the content area above already
             // carries it. The scrim template is the exception: its block
             // sits over the media on the panel itself, so it pads by its
-            // own hair of room plus the clearance the column did not spend.
+            // own hair of room, floored by the clearance the column did not
+            // spend. A floor, not a sum: both measure from the same cell
+            // edge, so adding them would spend that border twice.
             var pad = scrimTemplate
-                    ? Mathf.Clamp(
-                        Mathf.RoundToInt(shortSide * IN_FEED_SCRIM_PADDING_RATIO)
-                      , IN_FEED_SCRIM_PADDING_MIN_DP
-                      , IN_FEED_SCRIM_PADDING_MAX_DP)
-                      + Mathf.RoundToInt(inFeedCornerInset)
+                    ? Mathf.Max(
+                        Mathf.Clamp(
+                            Mathf.RoundToInt(shortSide * IN_FEED_SCRIM_PADDING_RATIO)
+                          , IN_FEED_SCRIM_PADDING_MIN_DP
+                          , IN_FEED_SCRIM_PADDING_MAX_DP)
+                      , Mathf.RoundToInt(inFeedCornerInset))
                     : 0;
             stack.padding = new(pad, pad, pad, pad);
             stack.spacing = gap;

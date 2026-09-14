@@ -50,7 +50,6 @@ public final class InFeedAd extends BaseAd {
     private final String adUnitId;
     private final int cacheSize;
     private final int backgroundColor;
-    private final int roundCornerPx;
     private final InFeedAdSlot[] slots;
     private Activity activity;
     private final ArrayDeque<CachedAd> cachedAds = new ArrayDeque<>();
@@ -70,8 +69,7 @@ public final class InFeedAd extends BaseAd {
           , String adUnitId
           , int slotCount
           , int cacheSize
-          , int backgroundColor
-          , int roundCornerPx) {
+          , int backgroundColor) {
         if (adUnitId == null || adUnitId.trim().isEmpty()) {
             throw new IllegalArgumentException(
                     "InFeedAd requires a non-empty adUnitId");
@@ -86,7 +84,6 @@ public final class InFeedAd extends BaseAd {
                 MAX_CACHE_SIZE
               , cacheSize < 1 ? slotCount + 1 : cacheSize);
         this.backgroundColor = backgroundColor;
-        this.roundCornerPx = Math.max(0, roundCornerPx);
         this.activity = currentActivity;
         InFeedAdSlot[] createdSlots = new InFeedAdSlot[slotCount];
         for (int i = 0; i < slotCount; ++i) {
@@ -112,13 +109,17 @@ public final class InFeedAd extends BaseAd {
         listener = newListener;
     }
 
+    // The corner radius travels with the rect, not with the unit: the cell
+    // is measured on screen by the caller, and the unit drawing it may have
+    // been built long before that - warmed at start-up, say.
     public void Configure(
             Activity currentActivity
           , int slotIndex
           , int xPx
           , int yPx
           , int widthPx
-          , int heightPx) {
+          , int heightPx
+          , int roundCornerPx) {
         main.post(() -> {
             if (released) {
                 Log.e(
@@ -134,7 +135,7 @@ public final class InFeedAd extends BaseAd {
             if (slot == null) return;
 
             AdoptActivity(currentActivity);
-            slot.Configure(xPx, yPx, widthPx, heightPx);
+            slot.Configure(xPx, yPx, widthPx, heightPx, roundCornerPx);
         });
     }
 
@@ -463,10 +464,6 @@ public final class InFeedAd extends BaseAd {
 
     int BackgroundColor() {
         return backgroundColor;
-    }
-
-    int RoundCornerPx() {
-        return roundCornerPx;
     }
 
     String AdUnitId() {

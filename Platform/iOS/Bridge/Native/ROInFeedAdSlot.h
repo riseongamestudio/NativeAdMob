@@ -31,7 +31,8 @@ NSTimeInterval ROInFeedBackoffDelay(
 - (void)configureWithX:(CGFloat)xPt
                      y:(CGFloat)yPt
                  width:(CGFloat)widthPt
-                height:(CGFloat)heightPt;
+                height:(CGFloat)heightPt
+           roundCorner:(CGFloat)roundCornerPt;
 - (void)show;
 - (void)hide;
 - (void)setPositionX:(CGFloat)xPt y:(CGFloat)yPt;
@@ -54,7 +55,6 @@ NSTimeInterval ROInFeedBackoffDelay(
 - (void)requestLoad;
 - (void)destroyAd:(nullable GADNativeAd *)ad;
 - (float)slotBackgroundColor;
-- (CGFloat)slotRoundCorner;
 - (NSString *)unitAdUnitId;
 - (NSInteger)noFillStreak;
 - (void)notifySlotDisplayed:(NSInteger)slotIndex;

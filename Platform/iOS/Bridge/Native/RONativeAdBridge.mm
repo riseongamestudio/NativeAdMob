@@ -45,7 +45,6 @@ void* ROInFeedAd_Create(
       , int32_t slotCount
       , int32_t cacheSize
       , int32_t backgroundColor
-      , int32_t roundCornerPx
       , int32_t instanceId) {
     NSString *unit = HBStringFromUtf8(adUnitId);
     if (unit.length == 0) return NULL;
@@ -54,7 +53,6 @@ void* ROInFeedAd_Create(
                                                 slotCount:slotCount
                                                 cacheSize:cacheSize
                                           backgroundColor:backgroundColor
-                                              roundCorner:HBPointsFromPixels(roundCornerPx)
                                                instanceId:instanceId];
     return (void *)CFBridgingRetain(ad);
 }
@@ -85,14 +83,16 @@ void ROInFeedAd_Configure(
       , int32_t xPx
       , int32_t yPx
       , int32_t widthPx
-      , int32_t heightPx) {
+      , int32_t heightPx
+      , int32_t roundCornerPx) {
     if (handle == NULL) return;
     ROInFeedAd *ad = (__bridge ROInFeedAd *)handle;
     [ad configureSlot:slotIndex
                     x:HBPointsFromPixels(xPx)
                     y:HBPointsFromPixels(yPx)
                 width:HBPointsFromPixels(widthPx)
-               height:HBPointsFromPixels(heightPx)];
+               height:HBPointsFromPixels(heightPx)
+          roundCorner:HBPointsFromPixels(roundCornerPx)];
 }
 
 void ROInFeedAd_Show(void* handle, int32_t slotIndex) {

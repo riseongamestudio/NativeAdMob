@@ -635,9 +635,12 @@ static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
         // side - a tiny cell cannot afford more.
         // A hair of breathing room, sized by the cell instead of by the
         // tier: enough that the text is not printed onto the very edge,
-        // never enough to read as a border. Plus the corner clearance the
-        // outer column did not spend on this template.
-        CGFloat scrimPad = [self ro_cellEdgePadding] + _cornerInset;
+        // never enough to read as a border. The corner clearance the outer
+        // column did not spend on this template is a FLOOR here, not an
+        // addend: both measure from the same cell edge, so a block already
+        // standing back far enough to clear the arc is already standing off
+        // the edge. Adding them spent the same border twice.
+        CGFloat scrimPad = MAX([self ro_cellEdgePadding], _cornerInset);
         scrim.ro_padding = UIEdgeInsetsMake(
                 scrimPad, scrimPad, scrimPad, scrimPad);
 

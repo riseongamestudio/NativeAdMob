@@ -28,7 +28,6 @@ typedef struct {
                        slotCount:(NSInteger)slotCount
                        cacheSize:(NSInteger)cacheSize
                  backgroundColor:(int32_t)backgroundColor
-                     roundCorner:(CGFloat)roundCornerPt
                       instanceId:(int32_t)instanceId;
 
 - (void)setInFeedListenerCallbacks:
@@ -39,7 +38,8 @@ typedef struct {
                     x:(CGFloat)xPt
                     y:(CGFloat)yPt
                 width:(CGFloat)widthPt
-               height:(CGFloat)heightPt;
+               height:(CGFloat)heightPt
+          roundCorner:(CGFloat)roundCornerPt;
 - (void)showSlot:(NSInteger)slotIndex;
 - (void)hideSlot:(NSInteger)slotIndex;
 - (void)setSlot:(NSInteger)slotIndex positionX:(CGFloat)xPt y:(CGFloat)yPt;

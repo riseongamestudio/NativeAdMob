@@ -40,16 +40,24 @@ final class InFeedAdSlot {
         final int yPx;
         final int widthPx;
         final int heightPx;
+        final int roundCornerPx;
 
-        SlotRect(int xPx, int yPx, int widthPx, int heightPx) {
+        SlotRect(
+                int xPx
+              , int yPx
+              , int widthPx
+              , int heightPx
+              , int roundCornerPx) {
             this.xPx = xPx;
             this.yPx = yPx;
             this.widthPx = Math.max(1, widthPx);
             this.heightPx = Math.max(1, heightPx);
+            this.roundCornerPx = Math.max(0, roundCornerPx);
         }
 
         SlotRect WithPosition(int newXPx, int newYPx) {
-            return new SlotRect(newXPx, newYPx, widthPx, heightPx);
+            return new SlotRect(
+                    newXPx, newYPx, widthPx, heightPx, roundCornerPx);
         }
     }
 
@@ -110,8 +118,14 @@ final class InFeedAdSlot {
     // ---- operations; the owner already hopped to main and vetted the
     // activity before calling any of these ----
 
-    void Configure(int xPx, int yPx, int widthPx, int heightPx) {
-        SlotRect newRect = new SlotRect(xPx, yPx, widthPx, heightPx);
+    void Configure(
+            int xPx
+          , int yPx
+          , int widthPx
+          , int heightPx
+          , int roundCornerPx) {
+        SlotRect newRect = new SlotRect(
+                xPx, yPx, widthPx, heightPx, roundCornerPx);
         boolean rectChanged = configured && !HasSameRect(rect, newRect);
 
         visibleRequested = false;
@@ -317,7 +331,7 @@ final class InFeedAdSlot {
                       , rect.widthPx
                       , rect.heightPx
                       , owner.BackgroundColor()
-                      , owner.RoundCornerPx()
+                      , rect.roundCornerPx
                       , new NativeAdPresentation.Listener() {
                             @Override
                             public void OnReady() {
@@ -884,7 +898,8 @@ final class InFeedAdSlot {
                 && first.xPx == second.xPx
                 && first.yPx == second.yPx
                 && first.widthPx == second.widthPx
-                && first.heightPx == second.heightPx;
+                && first.heightPx == second.heightPx
+                && first.roundCornerPx == second.roundCornerPx;
     }
 
     private static String Describe(DisplayEntry entry) {

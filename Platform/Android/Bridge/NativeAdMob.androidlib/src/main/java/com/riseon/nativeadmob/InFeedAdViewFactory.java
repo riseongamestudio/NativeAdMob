@@ -597,9 +597,13 @@ final class InFeedAdViewFactory {
             // side - a tiny cell cannot afford more.
             // A hair of breathing room, sized by the cell instead of
             // by the tier: enough that the text is not printed onto the
-            // very edge, never enough to read as a border. Plus the corner
-            // clearance the outer column did not spend on this template.
-            int scrimPad = CellEdgePaddingPx() + cornerInsetPx;
+            // very edge, never enough to read as a border. The corner
+            // clearance the outer column did not spend on this template is
+            // a FLOOR here, not an addend: both measure from the same cell
+            // edge, so a block already standing back far enough to clear
+            // the arc is already standing off the edge. Adding them spent
+            // the same border twice.
+            int scrimPad = Math.max(CellEdgePaddingPx(), cornerInsetPx);
             scrim.setPadding(scrimPad, scrimPad, scrimPad, scrimPad);
 
             views.headline = CreateText(
@@ -986,8 +990,10 @@ final class InFeedAdViewFactory {
         int badgeHeight = BadgeHeightPx(plan);
         // The badges sit on the root, outside the outer column, so they
         // carry the corner clearance themselves - on every template, the
-        // scrim one included: only the picture runs under the curve.
-        int edgeInset = CONTENT_EDGE_INSET_PX + cornerInsetPx;
+        // scrim one included: only the picture runs under the curve. A
+        // floor again, not an addend: both insets measure from the same
+        // cell edge.
+        int edgeInset = Math.max(CONTENT_EDGE_INSET_PX, cornerInsetPx);
         if (views.attribution != null) {
             int attributionWidth = AttributionWidthPx(plan, badgeHeight);
             views.attribution.setTextSize(

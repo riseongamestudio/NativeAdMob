@@ -25,8 +25,7 @@ namespace RiseOn.NativeAdMob.Android {
               , settings.AdUnitId
               , settings.SlotCount
               , settings.CacheSize
-              , AdColor.Pack(settings.BackgroundColor)
-              , settings.RoundCornerPx);
+              , AdColor.Pack(settings.BackgroundColor));
             listener = new InFeedAdListenerProxy(callbacks);
             javaObject.Call(
                 JAVA_SET_LISTENER_METHOD
@@ -36,7 +35,8 @@ namespace RiseOn.NativeAdMob.Android {
         public void ConfigureSlot(
             int slotIndex
           , Vector2Int positionPx
-          , Vector2Int sizePx) {
+          , Vector2Int sizePx
+          , int roundCornerPx) {
             javaObject?.Call(
                 JAVA_CONFIGURE_METHOD
               , AndroidApplication.currentActivity
@@ -44,7 +44,8 @@ namespace RiseOn.NativeAdMob.Android {
               , positionPx.x
               , positionPx.y
               , sizePx.x
-              , sizePx.y);
+              , sizePx.y
+              , roundCornerPx);
         }
 
         public void ShowSlot(int slotIndex) {

@@ -31,7 +31,6 @@ NSTimeInterval ROInFeedBackoffDelay(
     NSString *_adUnitId;
     NSInteger _cacheSize;
     int32_t _backgroundColor;
-    CGFloat _roundCorner;
     NSArray<ROInFeedAdSlot *> *_slots;
     NSMutableArray<ROInFeedCachedAd *> *_cachedAds;
     // OwnsAd runs inside the SDK's paid-event callback, off whatever thread
@@ -59,7 +58,6 @@ static NSTimeInterval RONow(void) {
                        slotCount:(NSInteger)slotCount
                        cacheSize:(NSInteger)cacheSize
                  backgroundColor:(int32_t)backgroundColor
-                     roundCorner:(CGFloat)roundCornerPt
                       instanceId:(int32_t)instanceId {
     self = [super initWithInstanceId:instanceId];
     if (self == nil) return nil;
@@ -70,7 +68,6 @@ static NSTimeInterval RONow(void) {
             kROMaxCacheSize
           , cacheSize < 1 ? boundedSlotCount + 1 : cacheSize);
     _backgroundColor = backgroundColor;
-    _roundCorner = MAX(0, roundCornerPt);
     _cachedAds = [NSMutableArray array];
     _ownedAds = [NSHashTable weakObjectsHashTable];
     _inFeedCallbacksLock = [NSObject new];
@@ -121,11 +118,15 @@ static NSTimeInterval RONow(void) {
     return nil;
 }
 
+// The corner radius travels with the rect, not with the unit: the cell is
+// measured on screen by the caller, and the unit drawing it may have been
+// built long before that - warmed at start-up, say.
 - (void)configureSlot:(NSInteger)slotIndex
                     x:(CGFloat)xPt
                     y:(CGFloat)yPt
                 width:(CGFloat)widthPt
-               height:(CGFloat)heightPt {
+               height:(CGFloat)heightPt
+          roundCorner:(CGFloat)roundCornerPt {
     [ROBaseAd runOnMainThread:^{
         if (self.released) {
             NSLog(@"%@: Configure ignored after Release", kROTag);
@@ -140,7 +141,11 @@ static NSTimeInterval RONow(void) {
                                    operation:@"Configure"];
         if (slot == nil) return;
 
-        [slot configureWithX:xPt y:yPt width:widthPt height:heightPt];
+        [slot configureWithX:xPt
+                           y:yPt
+                       width:widthPt
+                      height:heightPt
+                 roundCorner:roundCornerPt];
     }];
 }
 
@@ -441,10 +446,6 @@ static NSTimeInterval RONow(void) {
 
 - (float)slotBackgroundColor {
     return _backgroundColor;
-}
-
-- (CGFloat)slotRoundCorner {
-    return _roundCorner;
 }
 
 - (NSString *)unitAdUnitId {

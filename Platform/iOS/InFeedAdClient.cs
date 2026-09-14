@@ -17,7 +17,6 @@ namespace RiseOn.NativeAdMob.iOS {
               , settings.SlotCount
               , settings.CacheSize
               , AdColor.Pack(settings.BackgroundColor)
-              , settings.RoundCornerPx
               , instanceId);
             if (handle == IntPtr.Zero) return;
 
@@ -34,7 +33,8 @@ namespace RiseOn.NativeAdMob.iOS {
         public void ConfigureSlot(
             int slotIndex
           , Vector2Int positionPx
-          , Vector2Int sizePx) {
+          , Vector2Int sizePx
+          , int roundCornerPx) {
             if (handle == IntPtr.Zero) return;
 
             NativeAdBridge.ROInFeedAd_Configure(
@@ -43,7 +43,8 @@ namespace RiseOn.NativeAdMob.iOS {
               , positionPx.x
               , positionPx.y
               , sizePx.x
-              , sizePx.y);
+              , sizePx.y
+              , roundCornerPx);
         }
 
         public void ShowSlot(int slotIndex) {

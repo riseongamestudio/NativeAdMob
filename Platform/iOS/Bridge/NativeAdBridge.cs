@@ -51,7 +51,6 @@ namespace RiseOn.NativeAdMob.iOS {
           , int slotCount
           , int cacheSize
           , int backgroundColor
-          , int roundCornerPx
           , int instanceId);
         [DllImport("__Internal")]
         internal static extern void ROInFeedAd_SetListener(
@@ -69,7 +68,8 @@ namespace RiseOn.NativeAdMob.iOS {
           , int xPx
           , int yPx
           , int widthPx
-          , int heightPx);
+          , int heightPx
+          , int roundCornerPx);
         [DllImport("__Internal")]
         internal static extern void ROInFeedAd_Show(
             IntPtr handle, int slotIndex);

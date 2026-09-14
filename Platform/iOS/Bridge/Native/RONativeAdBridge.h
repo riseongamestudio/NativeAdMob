@@ -92,7 +92,6 @@ void* ROInFeedAd_Create(
       , int32_t slotCount
       , int32_t cacheSize
       , int32_t backgroundColor
-      , int32_t roundCornerPx
       , int32_t instanceId);
 void ROInFeedAd_SetListener(
         void* handle
@@ -108,7 +107,8 @@ void ROInFeedAd_Configure(
       , int32_t xPx
       , int32_t yPx
       , int32_t widthPx
-      , int32_t heightPx);
+      , int32_t heightPx
+      , int32_t roundCornerPx);
 void ROInFeedAd_Show(void* handle, int32_t slotIndex);
 void ROInFeedAd_Hide(void* handle, int32_t slotIndex);
 void ROInFeedAd_SetPosition(
