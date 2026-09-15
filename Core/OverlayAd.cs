@@ -30,7 +30,7 @@ namespace RiseOn.NativeAdMob {
         private protected OverlayAd(
             string adUnitId
           , string format
-          , bool coversFullScreen
+          , bool fullScreen
           , float heightRatio
           , int cacheSize
           , Color backgroundColor
@@ -46,7 +46,7 @@ namespace RiseOn.NativeAdMob {
             client = platform.CreateOverlay(
                 new OverlayAdSettings {
                     AdUnitId         = adUnitId
-                  , CoversFullScreen = coversFullScreen
+                  , FullScreen = fullScreen
                   , HeightRatio      = heightRatio
                   , CacheSize        = cacheSize
                   , BackgroundColor  = AdColor.Pack(backgroundColor)

@@ -52,7 +52,7 @@ namespace RiseOn.NativeAdMob {
             : base(
                 settings.AdUnitId
               , settings.Format
-              , coversFullScreen: false
+              , fullScreen: false
               , settings.HeightRatio
               , settings.CacheSize
               , settings.BackgroundColor

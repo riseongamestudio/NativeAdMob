@@ -33,7 +33,7 @@ public final class OverlayAdActivity extends Activity {
     private static final String EXTRA_SESSION_ID =
             "com.riseon.nativeadmob.extra.NATIVE_FULLSCREEN_SESSION_ID";
     private static final String SESSION_ID_PREFIX =
-            "native-fullscreen-";
+            "native-fullScreen-";
     private static final String PRESENTATION_FAILURE_PREFIX =
             "Failed to show ad: ";
     private static final int NO_TRANSITION_ANIMATION = 0;
@@ -189,7 +189,7 @@ public final class OverlayAdActivity extends Activity {
         // Requested here, not in the manifest: Android 8.0 (API 26 only)
         // crashes a translucent activity that declares a fixed orientation,
         // from super.onCreate, before any code of ours runs. Measured in
-        // production: IllegalStateException "Only fullscreen opaque
+        // production: IllegalStateException "Only fullScreen opaque
         // activities can request orientation", 7 users. On API 26 the
         // request is skipped; a translucent activity there follows the
         // orientation of the opaque activity beneath it - the portrait
@@ -244,7 +244,7 @@ public final class OverlayAdActivity extends Activity {
                       , session.style.ResolveTimerOnLeft(session.closeOnLeft)
                       , true
                       , session.style.backgroundColor
-                      , session.style.fakeCloseAutoDismiss
+                      , session.style.redirectOnClose
                       , requestedPanelHeight
                       , () -> CompletePresentation(""));
             }

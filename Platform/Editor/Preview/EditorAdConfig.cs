@@ -43,16 +43,16 @@ namespace RiseOn.NativeAdMob.Editor {
 
         internal static EditorAdConfig CreateFullScreen(
             string adUnitId
-          , bool fullscreen
+          , bool fullScreen
           , float heightRatio
           , Color backgroundColor
           , in CloseSettings controls) {
             return new(
                 adUnitId
-              , fullscreen
+              , fullScreen
                     ? EditorAdMode.FullScreen
                     : EditorAdMode.Collapsible
-              , fullscreen
+              , fullScreen
               , controls
               , ResolveRatio(heightRatio, DEFAULT_HEIGHT_RATIO)
               , backgroundColor

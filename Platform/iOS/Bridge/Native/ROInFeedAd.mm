@@ -106,7 +106,7 @@ static NSTimeInterval RONow(void) {
 }
 
 - (nullable ROInFeedAdSlot *)ro_slotAt:(NSInteger)slotIndex
-                           operation:(NSString *)operation {
+                             operation:(NSString *)operation {
     if (slotIndex >= 0 && slotIndex < (NSInteger)_slots.count) {
         return _slots[slotIndex];
     }

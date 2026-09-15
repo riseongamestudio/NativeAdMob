@@ -43,7 +43,7 @@ static NSTimeInterval RONow(void) {
 // The style snapshot Configure publishes and every show reads - the same
 // immutable OverlayStyle the Java side passes around.
 @interface HBOverlayStyle : NSObject
-@property (nonatomic, readonly) BOOL fullscreen;
+@property (nonatomic, readonly) BOOL fullScreen;
 @property (nonatomic, readonly) int32_t cooldown;
 // Ordinals shared with the C# enums: Left 0, Right 1, Random 2, and for the
 // timer OppositeOfClose 3, SameAsClose 4.
@@ -52,27 +52,27 @@ static NSTimeInterval RONow(void) {
 @property (nonatomic, readonly) float heightRatio;
 @property (nonatomic, readonly) int32_t backgroundColor;
 // The close button commits the ad's click on its way out.
-@property (nonatomic, readonly) BOOL fakeCloseAutoDismiss;
+@property (nonatomic, readonly) BOOL redirectOnClose;
 @end
 
 @implementation HBOverlayStyle
 
-- (instancetype)initWithFullscreen:(BOOL)fullscreen
+- (instancetype)initWithFullScreen:(BOOL)fullScreen
                           cooldown:(int32_t)cooldown
                          closeSide:(int32_t)closeSide
                          timerSide:(int32_t)timerSide
                        heightRatio:(float)heightRatio
                    backgroundColor:(int32_t)backgroundColor
-              fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss {
+                   redirectOnClose:(BOOL)redirectOnClose {
     self = [super init];
     if (self == nil) return nil;
-    _fullscreen = fullscreen;
+    _fullScreen = fullScreen;
     _cooldown = MAX(0, cooldown);
     _closeSide = closeSide;
     _timerSide = timerSide;
     _heightRatio = heightRatio;
     _backgroundColor = backgroundColor;
-    _fakeCloseAutoDismiss = fakeCloseAutoDismiss;
+    _redirectOnClose = redirectOnClose;
     return self;
 }
 
@@ -81,13 +81,13 @@ static NSTimeInterval RONow(void) {
                             timerSide:(int32_t)timerSide
                       redirectOnClose:(BOOL)redirectOnClose {
     return [[HBOverlayStyle alloc]
-            initWithFullscreen:self.fullscreen
+            initWithFullScreen:self.fullScreen
                       cooldown:cooldown
                      closeSide:closeSide
                      timerSide:timerSide
                    heightRatio:self.heightRatio
                backgroundColor:self.backgroundColor
-          fakeCloseAutoDismiss:redirectOnClose];
+               redirectOnClose:redirectOnClose];
 }
 
 // Random is answered once per presentation; the relative timer modes then
@@ -109,7 +109,7 @@ static NSTimeInterval RONow(void) {
 }
 
 - (BOOL)pausesGame {
-    return self.fullscreen;
+    return self.fullScreen;
 }
 
 @end
@@ -184,7 +184,7 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
     return self;
 }
 
-- (void)configureWithFullscreen:(BOOL)fullscreen
+- (void)configureWithFullScreen:(BOOL)fullScreen
                     heightRatio:(float)heightRatio
                 backgroundColor:(int32_t)backgroundColor
                       cacheSize:(int32_t)cacheSize
@@ -207,13 +207,13 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
         // so the follow-up is already in hand when the first ad closes.
         self->_cacheSize = MAX(1, MIN(kROMaxCacheSize, (NSInteger)cacheSize));
         self->_configuredStyle = [[HBOverlayStyle alloc]
-                initWithFullscreen:fullscreen
+                initWithFullScreen:fullScreen
                           cooldown:cooldown
                          closeSide:closeSide
                          timerSide:timerSide
                        heightRatio:heightRatio
                    backgroundColor:backgroundColor
-              fakeCloseAutoDismiss:redirectOnClose];
+                   redirectOnClose:redirectOnClose];
         self->_configured = YES;
     }];
 }
@@ -499,15 +499,39 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
 }
 
 // Not gated on generation: the ad that was clicked may well be the one on
-// screen from an earlier load, same as the Android AdListener comment.
+// screen from an earlier load, same as the Android AdListener comment. It IS
+// gated on being the ad on screen, though - every cached ad has this object
+// for a delegate, and commitAdClick now promotes a waiting close press, so a
+// report from an ad nobody can see must not end a show.
 - (void)nativeAdDidRecordClick:(GADNativeAd *)nativeAd {
     [ROBaseAd runOnMainThread:^{
+        if (self->_activeNativeAd != nativeAd) return;
+
         [self->_presentation onAdClicked];
     }];
 }
 
+// The click's landing page coming to the front. This is what tells a close
+// press that its redirect actually arrived - and unlike resigning active, it
+// fires for the in-app browser and store sheet too.
+- (void)nativeAdWillPresentScreen:(GADNativeAd *)nativeAd {
+    [ROBaseAd runOnMainThread:^{
+        if (self->_activeNativeAd != nativeAd) return;
+
+        [self->_presentation onAdWillPresentScreen];
+    }];
+}
+
+- (void)nativeAdDidDismissScreen:(GADNativeAd *)nativeAd {
+    [ROBaseAd runOnMainThread:^{
+        if (self->_activeNativeAd != nativeAd) return;
+
+        [self->_presentation onAdDidDismissScreen];
+    }];
+}
+
 - (void)showWithShowId:(int32_t)showId
-             onCompleted:(RONativeAdShowCompletedCallback)onCompleted {
+           onCompleted:(RONativeAdShowCompletedCallback)onCompleted {
     [ROBaseAd runOnMainThread:^{
         if (self.released) {
             [self ro_invokeCompleted:onCompleted
@@ -661,10 +685,10 @@ static NSString *ROMediaSignature(GADNativeAd *nativeAd) {
                                closeOnLeft:closeOnLeftForPresentation
                                timerOnLeft:[style resolveTimerOnLeft:
                                             closeOnLeftForPresentation]
-                                fullscreen:style.fullscreen
+                                fullScreen:style.fullScreen
                                heightRatio:style.heightRatio
                            backgroundColor:style.backgroundColor
-                      fakeCloseAutoDismiss:style.fakeCloseAutoDismiss];
+                           redirectOnClose:style.redirectOnClose];
     __weak ROOverlayAd *weakSelf = self;
     __weak GADNativeAd *weakAd = ad;
     createdPresentation.onShow = ^{

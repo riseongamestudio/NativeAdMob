@@ -18,7 +18,7 @@ namespace RiseOn.NativeAdMob.iOS {
 
             NativeAdBridge.ROOverlayAd_Configure(
                 handle
-              , settings.CoversFullScreen
+              , settings.FullScreen
               , settings.HeightRatio
               , settings.BackgroundColor
               , settings.CacheSize

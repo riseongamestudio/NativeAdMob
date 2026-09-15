@@ -1,5 +1,5 @@
 // Port of OverlayAdPresentation and the presenting half of
-// OverlayAdActivity in one object: fullscreen rides a translucent
+// OverlayAdActivity in one object: fullScreen rides a translucent
 // view controller presented over Unity (the Activity's role), collapsible
 // pins the content view to the bottom of Unity's view (the panel dialog's
 // role). iOS never tears a presented controller down behind the app's back,
@@ -20,10 +20,10 @@ NS_ASSUME_NONNULL_BEGIN
                           countdownSec:(int32_t)countdownSec
                            closeOnLeft:(BOOL)closeOnLeft
                            timerOnLeft:(BOOL)timerOnLeft
-                            fullscreen:(BOOL)fullscreen
+                            fullScreen:(BOOL)fullScreen
                            heightRatio:(float)heightRatio
                        backgroundColor:(int32_t)backgroundColor
-                  fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss;
+                       redirectOnClose:(BOOL)redirectOnClose;
 
 @property (nonatomic, copy, nullable) dispatch_block_t onShow;
 @property (nonatomic, copy, nullable) dispatch_block_t onDismiss;
@@ -40,6 +40,9 @@ NS_ASSUME_NONNULL_BEGIN
 // Dismiss without the onDismiss notification - Release() semantics.
 - (void)releasePresentation;
 - (void)onAdClicked;
+// The SDK's click-time screen signals, forwarded to the content view.
+- (void)onAdWillPresentScreen;
+- (void)onAdDidDismissScreen;
 
 @end
 

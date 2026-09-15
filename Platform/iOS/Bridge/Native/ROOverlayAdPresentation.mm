@@ -44,8 +44,8 @@ static NSString *const kROTag = @"Overlay";
     int32_t _countdownSec;
     BOOL _closeOnLeft;
     BOOL _timerOnLeft;
-    BOOL _fullscreen;
-    BOOL _fakeCloseAutoDismiss;
+    BOOL _fullScreen;
+    BOOL _redirectOnClose;
     float _heightRatio;
     int32_t _backgroundColor;
 
@@ -62,10 +62,10 @@ static NSString *const kROTag = @"Overlay";
                           countdownSec:(int32_t)countdownSec
                            closeOnLeft:(BOOL)closeOnLeft
                            timerOnLeft:(BOOL)timerOnLeft
-                            fullscreen:(BOOL)fullscreen
+                            fullScreen:(BOOL)fullScreen
                            heightRatio:(float)heightRatio
                        backgroundColor:(int32_t)backgroundColor
-                  fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss {
+                       redirectOnClose:(BOOL)redirectOnClose {
     self = [super init];
     if (self == nil) return nil;
 
@@ -74,10 +74,10 @@ static NSString *const kROTag = @"Overlay";
     _countdownSec = MAX(0, countdownSec);
     _closeOnLeft = closeOnLeft;
     _timerOnLeft = timerOnLeft;
-    _fullscreen = fullscreen;
+    _fullScreen = fullScreen;
     _heightRatio = heightRatio;
     _backgroundColor = backgroundColor;
-    _fakeCloseAutoDismiss = fakeCloseAutoDismiss;
+    _redirectOnClose = redirectOnClose;
     return self;
 }
 
@@ -91,7 +91,7 @@ static NSString *const kROTag = @"Overlay";
 
     BOOL hasVideoContent = _nativeAd.mediaContent.hasVideoContent;
     CGFloat requestedPanelHeight = [ROOverlayAdContentView
-            resolveInitialPanelHeightForFullscreen:_fullscreen
+            resolveInitialPanelHeightForFullScreen:_fullScreen
                                        heightRatio:_heightRatio
                                    hasVideoContent:hasVideoContent];
     __weak ROOverlayAdPresentation *weakSelf = self;
@@ -100,9 +100,9 @@ static NSString *const kROTag = @"Overlay";
         countDownRemainingMs:(int64_t)_countdownSec * 1000
                  closeOnLeft:_closeOnLeft
                  timerOnLeft:_timerOnLeft
-                  fullscreen:_fullscreen
+                  fullScreen:_fullScreen
              backgroundColor:_backgroundColor
-        fakeCloseAutoDismiss:_fakeCloseAutoDismiss
+             redirectOnClose:_redirectOnClose
         requestedPanelHeight:requestedPanelHeight
                      onClose:^{ [weakSelf dismiss]; }];
     return _contentView != nil;
@@ -122,7 +122,7 @@ static NSString *const kROTag = @"Overlay";
         return NO;
     }
 
-    if (_fullscreen) {
+    if (_fullScreen) {
         _presentedController =
                 [[ROOverlayAdViewController alloc] init];
         _presentedController.contentView = _contentView;
@@ -199,6 +199,14 @@ static NSString *const kROTag = @"Overlay";
 
 - (void)onAdClicked {
     [_contentView commitAdClick];
+}
+
+- (void)onAdWillPresentScreen {
+    [_contentView adWillPresentScreen];
+}
+
+- (void)onAdDidDismissScreen {
+    [_contentView adDidDismissScreen];
 }
 
 - (void)ro_dismissWithNotify:(BOOL)notify {

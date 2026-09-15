@@ -54,8 +54,8 @@ public final class OverlayAdPresentation
     private final int countDownSec;
     private final boolean closeOnLeft;
     private final boolean timerOnLeft;
-    private final boolean fakeCloseAutoDismiss;
-    private final boolean fullscreen;
+    private final boolean redirectOnClose;
+    private final boolean fullScreen;
     private final float heightRatio;
     private final int backgroundColor;
     private OverlayAdContentView contentView;
@@ -66,10 +66,10 @@ public final class OverlayAdPresentation
           , int countDownSec
           , boolean closeOnLeft
           , boolean timerOnLeft
-          , boolean fullscreen
+          , boolean fullScreen
           , float heightRatio
           , int backgroundColor
-          , boolean fakeCloseAutoDismiss) {
+          , boolean redirectOnClose) {
         super(
                 context
               , android.R.style.Theme_Black_NoTitleBar_Fullscreen);
@@ -81,8 +81,8 @@ public final class OverlayAdPresentation
         this.countDownSec = countDownSec;
         this.closeOnLeft = closeOnLeft;
         this.timerOnLeft = timerOnLeft;
-        this.fakeCloseAutoDismiss = fakeCloseAutoDismiss;
-        this.fullscreen = fullscreen;
+        this.redirectOnClose = redirectOnClose;
+        this.fullScreen = fullScreen;
         this.heightRatio = heightRatio;
         this.backgroundColor = backgroundColor;
     }
@@ -96,7 +96,7 @@ public final class OverlayAdPresentation
         int requestedPanelHeight =
                 OverlayAdContentView.ResolveInitialPanelHeight(
                         context
-                      , fullscreen
+                      , fullScreen
                       , heightRatio);
         Window window = getWindow();
         ConfigureWindow(window, requestedPanelHeight);
@@ -107,9 +107,9 @@ public final class OverlayAdPresentation
               , Math.max(0, countDownSec) * 1000L
               , closeOnLeft
               , timerOnLeft
-              , fullscreen
+              , fullScreen
               , backgroundColor
-              , fakeCloseAutoDismiss
+              , redirectOnClose
               , requestedPanelHeight
               , this::dismiss);
         setContentView(contentView);
@@ -185,8 +185,8 @@ public final class OverlayAdPresentation
         window.setBackgroundDrawable(
                 new ColorDrawable(Color.TRANSPARENT));
         window.setWindowAnimations(0);
-        if (fullscreen) {
-            ConfigureFullscreenCutout(window);
+        if (fullScreen) {
+            ConfigureFullScreenCutout(window);
             window.setLayout(
                     ViewGroup.LayoutParams.MATCH_PARENT
                   , ViewGroup.LayoutParams.MATCH_PARENT);
@@ -242,17 +242,17 @@ public final class OverlayAdPresentation
 
         WindowManager.LayoutParams attributes = window.getAttributes();
         attributes.token = hostWindowToken;
-        attributes.type = fullscreen
+        attributes.type = fullScreen
                 ? FULLSCREEN_WINDOW_TYPE
                 : NON_FULLSCREEN_WINDOW_TYPE;
         window.setAttributes(attributes);
     }
 
-    private void ConfigureFullscreenCutout(Window window) {
+    private void ConfigureFullScreenCutout(Window window) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            Api30Impl.ConfigureFullscreenInsets(window);
+            Api30Impl.ConfigureFullScreenInsets(window);
         } else {
-            ConfigureLegacyFullscreenInsets(window);
+            ConfigureLegacyFullScreenInsets(window);
         }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return;
 
@@ -264,7 +264,7 @@ public final class OverlayAdPresentation
     }
 
     @SuppressWarnings("deprecation")
-    private static void ConfigureLegacyFullscreenInsets(Window window) {
+    private static void ConfigureLegacyFullScreenInsets(Window window) {
         window.getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                         | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
@@ -273,7 +273,7 @@ public final class OverlayAdPresentation
     private static final class Api30Impl {
         private Api30Impl() {}
 
-        static void ConfigureFullscreenInsets(Window window) {
+        static void ConfigureFullScreenInsets(Window window) {
             WindowManager.LayoutParams attributes = window.getAttributes();
             int fitInsetTypes =
                     WindowInsets.Type.systemBars()

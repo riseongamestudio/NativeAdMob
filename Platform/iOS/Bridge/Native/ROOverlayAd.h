@@ -16,7 +16,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithAdUnitId:(NSString *)adUnitId
                       instanceId:(int32_t)instanceId;
 
-- (void)configureWithFullscreen:(BOOL)fullscreen
+- (void)configureWithFullScreen:(BOOL)fullScreen
                     heightRatio:(float)heightRatio
                 backgroundColor:(int32_t)backgroundColor
                       cacheSize:(int32_t)cacheSize
@@ -30,7 +30,7 @@ NS_ASSUME_NONNULL_BEGIN
              redirectOnClose:(BOOL)redirectOnClose;
 - (void)load;
 - (void)showWithShowId:(int32_t)showId
-             onCompleted:(RONativeAdShowCompletedCallback _Nullable)onCompleted;
+           onCompleted:(RONativeAdShowCompletedCallback _Nullable)onCompleted;
 - (void)hide;
 - (void)releaseAd;
 

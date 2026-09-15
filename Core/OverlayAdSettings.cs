@@ -1,7 +1,7 @@
 namespace RiseOn.NativeAdMob {
     internal struct OverlayAdSettings {
         public string        AdUnitId;
-        public bool          CoversFullScreen;
+        public bool          FullScreen;
         public float         HeightRatio;
         public int           CacheSize;
         public int           BackgroundColor;

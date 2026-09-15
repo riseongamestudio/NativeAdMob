@@ -39,7 +39,7 @@ public final class OverlayAd extends BaseAd {
     private static final int TIMER_SIDE_SAME     = 4;
 
     static final class OverlayAdStyle {
-        final boolean fullscreen;
+        final boolean fullScreen;
         final int cooldown;
         // Ordinals shared with the C# enums: Left 0, Right 1, Random 2, and
         // for the timer OppositeOfClose 3, SameAsClose 4.
@@ -48,23 +48,23 @@ public final class OverlayAd extends BaseAd {
         final float heightRatio;
         final int backgroundColor;
         // The close button commits the ad's click on its way out.
-        final boolean fakeCloseAutoDismiss;
+        final boolean redirectOnClose;
 
         OverlayAdStyle(
-                boolean fullscreen
+                boolean fullScreen
               , int cooldown
               , int closeSide
               , int timerSide
               , float heightRatio
               , int backgroundColor
-              , boolean fakeCloseAutoDismiss) {
-            this.fullscreen = fullscreen;
+              , boolean redirectOnClose) {
+            this.fullScreen = fullScreen;
             this.cooldown = Math.max(0, cooldown);
             this.closeSide = closeSide;
             this.timerSide = timerSide;
             this.heightRatio = heightRatio;
             this.backgroundColor = backgroundColor;
-            this.fakeCloseAutoDismiss = fakeCloseAutoDismiss;
+            this.redirectOnClose = redirectOnClose;
         }
 
         OverlayAdStyle WithClose(
@@ -73,7 +73,7 @@ public final class OverlayAd extends BaseAd {
               , int newTimerSide
               , boolean newRedirectOnClose) {
             return new OverlayAdStyle(
-                    fullscreen
+                    fullScreen
                   , newCooldown
                   , newCloseSide
                   , newTimerSide
@@ -101,7 +101,7 @@ public final class OverlayAd extends BaseAd {
         }
 
         boolean PausesGame() {
-            return fullscreen;
+            return fullScreen;
         }
     }
 
@@ -355,10 +355,10 @@ public final class OverlayAd extends BaseAd {
     }
 
     public synchronized void Configure(
-            boolean fullscreen
+            boolean fullScreen
           , float heightRatio
           , int backgroundColor
-          , int newCacheSize
+          , int cacheSize
           , int cooldown
           , int closeSide
           , int timerSide
@@ -379,9 +379,9 @@ public final class OverlayAd extends BaseAd {
         // How many ads stay warm at once. One - always hold a spare -
         // is the placement that never asked; a chained placement raises it
         // so the follow-up is already in hand when the first ad closes.
-        cacheSize = Math.max(1, Math.min(MAX_CACHE_SIZE, newCacheSize));
+        this.cacheSize = Math.max(1, Math.min(MAX_CACHE_SIZE, cacheSize));
         configuredStyle = new OverlayAdStyle(
-                fullscreen
+                fullScreen
               , cooldown
               , closeSide
               , timerSide
@@ -748,7 +748,7 @@ public final class OverlayAd extends BaseAd {
                 }
             });
 
-            if (requestedShowStyle.fullscreen) {
+            if (requestedShowStyle.fullScreen) {
                 // NOTE - deliberately no IsLayoutUnrenderable station on
                 // this path. The panel is the entire screen; mandatory
                 // chrome that outgrows a whole display does not exist in
@@ -1040,7 +1040,7 @@ public final class OverlayAd extends BaseAd {
             return;
         }
 
-        if (style.fullscreen) {
+        if (style.fullScreen) {
             ReleasePreparedPresentation();
             PrepareFullScreenContent(activity, ad, style);
         } else {
@@ -1061,10 +1061,10 @@ public final class OverlayAd extends BaseAd {
               , style.cooldown
               , closeOnLeftForPresentation
               , style.ResolveTimerOnLeft(closeOnLeftForPresentation)
-              , style.fullscreen
+              , style.fullScreen
               , style.heightRatio
               , style.backgroundColor
-              , style.fakeCloseAutoDismiss);
+              , style.redirectOnClose);
         createdPresentation.setOnShowListener(ignored -> {
             if (!released && activeNativeAd == ad) NotifyDisplayed();
         });
@@ -1235,7 +1235,7 @@ public final class OverlayAd extends BaseAd {
                           , style.ResolveTimerOnLeft(closeOnLeft)
                           , true
                           , style.backgroundColor
-                          , style.fakeCloseAutoDismiss
+                          , style.redirectOnClose
                           , requestedPanelHeight
                           , closeRelay);
             preparedContentView = createdContentView;

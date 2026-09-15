@@ -116,7 +116,7 @@ static const CGFloat kROMinBodyBottomPadding = 4;
 static const CGFloat kROMaxBodyBottomPadding = 8;
 static const CGFloat kROMinHeadlineTextSize = 15;
 static const CGFloat kROMaxHeadlineTextSize = 20;
-static const CGFloat kROFullscreenHeadlineTextSize = 18;
+static const CGFloat kROFullScreenHeadlineTextSize = 18;
 static const CGFloat kROMinAdvertiserTextSize = 12;
 static const CGFloat kROMaxAdvertiserTextSize = 14;
 static const CGFloat kROMinBodyTextSize = 13;
@@ -132,9 +132,47 @@ static const CGFloat kROMaxIconRowWidthRatio = 0.33f;
 // that has to scroll never does it at the size that failed to fit whole.
 static const CGFloat kROMarqueeTextShrink = 0.8f;
 static const NSTimeInterval kROCountdownInterval = 0.25;
-// How long a close that fired the SDK's click waits for the redirect to
-// actually take the screen before closing anyway. It ends the wait rather
-// than deciding it: whatever opened either arrived or is not coming.
+// How long a let-through close press waits for the SDK's click report.
+// Android's CLOSE_REPORT_TIMEOUT_MS, same value, same meaning.
+//
+// This is not a countdown to anything. A click report says only that a click
+// happened, never where - so when one arrives, the one piece of evidence
+// that it came from the close chip rather than from a deliberate tap on the
+// ad is that a press went through the chip a moment ago. This is how long
+// ago still counts as a moment. Inside it the click is the close button's
+// and the ad goes; outside it the click belongs to the ad and the ad stays
+// up for the player who meant to follow it. Without the expiry a missed
+// press would sit there for the rest of the show and close the ad on a
+// call-to-action tap half a minute later.
+//
+// When it runs out the press is simply forgotten. The SDK did not accept the
+// touch, so as far as the ad is concerned nothing was pressed, and a button
+// that missed should do nothing - a second of silence followed by the ad
+// vanishing by itself reads as a glitch instead. The one exception is the
+// net below, which is checked at this same moment because this is the
+// instant a press is known to have earned nothing.
+static const NSTimeInterval kROCloseReportTimeout = 1.0;
+// A missed press does nothing, which is right until it is every press. The
+// dead zone is small enough that landing in it three times running is close
+// to impossible - and a player pressing a third time is telling us plainly
+// that they want out, whatever the SDK thinks. That press waits its second
+// and then closes the ad, so the button can never be a trap.
+static const NSInteger kROClosePressesBeforeGivingUp = 3;
+// How far apart two touch-downs have to be to be two presses. UIKit asks
+// hitTest: several times over for a single touch-down, and without a
+// separation of its own every one of those asks would count against the net
+// above. The pending flag used to stand in for it, which made the net ask
+// for three SLOW presses instead: a whole second of tapping counted once,
+// and the tap-tap-tap anyone does at a button that ignored them was the one
+// thing that could not reach three. Nobody taps twice inside a tenth of a
+// second; one press's repeat asks all land in the same millisecond. Android
+// needs none of this - its listener sees ACTION_DOWN once per press.
+static const NSTimeInterval kROClosePressSeparation = 0.1;
+// And how long a REPORTED click then waits for the redirect to actually
+// take the screen. Longer than the first, because by this point a click is
+// certain and only the browser is late. It ends the wait rather than
+// deciding it: whatever opened either arrived or is not coming. Android's
+// REDIRECT_TIMEOUT_MS.
 static const NSTimeInterval kRORedirectTimeout = 3.0;
 
 static UIColor *HBArgb(uint32_t argb) {
@@ -148,6 +186,10 @@ static UIColor *HBArgb(uint32_t argb) {
 // close controls all pad their text the way the Android views do.
 @interface HBPaddedLabel : UILabel
 @property (nonatomic) UIEdgeInsets ro_contentInsets;
+// VoiceOver's press. A control that has given up being its own touch target
+// still has to answer the assistive one - see the close chip under
+// RedirectOnClose.
+@property (nonatomic, copy) dispatch_block_t ro_onAccessibilityActivate;
 @end
 
 @implementation HBPaddedLabel
@@ -164,12 +206,27 @@ static UIColor *HBArgb(uint32_t argb) {
           , content.height + insets.top + insets.bottom);
 }
 
+- (BOOL)accessibilityActivate {
+    if (self.ro_onAccessibilityActivate == nil) return NO;
+
+    self.ro_onAccessibilityActivate();
+    return YES;
+}
+
 @end
 
+// Android's CentreUnderIcon, and the text branch is the whole point of it:
+// these labels are laid out at the rail's full width, so moving the VIEW to
+// the middle of a space it already fills changes nothing - only the text
+// inside it can move. ROAdTextLabel is this pack's TextView, and a plain
+// isKindOfClass:UILabel test misses it, which is how the side-media rail
+// ended up with a centred icon over left-aligned lines.
 static void ROCentreUnderIcon(UIView *view) {
     if (view == nil) return;
 
-    if ([view isKindOfClass:UILabel.class]) {
+    if ([view isKindOfClass:ROAdTextLabel.class]) {
+        ((ROAdTextLabel *)view).textAlignment = NSTextAlignmentCenter;
+    } else if ([view isKindOfClass:UILabel.class]) {
         ((UILabel *)view).textAlignment = NSTextAlignmentCenter;
     }
     view.ro_layoutGravity = HBGravityCenterHorizontal;
@@ -179,9 +236,9 @@ static void ROCentreUnderIcon(UIView *view) {
     GADNativeAd *_nativeAd;
     int64_t _countDownRemainingMs;
     BOOL _closeOnLeft;
-    BOOL _fakeCloseAutoDismiss;
+    BOOL _redirectOnClose;
     BOOL _timerOnLeft;
-    BOOL _fullscreen;
+    BOOL _fullScreen;
     int32_t _backgroundColor;
     dispatch_block_t _onClose;
     CGFloat _resolvedPanelHeight;
@@ -245,6 +302,17 @@ static void ROCentreUnderIcon(UIView *view) {
     UIImageView *_fallbackMediaImageView;
 
     NSTimer *_timer;
+    // A close press that has been let through to the ad surface and is
+    // waiting for the SDK to report the click it should have produced.
+    // Bounded, because a press the SDK never reports must still close.
+    NSTimer *_closeReportTimer;
+    BOOL _closePressPending;
+    // Close presses the SDK never answered. A click arriving for one of them
+    // clears the run, so only misses count toward the net.
+    NSInteger _unansweredClosePresses;
+    // The touch time of the last press counted, so that the repeat asks
+    // hitTest: makes for that same touch are not counted again.
+    NSTimeInterval _lastClosePressTime;
     // A close press whose click the SDK has taken, waiting for whatever it
     // opened to come to the front. The ad stays up through this: closing on
     // the click alone left a gap where the ad was already gone and the
@@ -258,10 +326,10 @@ static void ROCentreUnderIcon(UIView *view) {
     NSMutableSet<NSValue *> *_shrunkTexts;
 }
 
-+ (CGFloat)resolveInitialPanelHeightForFullscreen:(BOOL)fullscreen
++ (CGFloat)resolveInitialPanelHeightForFullScreen:(BOOL)fullScreen
                                       heightRatio:(float)heightRatio
                                   hasVideoContent:(BOOL)hasVideoContent {
-    if (fullscreen) return UIScreen.mainScreen.bounds.size.height;
+    if (fullScreen) return UIScreen.mainScreen.bounds.size.height;
 
     return [self resolveHalfScreenPanelHeightForRatio:heightRatio];
 }
@@ -287,14 +355,14 @@ static void ROCentreUnderIcon(UIView *view) {
 }
 
 - (instancetype)initWithNativeAd:(GADNativeAd *)nativeAd
-             countDownRemainingMs:(int64_t)countDownRemainingMs
-                      closeOnLeft:(BOOL)closeOnLeft
-                   timerOnLeft:(BOOL)timerOnLeft
-                       fullscreen:(BOOL)fullscreen
-                  backgroundColor:(int32_t)backgroundColor
-             fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss
-             requestedPanelHeight:(CGFloat)requestedPanelHeight
-                          onClose:(dispatch_block_t)onClose {
+            countDownRemainingMs:(int64_t)countDownRemainingMs
+                     closeOnLeft:(BOOL)closeOnLeft
+                     timerOnLeft:(BOOL)timerOnLeft
+                      fullScreen:(BOOL)fullScreen
+                 backgroundColor:(int32_t)backgroundColor
+                 redirectOnClose:(BOOL)redirectOnClose
+            requestedPanelHeight:(CGFloat)requestedPanelHeight
+                         onClose:(dispatch_block_t)onClose {
     self = [super initWithFrame:CGRectZero];
     if (self == nil) return nil;
 
@@ -302,9 +370,9 @@ static void ROCentreUnderIcon(UIView *view) {
     _countDownRemainingMs = MAX(0, countDownRemainingMs);
     _closeOnLeft = closeOnLeft;
     _timerOnLeft = timerOnLeft;
-    _fullscreen = fullscreen;
+    _fullScreen = fullScreen;
     _backgroundColor = backgroundColor;
-    _fakeCloseAutoDismiss = fakeCloseAutoDismiss;
+    _redirectOnClose = redirectOnClose;
     _onClose = [onClose copy];
     _shrunkTexts = [NSMutableSet set];
     [self ro_buildWithRequestedPanelHeight:requestedPanelHeight];
@@ -335,6 +403,11 @@ static void ROCentreUnderIcon(UIView *view) {
 
     [_timer invalidate];
     _timer = nil;
+    _closePressPending = NO;
+    _unansweredClosePresses = 0;
+    _lastClosePressTime = 0;
+    [_closeReportTimer invalidate];
+    _closeReportTimer = nil;
     _redirectPending = NO;
     [_redirectTimer invalidate];
     _redirectTimer = nil;
@@ -379,8 +452,73 @@ static void ROCentreUnderIcon(UIView *view) {
     return _countDownRemainingMs;
 }
 
+// The SDK has taken a click. Android's CommitAdClick, and it carries the
+// same two duties: the latch, always, and the promotion of a waiting close
+// press from the report stage to the redirect stage.
 - (void)commitAdClick {
     _clickCommitted = YES;
+
+    // Only a click that began on the close chip closes the ad. A genuine tap
+    // on the call to action leaves the flag clear, so the player who meant
+    // to follow the ad comes back to it still open.
+    if (!_closePressPending) return;
+
+    _closePressPending = NO;
+    _unansweredClosePresses = 0;
+    [_closeReportTimer invalidate];
+    _closeReportTimer = nil;
+    if (_released) return;
+
+    // Reported, not yet arrived: hand the wait over to whatever takes the
+    // screen, with a bound in case nothing ever comes to the front.
+    _redirectPending = YES;
+    __weak ROOverlayAdContentView *weakSelf = self;
+    [_redirectTimer invalidate];
+    _redirectTimer =
+            [NSTimer scheduledTimerWithTimeInterval:kRORedirectTimeout
+                                            repeats:NO
+                                              block:^(NSTimer *timer) {
+        [weakSelf ro_runCloseFromRedirect];
+    }];
+}
+
+// The redirect taking the screen, reported by the SDK itself rather than
+// inferred from the app resigning active. It is the more precise signal, and
+// the only one that fires at all when the SDK opens its landing page INSIDE
+// the app: an SKStoreProductViewController or an SFSafariViewController
+// never resigns the app active, so onPaused below is deaf to exactly the
+// case that is most common. Android has no counterpart - its windows report
+// their own focus and visibility, which is the road it takes instead.
+- (void)adWillPresentScreen {
+    if (_redirectPending) {
+        [self ro_runCloseFromRedirect];
+        return;
+    }
+
+    // Not a close press, then: a genuine tap on the ad, whose landing page
+    // opened inside the app. The ad is still standing but nobody is watching
+    // it, and the countdown buys watch time. Android reads this moment off
+    // its window going invisible - a signal the in-app case never produces
+    // here, so the duty falls to this hook instead.
+    [_timer invalidate];
+    _timer = nil;
+}
+
+// The in-app sheet closing again. Without this the latch would stay shut for
+// the rest of the show, because its only other release is the app becoming
+// active - which never happened, since it never resigned. This is the iOS
+// shape of the window-visibility clear Android had to add for its
+// not-focusable half-screen window.
+- (void)adDidDismissScreen {
+    _clickCommitted = NO;
+    if (_released) return;
+
+    // The other half of the pause above, and Android's resume on the window
+    // coming back. ro_startCountdown re-anchors on _countDownRemainingMs -
+    // which the timer's own ticks left current - and invalidates whatever is
+    // running before it starts, so the out-of-app path arriving both here
+    // and at didBecomeActive costs nothing.
+    [self ro_startCountdown];
 }
 
 - (void)ro_applicationDidBecomeActive {
@@ -389,11 +527,52 @@ static void ROCentreUnderIcon(UIView *view) {
     _clickCommitted = NO;
 }
 
+// Is this touch landing on the close chip? Asked of a POINT rather than of
+// the hit-test result, because under RedirectOnClose the chip is deliberately
+// not the hit-test result - hitTest: below declines the target so the press
+// can reach the ad surface. Hidden is part of the question: the chip stays
+// hidden until the countdown ends, and UIKit's own refusal to hit-test a
+// hidden view is what used to enforce that.
+- (BOOL)ro_isCloseTouchAtPoint:(CGPoint)point withEvent:(UIEvent *)event {
+    if (_close == nil || _close.hidden) return NO;
+    // hitTest: is also asked questions that are not presses at all - layout
+    // and focus bookkeeping ask it with no event whatsoever, and the pointer
+    // merely hovering on iPad asks it with one that is not a touch. Arming
+    // off either would start the close's clock with no finger behind it, so
+    // a real touch event is required rather than merely not contradicted.
+    if (event == nil || event.type != UIEventTypeTouches) return NO;
+
+    return CGRectContainsPoint(_close.frame, point);
+}
+
 // The latch: after a committed click every touch inside the ad is consumed
 // by this view instead of any child, so the SDK cannot register another.
+// The close chip is the one exception on either road - Android gets that for
+// free by keeping its latch on a container wrapping the ad view alone, which
+// leaves the close a sibling outside it.
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
     UIView *hit = [super hitTest:point withEvent:event];
-    if (_clickCommitted && hit != nil && hit != _close) return self;
+
+    if (![self ro_isCloseTouchAtPoint:point withEvent:event]) {
+        if (_clickCommitted && hit != nil) return self;
+        return hit;
+    }
+
+    // Plain close: the chip is its own target and its tap recogniser closes.
+    if (!_redirectOnClose) return hit;
+
+    // Let-through close. The arming happens HERE, at touch-down, because
+    // this is the only moment a view can decline to be the target and let
+    // the press continue to the ad surface beneath it. A gesture recogniser
+    // would fire on touch-UP and would consume the touch, and the SDK counts
+    // touches, not calls. hitTest: is asked more than once per press, so the
+    // touch's own time goes with it and the repeats fall away there.
+    [self ro_armCloseFromPressAtTime:event.timestamp];
+    // The ad surface is deaf while the latch is shut, so let nothing reach
+    // it - one press, one click. The press is armed all the same, and its
+    // report bound closes the ad when no second click ever arrives.
+    if (_clickCommitted) return self;
+
     return hit;
 }
 
@@ -417,17 +596,17 @@ static void ROCentreUnderIcon(UIView *view) {
     _mediaIsVideo = hasVideoContent;
     _mediaAspectRatio = [self ro_mediaAspectRatio];
     CGSize hbScreen = UIScreen.mainScreen.bounds.size;
-    CGFloat sidePanelHeight = _fullscreen
+    CGFloat sidePanelHeight = _fullScreen
             ? hbScreen.height
             : requestedPanelHeight;
-    _tickerLayout = !_fullscreen
+    _tickerLayout = !_fullScreen
             && requestedPanelHeight < kROTickerMaxPanelHeight;
-    BOOL panelHostsMedia = _fullscreen
+    BOOL panelHostsMedia = _fullScreen
             || requestedPanelHeight
                     >= _minimumMediaSize + kROMinMediaLowerContent;
     // With the media dropped - or a creative that never had any - the
     // registered icon stands in for it, the way the in-feed slot works.
-    _iconHero = !_fullscreen
+    _iconHero = !_fullScreen
             && !_tickerLayout
             && (!_hasDisplayableMedia || !panelHostsMedia)
             && _nativeAd.icon.image != nil;
@@ -483,7 +662,7 @@ static void ROCentreUnderIcon(UIView *view) {
     _identityRow.ro_vertical = NO;
     _identityRow.ro_gravity = HBGravityCenterVertical;
     _identityRow.ro_padding = UIEdgeInsetsMake(
-            _fullscreen
+            _fullScreen
                     ? kROMaxIdentityVerticalPadding
                     : kROMinIdentityVerticalPadding
           , 0
@@ -512,8 +691,8 @@ static void ROCentreUnderIcon(UIView *view) {
 
     _headline = [[ROAdTextLabel alloc] init];
     _headline.font = [UIFont boldSystemFontOfSize:
-            _fullscreen
-                    ? kROFullscreenHeadlineTextSize
+            _fullScreen
+                    ? kROFullScreenHeadlineTextSize
                     : kROMinHeadlineTextSize];
     _headline.textColor = UIColor.whiteColor;
     _headline.maxLines = NSIntegerMax;
@@ -745,7 +924,7 @@ static void ROCentreUnderIcon(UIView *view) {
         ROCentreUnderIcon(_starRating);
         if (!_sideBodySpilled) ROCentreUnderIcon(_body);
     }
-    if (!_fullscreen && !_tickerLayout) {
+    if (!_fullScreen && !_tickerLayout) {
         if (_sideMediaLayout) {
             [self ro_configureResponsiveSideRailWithPanelHeight:
                     _sideRailHeight > 0
@@ -756,7 +935,7 @@ static void ROCentreUnderIcon(UIView *view) {
                     requestedPanelHeight];
         }
     }
-    if (_fullscreen && _hasDisplayableMedia && !_sideMediaLayout) {
+    if (_fullScreen && _hasDisplayableMedia && !_sideMediaLayout) {
         // The stack hugs the bottom and the media grows toward the corner
         // controls; the exact fit runs in the layout pass, where the true
         // frame is known.
@@ -791,12 +970,29 @@ static void ROCentreUnderIcon(UIView *view) {
     _closeGlyph.lineCap = kCALineCapRound;
     [_close.layer addSublayer:_closeGlyph];
     _close.hidden = YES;
-    _close.userInteractionEnabled = YES;
     _close.isAccessibilityElement = YES;
     _close.accessibilityLabel = @"Close ad";
-    [_close addGestureRecognizer:[[UITapGestureRecognizer alloc]
-            initWithTarget:self
-                    action:@selector(ro_closeTapped)]];
+    // Under RedirectOnClose the chip must NOT be the touch target: the press
+    // belongs to the ad surface underneath it, and a view that is its own
+    // target is a view the press stops at. It therefore carries neither
+    // interactivity nor a recogniser, and hitTest: both arms the press and
+    // steps aside for it.
+    _close.userInteractionEnabled = !_redirectOnClose;
+    if (_redirectOnClose) {
+        // VoiceOver cannot press through anything: it activates an element,
+        // it does not put a finger somewhere. Give it the plain close, or it
+        // is handed an ad it can never dismiss.
+        __weak ROOverlayAdContentView *weakSelf = self;
+        _close.ro_onAccessibilityActivate = ^{
+            ROOverlayAdContentView *strongSelf = weakSelf;
+            if (strongSelf == nil || strongSelf->_released) return;
+            if (strongSelf->_onClose != nil) strongSelf->_onClose();
+        };
+    } else {
+        [_close addGestureRecognizer:[[UITapGestureRecognizer alloc]
+                initWithTarget:self
+                        action:@selector(ro_closeTapped)]];
+    }
     [self addSubview:_countdown];
     [self addSubview:_close];
 
@@ -822,31 +1018,106 @@ static void ROCentreUnderIcon(UIView *view) {
     }
 }
 
+// Android lets the close press fall through to the NativeAdView, which is
+// the SDK's clickable surface across its whole area. iOS has no such
+// surface: GADNativeAdView tracks clicks per REGISTERED ASSET VIEW, and the
+// close chip sits in the band the content column reserves as padding for the
+// control strip - over nothing registered at all in every layout but the
+// scrim one. A press let through there reaches a plain container and the SDK
+// counts nothing.
+//
+// So the surface is made rather than found: a view the size of the chip,
+// registered on the one asset slot this face never uses. The press lands on
+// a genuine registered asset view, and Google does its own accounting and
+// its own redirect off it - nothing here fakes either. The road is built
+// because there was none, which is the reverse of what the Android comment
+// beside this feature used to claim about iOS.
+//
+// The slot is matched to an asset the creative actually carries: a slot for
+// an absent asset is the one the SDK has least reason to track. Registration
+// must happen BEFORE the ad is handed to the view - the tracker is built at
+// that moment and never looks again.
+// The plain close: no redirect wanted, the chip is its own touch target, and
+// this is its tap. The let-through road never arrives here.
 - (void)ro_closeTapped {
-    if (!_fakeCloseAutoDismiss) {
-        if (_onClose != nil) _onClose();
+    if (_onClose != nil) _onClose();
+}
+
+// A press has been let through to the ad surface. Nothing is faked and
+// nothing is asked of the SDK: the finger itself reached a registered asset
+// view, and Google does the rest. All this does is start waiting for the
+// report.
+//
+// Android arms from an OnTouchListener returning false on ACTION_DOWN; this
+// is the same moment, read off the one UIKit hook that runs at touch-down
+// and is allowed to decline the target.
+//
+// The time is the touch's own, not the clock's, because the only thing being
+// told apart here is one finger from two.
+- (void)ro_armCloseFromPressAtTime:(NSTimeInterval)touchTime {
+    // _redirectPending: a second press while the redirect is on its way must
+    // not restart the memory and hand the redirect's own click to a later
+    // press. The press is ignored; the redirect, or its own bound, still
+    // ends the show.
+    if (_released || _redirectPending) return;
+    // The same touch-down asking again, which is not a second press. Only
+    // this is turned away - a real second press re-arms over the first,
+    // counts, and starts its own wait, so pressing again quickly is what it
+    // looks like rather than a second of nothing.
+    if (_lastClosePressTime > 0
+            && touchTime - _lastClosePressTime < kROClosePressSeparation) {
         return;
     }
 
-    // A second tap while the first redirect is still on its way must not
-    // reach the SDK again - one press, one click, which is the whole point
-    // of the multi-click latch. Checked BEFORE performClick, not after.
-    if (_redirectPending) return;
+    // Below the net the newest press owns the claim and the wait runs from
+    // it, so the press that trips the net gets its own full second to earn a
+    // click - anchoring the wait to the FIRST press of the run would leave
+    // the third with whatever was left of it, often less than the SDK needs,
+    // and close the ad bare on a press that was about to work.
+    //
+    // Once the net has tripped, the deadline it set is a promise and stands.
+    // A later press still counts, and can still earn a click - that click
+    // cancels the deadline and closes on the redirect instead, the better
+    // ending - but it cannot PUSH the deadline away, or someone hammering a
+    // button that keeps ignoring them would never reach the close they are
+    // asking for.
+    BOOL netAlreadyTripped = _closePressPending
+            && _unansweredClosePresses >= kROClosePressesBeforeGivingUp;
 
-    // The SDK's own click path, so the redirect and the click accounting
-    // stay in Google's hands rather than being faked here. The close itself
-    // waits for onPaused; see there.
-    [_nativeAd performClickOnAssetWithKey:GADNativeCallToActionAsset];
+    _closePressPending = YES;
+    _lastClosePressTime = touchTime;
+    _unansweredClosePresses++;
+    if (netAlreadyTripped) return;
 
-    _redirectPending = YES;
     __weak ROOverlayAdContentView *weakSelf = self;
-    [_redirectTimer invalidate];
-    _redirectTimer =
-            [NSTimer scheduledTimerWithTimeInterval:kRORedirectTimeout
+    [_closeReportTimer invalidate];
+    _closeReportTimer =
+            [NSTimer scheduledTimerWithTimeInterval:kROCloseReportTimeout
                                             repeats:NO
                                               block:^(NSTimer *timer) {
-        [weakSelf ro_runCloseFromRedirect];
+        [weakSelf ro_forgetClosePress];
     }];
+}
+
+// The press was let through and no click was ever reported for it - the chip
+// was over a part of the ad the SDK does not treat as clickable, or the latch
+// was shut. The press was never reported as a click, so it was never a press
+// as far as the ad is concerned. Nothing closes: the chip is only
+// decoration, and a decoration that was missed does nothing. All that ends
+// here is this press's claim on the next click to arrive - unless the net
+// has run out of patience.
+- (void)ro_forgetClosePress {
+    if (!_closePressPending) return;
+
+    _closePressPending = NO;
+    [_closeReportTimer invalidate];
+    _closeReportTimer = nil;
+
+    // Under the net, the press simply never happened.
+    if (_unansweredClosePresses < kROClosePressesBeforeGivingUp) return;
+    if (_released) return;
+
+    if (_onClose != nil) _onClose();
 }
 
 // The click was taken but nothing ever came to the front - a slow network,
@@ -854,6 +1125,7 @@ static void ROCentreUnderIcon(UIView *view) {
 // close.
 - (void)ro_runCloseFromRedirect {
     if (!_redirectPending) return;
+
 
     _redirectPending = NO;
     [_redirectTimer invalidate];
@@ -1505,7 +1777,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
         CGFloat lowerContentHeight = MAX(
                 0
               , _contentColumn.ro_measuredSize.height - _minimumMediaSize);
-        CGFloat panelHeight = _fullscreen
+        CGFloat panelHeight = _fullScreen
                 ? screen.height
                 : requestedPanelHeight;
         CGFloat availableMediaHeight = panelHeight - lowerContentHeight;
@@ -1541,7 +1813,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     // fit is shrunk, dropped or sent down the last-resort ladder, never
     // answered with a bigger panel. Android removed its widening on the
     // same owner's call - the cover and the ad read one number again.
-    _resolvedPanelHeight = _fullscreen
+    _resolvedPanelHeight = _fullScreen
             ? screen.height
             : requestedPanelHeight;
 }
@@ -1558,7 +1830,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     if (_released || _nativeAdView == nil) return;
 
     CGRect bounds = self.bounds;
-    CGFloat cutoutInset = _fullscreen ? self.safeAreaInsets.top : 0;
+    CGFloat cutoutInset = _fullScreen ? self.safeAreaInsets.top : 0;
     CGRect adFrame = CGRectMake(
             0
           , cutoutInset
@@ -1725,7 +1997,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
     _mediaView.ro_layoutMargins = UIEdgeInsetsZero;
     // The collapsible path computes its first plan here and now, so the
     // NO BAND verdict exists while the last-resort ladder can still act
-    // on it. The fullscreen path passes 0 and keeps deferring to the
+    // on it. The fullScreen path passes 0 and keeps deferring to the
     // layout pass, where its true frame is known.
     if (panelHeight > 0) {
         [self ro_recomputeMediaControlAvoidanceWithWidth:
@@ -1743,7 +2015,7 @@ static CGFloat HBInterpolate(CGFloat minimum, CGFloat maximum, CGFloat scale) {
 // colours to the edges. Badges may sit over media; the close and timer
 // controls avoid it.
 - (void)ro_recomputeMediaControlAvoidanceWithWidth:(CGFloat)panelWidth
-                                          height:(CGFloat)panelHeight {
+                                            height:(CGFloat)panelHeight {
     if (panelWidth <= 0 || panelHeight <= 0) return;
 
     CGFloat controlSize = kROControlStripHeight;

@@ -14,21 +14,21 @@ NS_ASSUME_NONNULL_BEGIN
 @interface ROOverlayAdContentView : UIView
 
 - (instancetype)initWithNativeAd:(GADNativeAd *)nativeAd
-             countDownRemainingMs:(int64_t)countDownRemainingMs
-                      closeOnLeft:(BOOL)closeOnLeft
-                   timerOnLeft:(BOOL)timerOnLeft
-                       fullscreen:(BOOL)fullscreen
-                  backgroundColor:(int32_t)backgroundColor
-             fakeCloseAutoDismiss:(BOOL)fakeCloseAutoDismiss
-             requestedPanelHeight:(CGFloat)requestedPanelHeight
-                          onClose:(dispatch_block_t)onClose;
+            countDownRemainingMs:(int64_t)countDownRemainingMs
+                     closeOnLeft:(BOOL)closeOnLeft
+                     timerOnLeft:(BOOL)timerOnLeft
+                      fullScreen:(BOOL)fullScreen
+                 backgroundColor:(int32_t)backgroundColor
+                 redirectOnClose:(BOOL)redirectOnClose
+            requestedPanelHeight:(CGFloat)requestedPanelHeight
+                         onClose:(dispatch_block_t)onClose;
 
-// The counterpart of ResolveInitialPanelHeight: fullscreen takes the screen,
+// The counterpart of ResolveInitialPanelHeight: fullScreen takes the screen,
 // otherwise the height ratio bounded below by the control strip plus the
 // media minimum.
 + (CGFloat)resolveHalfScreenPanelHeightForRatio:(float)heightRatio;
 
-+ (CGFloat)resolveInitialPanelHeightForFullscreen:(BOOL)fullscreen
++ (CGFloat)resolveInitialPanelHeightForFullScreen:(BOOL)fullScreen
                                       heightRatio:(float)heightRatio
                                   hasVideoContent:(BOOL)hasVideoContent;
 
@@ -52,6 +52,13 @@ NS_ASSUME_NONNULL_BEGIN
 // The click latch: every further touch is swallowed until the ad's overlay
 // goes away or the app comes back to the foreground.
 - (void)commitAdClick;
+
+// The SDK's own click-time signals. They carry what resigning active cannot:
+// a landing page the SDK opens INSIDE the app never resigns it, so neither
+// the redirect's arrival nor the latch's release can be read off the app
+// lifecycle alone.
+- (void)adWillPresentScreen;
+- (void)adDidDismissScreen;
 
 @end
 

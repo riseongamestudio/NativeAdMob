@@ -98,7 +98,7 @@ namespace RiseOn.NativeAdMob.iOS {
         [DllImport("__Internal")]
         internal static extern void ROOverlayAd_Configure(
             IntPtr handle
-          , [MarshalAs(UnmanagedType.I1)] bool fullscreen
+          , [MarshalAs(UnmanagedType.I1)] bool fullScreen
           , float heightRatio
           , int backgroundColor
           , int cacheSize

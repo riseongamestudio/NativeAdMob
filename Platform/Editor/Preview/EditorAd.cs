@@ -507,7 +507,7 @@ namespace RiseOn.NativeAdMob.Editor {
         private RectTransform CreateContent(
             RectTransform panel
           , EditorAdConfig config) {
-            var fullscreen = config.Mode == EditorAdMode.FullScreen;
+            var fullScreen = config.Mode == EditorAdMode.FullScreen;
             var contentObject = new GameObject(
                 CONTENT_OBJECT_NAME
               , typeof(RectTransform)
@@ -531,7 +531,7 @@ namespace RiseOn.NativeAdMob.Editor {
                     contentObject
                             .GetComponent<EditorAdaptiveLayoutGroup>();
             ConfigureContentLayout(contentLayout);
-            if (fullscreen) {
+            if (fullScreen) {
                 contentLayout.childAlignment = TextAnchor.LowerCenter;
             }
 
@@ -565,7 +565,7 @@ namespace RiseOn.NativeAdMob.Editor {
 
             var identityTextParent =
                     CreateIdentityRow(detailsObject.transform);
-            var headlineFontSize = fullscreen
+            var headlineFontSize = fullScreen
                     ? FULLSCREEN_HEADLINE_FONT_SIZE
                     : COMPACT_HEADLINE_FONT_SIZE;
             headlineText = CreateText(

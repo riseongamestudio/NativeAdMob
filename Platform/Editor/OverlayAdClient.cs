@@ -21,7 +21,7 @@ namespace RiseOn.NativeAdMob.Editor {
             this.callbacks = callbacks;
             config = EditorAdConfig.CreateFullScreen(
                 settings.AdUnitId
-              , settings.CoversFullScreen
+              , settings.FullScreen
               , settings.HeightRatio
               , AdColor.Unpack(settings.BackgroundColor)
               , settings.Close);

@@ -116,10 +116,23 @@ final class OverlayAdContentView extends FrameLayout {
     private static final int CONTROL_STRIP_HEIGHT_DP = 30;
     private static final int CONTROL_GAP_DP = 2;
     private static final int RIGHT_CONTROL_INSET_DP = 18;
-    // How long a let-through close press waits for the SDK's click report
-    // before closing anyway. A close button that does not close is the one
-    // outcome worse than a redirect that does not fire.
+    // How long a let-through close press waits for the SDK's click report.
+    // When it runs out the press is forgotten, not acted on: the SDK did not
+    // accept the touch, so as far as the ad is concerned nothing was pressed,
+    // and a button that missed should do nothing. A second of silence
+    // followed by the ad vanishing by itself reads as a glitch instead.
+    //
+    // The flag still has to expire, or a genuine call to action tap much
+    // later would inherit it and close the ad on someone who meant to follow
+    // it.
     private static final long CLOSE_REPORT_TIMEOUT_MS = 1000L;
+    // A missed press doing nothing is right until it is every press. The
+    // unaccepted area is small enough that landing in it three times running
+    // is close to impossible - and a player pressing a third time is saying
+    // plainly that they want out, whatever the SDK thinks. That press still
+    // waits its bound, so a click that does arrive is not thrown away, and
+    // only then closes. The button can never become a trap.
+    private static final int CLOSE_PRESSES_BEFORE_GIVING_UP = 3;
     // And how long a REPORTED click then waits for the redirect to actually
     // take the screen. Longer than the first, because by this point a click
     // is certain and only the browser is late. It ends the wait rather than
@@ -290,9 +303,9 @@ final class OverlayAdContentView extends FrameLayout {
     private int avoidanceHorizontalPadding;
     private int avoidancePanelHeight;
     private final boolean closeOnLeft;
-    private final boolean fakeCloseAutoDismiss;
+    private final boolean redirectOnClose;
     private final boolean timerOnLeft;
-    private final boolean fullscreen;
+    private final boolean fullScreen;
     private final int backgroundColor;
     private final Runnable onClose;
     private CountDownTimer timer;
@@ -314,7 +327,10 @@ final class OverlayAdContentView extends FrameLayout {
     // the game showed through it. Closing when the redirect actually takes
     // the screen means nobody ever sees the swap.
     private boolean redirectPending;
-    private final Runnable closeFallbackRunnable = this::RunCloseFromPress;
+    private final Runnable closeFallbackRunnable = this::ForgetClosePress;
+    // Close presses the SDK never answered. A click arriving for one of them
+    // clears the run, so only misses count toward the net.
+    private int unansweredClosePresses;
     private final Runnable redirectFallbackRunnable =
             this::RunCloseFromRedirect;
 
@@ -330,9 +346,9 @@ final class OverlayAdContentView extends FrameLayout {
           , long countDownRemainingMs
           , boolean closeOnLeft
           , boolean timerOnLeft
-          , boolean fullscreen
+          , boolean fullScreen
           , int backgroundColor
-          , boolean fakeCloseAutoDismiss
+          , boolean redirectOnClose
           , int requestedPanelHeight
           , Runnable onClose) {
         super(context);
@@ -340,9 +356,9 @@ final class OverlayAdContentView extends FrameLayout {
         this.countDownRemainingMs = Math.max(0L, countDownRemainingMs);
         this.closeOnLeft = closeOnLeft;
         this.timerOnLeft = timerOnLeft;
-        this.fullscreen = fullscreen;
+        this.fullScreen = fullScreen;
         this.backgroundColor = backgroundColor;
-        this.fakeCloseAutoDismiss = fakeCloseAutoDismiss;
+        this.redirectOnClose = redirectOnClose;
         this.onClose = onClose;
         Build(requestedPanelHeight);
         // Settle first, inset second - the order the device validated.
@@ -350,14 +366,14 @@ final class OverlayAdContentView extends FrameLayout {
         // cutout device already excludes the inset, so the plan and the
         // first real layout agree without either knowing about the other.
         SettleContentBeforeLayout();
-        ApplyFullscreenContentInset();
+        ApplyFullScreenContentInset();
     }
 
     static int ResolveInitialPanelHeight(
             Context context
-          , boolean fullscreen
+          , boolean fullScreen
           , float heightRatio) {
-        if (fullscreen) {
+        if (fullScreen) {
             return context.getResources()
                     .getDisplayMetrics().heightPixels;
         }
@@ -400,6 +416,7 @@ final class OverlayAdContentView extends FrameLayout {
         released = true;
 
         closePressPending = false;
+        unansweredClosePresses = 0;
         redirectPending = false;
         if (close != null) {
             close.removeCallbacks(closeFallbackRunnable);
@@ -518,6 +535,7 @@ final class OverlayAdContentView extends FrameLayout {
         if (!closePressPending) return;
 
         closePressPending = false;
+        unansweredClosePresses = 0;
         if (close != null) close.removeCallbacks(closeFallbackRunnable);
 
         // With no button left to post on there is no way to bound the wait,
@@ -534,21 +552,54 @@ final class OverlayAdContentView extends FrameLayout {
     }
 
     private void ArmCloseFromPress() {
-        // redirectPending too: a second press while the redirect is on its
-        // way would arm the SHORT fallback and close the ad before the
-        // browser arrives - the exact gap this wait exists to remove. The
-        // press is ignored; the redirect, or its own bound, still ends it.
-        if (released || closePressPending || redirectPending) return;
+        // redirectPending: a second press while the redirect is on its way
+        // must not restart the memory and hand the redirect's own click to a
+        // later press. The press is ignored; the redirect, or its own bound,
+        // still ends the show.
+        //
+        // A press while an earlier one is merely WAITING is a different
+        // thing, and it re-arms: it counts toward the net and starts its own
+        // wait. Turning it away instead would have made the net ask for
+        // three presses a second apart, and the tap-tap-tap anyone does at a
+        // button that ignored them counts as one.
+        if (released || redirectPending) return;
+
+        // Below the net the newest press owns the claim and the wait runs
+        // from it, so the press that trips the net gets its own full second
+        // to earn a click - anchoring the wait to the FIRST press of the run
+        // would leave the third with whatever was left of it, often less
+        // than the SDK needs, and close the ad bare on a press that was
+        // about to work.
+        //
+        // Once the net has tripped, the deadline it set is a promise and
+        // stands. A later press still counts, and can still earn a click -
+        // that click cancels the deadline and closes on the redirect
+        // instead, the better ending - but it cannot PUSH the deadline away,
+        // or someone hammering a button that keeps ignoring them would never
+        // reach the close they are asking for.
+        boolean netAlreadyTripped = closePressPending
+                && unansweredClosePresses >= CLOSE_PRESSES_BEFORE_GIVING_UP;
 
         closePressPending = true;
+        unansweredClosePresses++;
+        if (netAlreadyTripped) return;
+
+        close.removeCallbacks(closeFallbackRunnable);
         close.postDelayed(closeFallbackRunnable, CLOSE_REPORT_TIMEOUT_MS);
     }
 
-    private void RunCloseFromPress() {
+    // The press was never reported as a click, so it was never a press as
+    // far as the ad is concerned. Nothing closes: the chip is only
+    // decoration, and a decoration that was missed does nothing. All that
+    // ends here is this press's claim on the next click to arrive - unless
+    // the net below has run out of patience.
+    private void ForgetClosePress() {
         if (!closePressPending) return;
 
         closePressPending = false;
         if (close != null) close.removeCallbacks(closeFallbackRunnable);
+
+        if (unansweredClosePresses < CLOSE_PRESSES_BEFORE_GIVING_UP) return;
         if (released) return;
 
         if (onClose != null) onClose.run();
@@ -603,7 +654,7 @@ final class OverlayAdContentView extends FrameLayout {
                 GetMediaAspectRatio(fallbackMediaImage);
         int controlStripHeight =
                 (int) (CONTROL_STRIP_HEIGHT_DP * density);
-        boolean panelHostsMedia = fullscreen
+        boolean panelHostsMedia = fullScreen
                 || requestedPanelHeight
                         >= minimumMediaSize
                                 + (int) (MIN_MEDIA_LOWER_CONTENT_DP
@@ -611,10 +662,10 @@ final class OverlayAdContentView extends FrameLayout {
         // With the media dropped - or a creative that never had any - the
         // registered icon stands in for it, the way the in-feed slot already
         // works: it leaves the identity row and takes the media's band.
-        boolean tickerLayout = !fullscreen
+        boolean tickerLayout = !fullScreen
                 && requestedPanelHeight
                         < (int) (TICKER_MAX_PANEL_DP * density);
-        boolean iconHero = !fullscreen
+        boolean iconHero = !fullScreen
                 && !tickerLayout
                 && (!hasDisplayableMedia || !panelHostsMedia)
                 && nativeAd.getIcon() != null
@@ -625,7 +676,7 @@ final class OverlayAdContentView extends FrameLayout {
         // A picture directly above the identity row is its own separator;
         // the row's top padding would only widen a seam already there.
         mediaAboveIdentity = hasDisplayableMedia;
-        int sidePanelHeight = fullscreen
+        int sidePanelHeight = fullScreen
                 ? displayMetrics.heightPixels
                 : requestedPanelHeight;
         sideMediaLayout = hasDisplayableMedia
@@ -683,7 +734,7 @@ final class OverlayAdContentView extends FrameLayout {
         identityRow.setGravity(Gravity.CENTER_VERTICAL);
         identityRow.setPadding(
                 0
-              , (int) ((fullscreen
+              , (int) ((fullScreen
                         ? MAX_IDENTITY_VERTICAL_PADDING_DP
                         : MIN_IDENTITY_VERTICAL_PADDING_DP)
                         * density)
@@ -719,7 +770,7 @@ final class OverlayAdContentView extends FrameLayout {
         TextView headline = new TextView(context);
         headline.setTextColor(Color.WHITE);
         headline.setTextSize(
-                fullscreen
+                fullScreen
                         ? 18f
                         : MIN_HEADLINE_TEXT_SIZE_SP);
         headline.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
@@ -1062,7 +1113,7 @@ final class OverlayAdContentView extends FrameLayout {
             CentreUnderIcon(starRating);
             if (!sideBodySpilled) CentreUnderIcon(body);
         }
-        if (!fullscreen && !tickerLayout) {
+        if (!fullScreen && !tickerLayout) {
             if (sideMediaLayout) {
                 ConfigureResponsiveSideRail(
                         sideRail
@@ -1108,7 +1159,7 @@ final class OverlayAdContentView extends FrameLayout {
             settleIdentityText = identityText;
             settleIdentityRow = identityRow;
         }
-        if (fullscreen && hasDisplayableMedia && !sideMediaLayout) {
+        if (fullScreen && hasDisplayableMedia && !sideMediaLayout) {
             EnableControlAvoidance(
                     displayMetrics
                   , horizontalPadding
@@ -1193,7 +1244,7 @@ final class OverlayAdContentView extends FrameLayout {
               , rightControlInset
               , 0);
         close.setLayoutParams(closeLayoutParams);
-        if (fakeCloseAutoDismiss) {
+        if (redirectOnClose) {
             // The press is LET THROUGH rather than performed. A touch
             // listener sees the DOWN and returns false, so the view never
             // becomes the touch target and the whole gesture continues down
@@ -1204,10 +1255,14 @@ final class OverlayAdContentView extends FrameLayout {
             //
             // performClick() used to sit here and did nothing at all: it
             // fires an OnClickListener without ever producing a MotionEvent,
-            // and the SDK counts touches, not calls. On iOS the supported
-            // performClickOnAssetWithKey: exists and is still used - the two
-            // platforms take different roads because only one of them has a
-            // road.
+            // and the SDK counts touches, not calls.
+            //
+            // iOS lets the press through the same way and for the same
+            // reason, but has to do it from hitTest: - the one hook there
+            // that runs at touch-down and is allowed to decline the target.
+            // The API this comment used to name does not exist:
+            // performClickOnAssetWithKey: belongs to GADCustomNativeAd,
+            // never to GADNativeAd.
             close.setOnTouchListener((view, event) -> {
                 if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
                     ArmCloseFromPress();
@@ -2273,7 +2328,7 @@ final class OverlayAdContentView extends FrameLayout {
         // onSizeChanged's currentHeight minus paddingTop by itself.
         // Subtracting it here again - tried once - made the settle plan on
         // 2180 and the first real layout replan on 2290, a 110px step on
-        // every fullscreen ad.
+        // every fullScreen ad.
         if (controlAvoidanceActive) {
             RecomputeMediaControlAvoidance(
                     settleColumnWidth
@@ -2442,7 +2497,7 @@ final class OverlayAdContentView extends FrameLayout {
     // The guess used to be displayMetrics.heightPixels, and it matched the
     // real window on one device only because that OEM happens to report
     // the height with the cutout already taken out; a second device
-    // reported it differently and every fullscreen ad stepped right after
+    // reported it differently and every fullScreen ad stepped right after
     // its first paint. The post()ed onSizeChanged repair that stood here
     // was the step itself. Measure is the one place the real size exists
     // before anything is drawn, and planning here means the children are
@@ -2814,8 +2869,8 @@ final class OverlayAdContentView extends FrameLayout {
         setClipToOutline(false);
     }
 
-    private void ApplyFullscreenContentInset() {
-        if (!fullscreen
+    private void ApplyFullScreenContentInset() {
+        if (!fullScreen
                 || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
             return;
         }
@@ -3132,7 +3187,7 @@ final class OverlayAdContentView extends FrameLayout {
                     contentColumn
                   , displayMetrics.widthPixels)
                         - minimumMediaSize);
-        int panelHeight = fullscreen
+        int panelHeight = fullScreen
                 ? displayMetrics.heightPixels
                 : requestedPanelHeight;
         int availableMediaHeight = panelHeight - lowerContentHeight;

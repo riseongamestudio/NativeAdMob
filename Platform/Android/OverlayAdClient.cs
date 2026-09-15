@@ -28,7 +28,7 @@ namespace RiseOn.NativeAdMob.Android {
               , settings.AdUnitId);
             javaObject.Call(
                 JAVA_CONFIGURE_METHOD
-              , settings.CoversFullScreen
+              , settings.FullScreen
               , settings.HeightRatio
               , settings.BackgroundColor
               , settings.CacheSize

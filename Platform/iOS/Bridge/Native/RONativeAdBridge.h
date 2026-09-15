@@ -133,7 +133,7 @@ void ROOverlayAd_SetListener(
       , RONativeAdShowNotReadyCallback showNotReady);
 void ROOverlayAd_Configure(
         void* handle
-      , bool fullscreen
+      , bool fullScreen
       , float heightRatio
       , int32_t backgroundColor
       , int32_t cacheSize

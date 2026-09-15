@@ -159,7 +159,7 @@ void ROOverlayAd_SetListener(
 
 void ROOverlayAd_Configure(
         void* handle
-      , bool fullscreen
+      , bool fullScreen
       , float heightRatio
       , int32_t backgroundColor
       , int32_t cacheSize
@@ -169,7 +169,7 @@ void ROOverlayAd_Configure(
       , bool redirectOnClose) {
     if (handle == NULL) return;
     [(__bridge ROOverlayAd *)handle
-            configureWithFullscreen:fullscreen
+            configureWithFullScreen:fullScreen
                         heightRatio:heightRatio
                     backgroundColor:backgroundColor
                           cacheSize:cacheSize
