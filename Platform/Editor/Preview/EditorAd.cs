@@ -49,11 +49,6 @@ namespace RiseOn.NativeAdMob.Editor {
         // sitting on the maths axis rather than centred in its box.
         private const string CLOSE_TEXT                = "✕";
 
-        private const int FULLSCREEN_CANVAS_SORTING_ORDER = short.MaxValue;
-        private const int NON_FULLSCREEN_CANVAS_SORTING_ORDER =
-                FULLSCREEN_CANVAS_SORTING_ORDER - 1;
-        private const int IN_FEED_CANVAS_SORTING_ORDER =
-                NON_FULLSCREEN_CANVAS_SORTING_ORDER - 1;
         // The device spends 5dp a side, not the 20dp gutters an early build
         // had - and only on text: the media bleeds edge to edge.
         private const int CONTENT_HORIZONTAL_PADDING_DP     = 5;
@@ -120,8 +115,6 @@ namespace RiseOn.NativeAdMob.Editor {
         private const int COUNTDOWN_FONT_SIZE               = 18;
         private const int CALL_TO_ACTION_FONT_SIZE          = 14;
         private const int CALL_TO_ACTION_HEIGHT_DP          = 44;
-        private const float FULL_TIME_SCALE                 = 1f;
-        private const float PAUSED_TIME_SCALE               = 0f;
         private const float CANVAS_MATCH_WIDTH_OR_HEIGHT    = 0.5f;
         private const float SCREEN_CHANGE_TOLERANCE         = 0.001f;
         private const float TEXT_HEIGHT_MULTIPLIER          = 1.5f;
@@ -210,6 +203,7 @@ namespace RiseOn.NativeAdMob.Editor {
         private int lastScreenHeight = -1;
         private Rect lastSafeArea;
         private bool pausesGame;
+        private bool holdsPause;
         private bool dismissed;
         private bool externalUrlOpening;
         private bool externalUrlFocusLost;
@@ -231,6 +225,21 @@ namespace RiseOn.NativeAdMob.Editor {
 
         internal void Dismiss() {
             Finish(true);
+        }
+
+        // A preview torn down by anything but Finish - a scene load, leaving
+        // play mode - still has to give its pause back. With the count shared
+        // with the cover, a holder that never let go would keep the game
+        // stopped after every cover came down.
+        private void OnDestroy() {
+            ReleasePause();
+        }
+
+        private void ReleasePause() {
+            if (!holdsPause) return;
+
+            holdsPause = false;
+            EditorPause.Release();
         }
 
         internal void Release() {
@@ -277,17 +286,23 @@ namespace RiseOn.NativeAdMob.Editor {
             Canvas.ForceUpdateCanvases();
             RefreshResponsiveLayout(true);
 
-            if (pausesGame) Time.timeScale = PAUSED_TIME_SCALE;
+            // Through the shared holder count, not straight onto timeScale:
+            // the full-screen cover may be holding the game stopped too, and
+            // this ad closing must not restart it underneath the cover.
+            if (pausesGame) {
+                EditorPause.Acquire();
+                holdsPause = true;
+            }
         }
 
         private static int ResolveCanvasSortingOrder(
             EditorAdMode mode) {
             return mode switch {
                 EditorAdMode.FullScreen =>
-                        FULLSCREEN_CANVAS_SORTING_ORDER
+                        EditorSortingOrder.FULL_SCREEN_AD
               , EditorAdMode.Collapsible =>
-                        NON_FULLSCREEN_CANVAS_SORTING_ORDER
-              , _ => IN_FEED_CANVAS_SORTING_ORDER
+                        EditorSortingOrder.HALF_SCREEN_AD
+              , _ => EditorSortingOrder.IN_FEED_AD
             };
         }
 
@@ -1890,7 +1905,7 @@ namespace RiseOn.NativeAdMob.Editor {
             if (!this || dismissed) return;
             dismissed = true;
 
-            if (pausesGame) Time.timeScale = FULL_TIME_SCALE;
+            ReleasePause();
 
             var callback = notify ? onDismissed : null;
             onDismissed = null;
