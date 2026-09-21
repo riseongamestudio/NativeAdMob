@@ -1,6 +1,8 @@
 {
   "name": "com.riseon.nativeadmob",
   "version": "1.0.0",
+  "displayName": "NativeAdMob",
+  "description": "Native AdMob ads for Unity with full-screen, half-screen (collapsible) and in-feed layouts",
   "dependencies": {
     "com.google.ads.mobile": "11.5.0",
     "com.unity.ugui": "2.0.0"
