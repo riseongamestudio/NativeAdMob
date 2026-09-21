@@ -5,6 +5,16 @@ cộng hai màn che trơn (`FullScreenCover`, `HalfScreenCover`) xếp cùng tha
 với ad. `Core/` là C# dùng chung; `Platform/Android`, `Platform/iOS` là bridge
 sang Java và Obj-C++; `Platform/Editor` là bản mô phỏng trong Editor.
 
+Pack đứng riêng, không phụ thuộc game nào: repo
+`https://github.com/riseongamestudio/NativeAdMob`, package
+`com.riseon.nativeadmob` (Unity 6000.3). Cài qua Package Manager → *Add
+package from git URL* với `https://github.com/riseongamestudio/NativeAdMob.git`
+(thêm `#<tag>` để ghim phiên bản). `package.json` khai phụ thuộc
+`com.google.ads.mobile` 11.5.0 (plugin Google Mobile Ads cho Unity) và
+`com.unity.ugui`; SDK native của Google (Android `play-services-ads`, iOS pod
+`Google-Mobile-Ads-SDK`) do plugin đó mang vào — androidlib của pack chỉ
+`compileOnly`. Cách một game dùng pack: A11.
+
 Tài liệu này viết để **một người (hay một AI) mất sạch ngữ cảnh vẫn làm việc
 được ngay**: không chỉ luật, mà cả cách mọi thứ vận hành, ý tưởng layout,
 từng đánh đổi đã chọn kèm phương án bị bác, và trạng thái bàn giao. Vấn đề
@@ -29,11 +39,14 @@ cấp bản máy thật cho khớp với Editor.
 - **Trước khi sửa layout**: A5, A6, A7, rồi B6–B12, rồi A10 để tìm hàm.
 - **Trước khi sửa luồng load/show/callback**: A3, A4, B1–B4, README nền tảng.
 - **Khi thấy một hành vi "kỳ"**: C2 sổ sự cố trước, rất có thể đã gặp.
+- **Mã commit** (8 ký tự) là của repo này. Tới 2026-09-21 pack sống trong
+  repo của một game rồi mới được tách ra; lịch sử giữ nguyên nên commit cũ vẫn
+  tra được ở đây, chỉ mã là mới.
 
 Mục lục — Phần A (bức tranh): A1 bản đồ · A2 kiến trúc C# · A3 vòng đời
 overlay · A4 vòng đời in-feed · A5 engine in-feed · A6 dựng layout overlay ·
 A7 template · A8 thuật ngữ · A9 đánh đổi · A10 bản đồ đọc code · A11 tích hợp
-game. Phần B (luật): B1 sự kiện/luồng · B2 cache · B3 xếp lớp · B4 pause ·
+vào game. Phần B (luật): B1 sự kiện/luồng · B2 cache · B3 xếp lớp · B4 pause ·
 B5 RedirectOnClose · B6 tháp ưu tiên/chữ · B7 media · B8 side-media · B9
 padding 5dp · B10 sân media/né control · B11 bo góc · B12 badge/AdChoices ·
 B13 slot in-feed · B14 tên/phong cách. Phần C (vận hành): C1 quy trình/cổng ·
@@ -46,7 +59,8 @@ C2 sổ sự cố · C3 việc còn mở · C4 bàn giao.
 ## A1. Bản đồ package
 
 ```
-RiseOn.NativeAdMob/
+NativeAdMob/                      gốc repo = gốc package
+  package.json                    com.riseon.nativeadmob; phụ thuộc com.google.ads.mobile
   README.md                       luật chung (file này)
   RiseOn.NativeAdMob.asmdef       core: API công khai + máy trạng thái + SPI internal
   AssemblyInfo.cs                 InternalsVisibleTo ba assembly nền tảng
@@ -82,7 +96,7 @@ native ở README iOS.
 
 ## A2. Kiến trúc C#: một core, ba assembly nền tảng
 
-- **Không `#if`, không partial trong C# của pack** (e6473593). Core
+- **Không `#if`, không partial trong C# của pack** (dab57106). Core
   `RiseOn.NativeAdMob` giữ API và máy trạng thái, nói chuyện với nền tảng qua
   SPI internal (`IInFeedAdClient`, `IOverlayAdClient`, hai interface callback,
   `IAdPlatform`, `ICoverPlatform`). Ba assembly `RiseOn.NativeAdMob.Android` /
@@ -108,7 +122,7 @@ native ở README iOS.
   Show/SetPosition (slot không có kích thước thì không có chỗ vẽ); mỗi
   `Item.Show(onDisplayed)` giữ callback theo slot tới `OnSlotDisplayed`.
   `SlotCount ∈ [1, 8]`; indexer mang `[IndexerName("Slots")]` vì metadata
-  indexer mặc định trùng tên struct `Item` (CS0102, f7d2106e).
+  indexer mặc định trùng tên struct `Item` (CS0102, f0a99602).
 - `OverlayAd` abstract, constructor `private protected`: `FullScreenAd` (app
   open / interstitial / end card) và `HalfScreenAd` (collapsible,
   `HeightRatio`) là hai mặt duy nhất.
@@ -117,7 +131,7 @@ native ở README iOS.
   `OnAdPaid` (`AdInfo` ráp ở `BaseAd.RaiseAdPaid`, rời pack đã đầy đủ).
 - Bề mặt public ngoài assembly đúng bằng: các class, `Settings`, `Item`, event,
   method public. `protected` đã hạ hết xuống `private protected`, trừ override
-  `Graphic.OnPopulateMesh` bên Editor (CS0507, e0e656cd).
+  `Graphic.OnPopulateMesh` bên Editor (CS0507, c37e0eb9).
 - `using X;` **không** resolve namespace con — vụ `NativeAdMob.InFeed` từng vỡ
   compile; dùng alias hoặc tên đầy đủ.
 - Lỗi: `AdError{Code, Message}` chỉ đi kèm event thất bại. Mã −1 là show bị
@@ -283,7 +297,7 @@ tự co giãn, quyết định theo thứ tự:
      bleed media + chạy lại pipeline; vẫn không → **scrim**
      (`ApplyScrimLayout`) hoặc **không media** cho video
      (`AdoptMedialessVideoLayout`); cả hai không được → `layoutUnrenderable`.
-   - **Full-screen**: cùng `EnableControlAvoidance` (từ 1c848203 thang co
+   - **Full-screen**: cùng `EnableControlAvoidance` (từ b37ad3be thang co
      chrome sống trong pass né, chung hai format).
 5. **Né control** (`EnableControlAvoidance` → `RecomputeMediaControlAvoidance`):
    stack dồn đáy (`Gravity.BOTTOM`), đo phần dưới (`MeasureLowerContent`),
@@ -389,12 +403,12 @@ hết mọi nấc. Không media (video không vừa 120dp): icon, headline, body
 
 | Quyết định | Bị bác | Vì sao | Ở đâu |
 |---|---|---|---|
-| Full-screen là **Activity** | Dialog trên Unity Activity (31bcbd2a) | Activity cho pause miễn phí và đúng thang; delay thật là bind creative → dựng sẵn lúc load (4e4d73d4) | README Android §3 |
-| Sự kiện Java→C# qua **HandlerThread riêng** | gọi thẳng trên thread SDK / main | main thread parked ở GC suspend của IL2CPP khi Unity pause = ANR (e4504f2c) | B1 |
+| Full-screen là **Activity** | Dialog trên Unity Activity (33cf6634) | Activity cho pause miễn phí và đúng thang; delay thật là bind creative → dựng sẵn lúc load (d64fdc88) | README Android §3 |
+| Sự kiện Java→C# qua **HandlerThread riêng** | gọi thẳng trên thread SDK / main | main thread parked ở GC suspend của IL2CPP khi Unity pause = ANR (9d6667bc) | B1 |
 | Pack **không marshal** về thread Unity | marshal mọi callback | caller trễ một frame dù không cần; cover phải hạ từ thread không qua player loop | B1, B4 |
 | Readiness **chỉ native công bố**, count đi kèm completion | C# tự suy từ consumed | suy sai đè lên sự thật; thông báo riêng trễ 1.5 frame | B1 |
 | Prefetch **khi displayed**, không huỷ ad ấm | load khi đóng; huỷ để nạp mới | miss collapsible lần 2; prefetch tự vứt việc | B2 |
-| Retry ở **native**, provider không chồng | retry ở provider | nhân đôi request lúc no-fill | B2 |
+| Retry ở **native**, bên gọi không chồng | retry ở bên gọi | nhân đôi request lúc no-fill | B2 |
 | Hết hạn **1 giờ**, quét cả trước show | 4 giờ (AppOpenAd) | native ad hết hạn sau 1 giờ theo docs; timer uptime đứng khi máy ngủ | B2 |
 | Chữ **trọn hoặc cuộn**, không cắt | ellipsize | chính sách + đọc được; cuộn là giá trả cho element | B6 |
 | **Nguyên vẹn > cỡ chữ > cuộn**; cuộn phụ trước headline | cuộn ngay khi hụt | chữ tĩnh dễ đọc hơn; headline là thứ cuối cùng được động | B6 |
@@ -415,7 +429,7 @@ hết mọi nấc. Không media (video không vừa 120dp): icon, headline, body
 | **Cả hai vị trí control** là vật cản | chỉ nút đang hiện | đổi neo khi timer→close bị cấm tuyệt đối | B10 |
 | Không đệm buffer | 2dp quanh control | "sát sàn sạt miễn là không overlap" | B10 |
 | Bộ sàn gọn là **mặc định** của stacked-avoid | phương án cuối | height dôi dồn hết cho media | B10 |
-| Kế hoạch né lập **trong `onMeasure`**, idempotent | `post()` từ `onSizeChanged` (c335fdc4) | bản post là cú nhảy sau frame đầu trên máy có cutout khác | A6, B6 |
+| Kế hoạch né lập **trong `onMeasure`**, idempotent | `post()` từ `onSizeChanged` (ad67dcb4) | bản post là cú nhảy sau frame đầu trên máy có cutout khác | A6, B6 |
 | Panel thấp: **tôn trọng ratio**, thang media→icon-hero→ticker→nới tối thiểu | nới panel cho vừa media | panel là chiều cao game xin | B10 |
 | Full-screen **không** trạm unrenderable | như half | chrome vượt cả màn hình không có thật; chỉ cần đẹp | A3 |
 | Icon pipeline "tiêu" thì settle **không nở lại** | icon theo chữ | chứng chỉ fit bị vô hiệu sau lưng pipeline | A6 |
@@ -430,7 +444,7 @@ hết mọi nấc. Không media (video không vừa 120dp): icon, headline, body
 | iOS: `ROPauseGuard` display link | tin `UnityPause` | SDK mediation xoá cờ khi ad họ đóng | README iOS |
 | Cover half **đo bằng resolver của ad** | `decorView.getHeight()` | lệch trên máy cutout → dải đen | B10 |
 | Cover theme **đục** | thừa hưởng translucent | game lộ qua khe chưa vẽ | README Android |
-| Editor là **ảnh chụp**, không mô phỏng | lifecycle giả (33f45878) | user chốt: để nhìn, không để tái tạo độ trễ | README Editor |
+| Editor là **ảnh chụp**, không mô phỏng | lifecycle giả (e81149c2) | user chốt: để nhìn, không để tái tạo độ trễ | README Editor |
 | Editor **không port engine** | port | "vài layout tiêu biểu" là đủ | README Editor |
 | asm Editor: `defineConstraints UNITY_EDITOR` | `includePlatforms Editor` | Unity cấm AddComponent từ asm editor-only | README Editor |
 | C#: **asm-per-platform**, không `#if` | `#if` + partial | user thích asm; một đường code | A2 |
@@ -467,42 +481,66 @@ Tên là của Java; Obj-C++ cùng tên với prefix `ro_`/không prefix (README
 | C# ready/show/complete | `OverlayAd.Show`, `TryTakeShow`, `OnStateChanged`, `InFeedAd.ShowSlot`, `HandleSlotDisplayed` |
 | Editor vẽ gì | `EditorAd.Show`, `CreateBadges`, `PlaceAdChoices`, `ApplyRoundedCorners`, `EditorSortingOrder`, `EditorPause` |
 
-## A11. Tích hợp với game (GetInTheBowl)
+## A11. Tích hợp vào game
 
-Hai file dùng pack: `_Game/.../Core/Ads/AdsManager.cs` (gate + luồng) và
-`AdMobProvider.cs` (tạo instance, log, analytics). MAX (`AdMaxProvider`) đặt
-`MaxSdk.InvokeEventsOnUnityMainThread = false` nên callback MAX cũng ở thread
-SDK — đó là nguồn của `onCompletedAnyThread`.
+Pack chỉ lo nạp và hiển thị ad. Mọi chính sách của game — gói bỏ quảng cáo,
+tần suất, cờ remote config, chế độ test — nằm ở phía game, trước khi gọi pack.
 
-| Placement | Type | Settings đáng nhớ | Format |
-|---|---|---|---|
-| App open native | `FullScreenAd` | | `NATIVE_APP_OPEN` |
-| Interstitial native | `FullScreenAd` | Close cooldown 5, side Random, timer đối diện | `NATIVE_INTERSTITIAL` |
-| End card | `FullScreenAd` | cooldown 0 | `NATIVE_END_CARD` |
-| Collapsible | `HalfScreenAd` | `HeightRatio` từ remote config, `CacheSize 2` (plan chained), cooldown 3, Random/đối diện | `NATIVE_COLLAPSIBLE` |
-| In-feed | `InFeedAd` | `SlotCount 1`, nền `Color.clear`; một instance **ấm sẵn** từ init (`nativeInFeedAd_Warmed`), `CreateNativeInFeed()` trả nó trước | `NATIVE_IN_FEED` |
+**Tạo placement.** Mỗi placement là một instance sống trọn đời app, tạo một
+lần lúc khởi động, sau khi Google Mobile Ads đã khởi tạo:
 
-- Gate game (remove-ads, cheat, remote flag, interval) nằm ở `AdsManager`
-  (`IsNativeCollapsibleReadyAndCanBeShown`, `ShouldShowNativeEndCard`,
-  `ShowNativeInFeed`), **không** trong pack.
-- Màn che: collapsible → `HalfScreenCover.Show(black, ratio)` **trước**
-  `ShowNativeCollapsible`, hạ bằng `onCompletedAnyThread = HalfScreenCover.Hide`.
-  MAX interstitial/rewarded → `FullScreenCover.Show()` trước, tính
-  `shouldShowNativeEndCard` **trên thread Unity** rồi
-  `ShowNativeEndCardThreadSafe(bool, onCompletedAnyThread, onCompleted)` từ
-  callback any-thread của MAX; end card hạ cover khi xong. Mọi nhánh kể cả
-  thất bại đều gọi `onCompletedAnyThread`.
-- `AdProvider.InvokeSafely` bọc mọi callback any-thread; `showingFSACount`
-  atomic (`Interlocked.Increment` / `utils.AtomicDecrementIfAbove`).
-- Ô in-feed: `CanvasChapterPopup` / `CanvasLevelPopup` đo ô bằng
-  `ScreenRect(rectTransform, padding, roundCorner)` sau
-  `Canvas.ForceUpdateCanvases()`; chỉ show khi `IsFullyInside(viewport)`;
-  `AdsManager.CreateNativeInFeed(rect.SizeRounded, rect.RoundCornerRounded)`
-  rồi `SetPosition(0, rect.PositionRounded)` + `Show(0, onDisplayed)`; slot id
-  luôn 0. Gizmo `AdCellGizmos.DrawRoundedRect` vẽ đúng số gửi cho ad để căn
-  padding/bán kính bằng mắt. Placeholder của ô (`ChapterItem.SetAdPlaceHolder`,
-  LevelBox) giữ nền đen, chỉ tắt chữ "Ad" khi ad thật hiện.
-- Editor: canvas game phải nằm dưới thang sorting của pack (README Editor).
+| Placement thường gặp | Type | Ghi chú |
+|---|---|---|
+| App open, interstitial, end card | `FullScreenAd` | `Close` quyết nút đóng và đếm ngược |
+| Collapsible (nửa dưới màn) | `HalfScreenAd` | `HeightRatio` là phần màn hình bị che |
+| Ô trong danh sách | `InFeedAd` | một instance mỗi ad unit, `SlotCount` ô |
+
+- `Format` là tên placement do game tự đặt; nó đi kèm mọi `OnAdPaid` để game
+  ghi doanh thu theo placement.
+- Placement nào bày ad thứ hai ngay khi ad đầu đóng (chuỗi ad) nên để
+  `CacheSize` 2.
+- Overlay: gọi `Load()` một lần sau khi tạo; pack tự nạp tiếp và tự retry
+  (B2). In-feed tự nạp từ lúc tạo — tạo sớm để ad kịp ấm trước khi ô đầu tiên
+  hiện.
+- `Show()` khi `IsReady()`; kết quả về qua `OnAdDisplayed` /
+  `OnAdDisplayFailed` / `OnAdHidden`.
+
+**Luồng callback.** Mọi event của pack đến trên thread native, **không** phải
+thread Unity (B1). Việc gì đụng tới Unity trong handler phải tự đưa về main
+thread (`UniTask.Post`, `SynchronizationContext`…). Giá trị nào cần đọc trong
+một callback bắn trên thread lạ thì ghi ngay trong callback của SDK hoặc tính
+sẵn từ trước — đừng để nó được ghi qua một lệnh post sang main thread, vì lúc
+đọc lệnh đó có thể chưa chạy.
+
+**Màn che** (B3, B4).
+- Half: `HalfScreenCover.Show(màu, heightRatio)` **trước**, rồi mới show
+  `HalfScreenAd` cùng `HeightRatio`; hạ khi ad xong.
+- Full (thường để che khoảng giữa hai quảng cáo nối nhau, vd. interstitial của
+  một SDK khác rồi tới end card): `FullScreenCover.Show()` trước. Màn che full
+  làm Unity dừng, nên **`Hide()` phải được gọi từ một thread không chạy qua
+  player loop** — thực tế là callback trên thread của chính SDK quảng cáo. Mọi
+  đường kết thúc, kể cả hiển thị thất bại, đều phải hạ. Điều kiện cần tra
+  (`PlayerPrefs`, remote config…) tính trước trên thread Unity rồi truyền vào
+  dạng bool; bọc callback trong try/catch để một lỗi không chặn mất lệnh hạ.
+
+**Ô in-feed từ uGUI.**
+- Mỗi ô là một slot: `InFeedAd.Initialize(sizePx, roundCornerPx)` khi đã đo
+  được ô (gọi lại khi ô đổi cỡ), rồi `feed[slot].SetPosition(positionPx)` và
+  `feed[slot].Show(onDisplayed)`; `Hide()` khi ô rời màn hình hay màn hình
+  chứa nó đóng.
+- Đo ô sau `Canvas.ForceUpdateCanvases()`. Với canvas Screen Space Overlay,
+  toạ độ world của `RectTransform` chính là pixel màn hình: nhân các góc của
+  rect (đã trừ padding) với `localToWorldMatrix`. Pack nhận toạ độ **gốc
+  trên-trái**, nên `y = Screen.height − top`.
+- Bán kính bo góc tính theo đơn vị canvas thì đổi sang px bằng hệ số của chính
+  rect: `scale = (topRight.x − topLeft.x) / bề rộng rect đã trừ padding`
+  (= `lossyScale.x`), `roundCornerPx = round(radius × scale)`.
+- Chỉ show khi ô nằm **trọn** trong khung nhìn; ô bị cắt thì hide.
+- Pack không vẽ gì khi chưa có ad — ô trống tới lúc fill — nên giữ một
+  placeholder của game bên dưới ô.
+
+**Editor.** Canvas của game phải nằm dưới cả thang sorting order của pack
+(`-5` trở xuống, README Editor §3).
 
 ---
 
@@ -514,20 +552,20 @@ SDK — đó là nguồn của `onCompletedAnyThread`.
   chỉ gác release rồi gọi thẳng, đúng cách SDK AdMob làm: listener nào cần
   thread Unity thì tự nói. Hệ quả cho bên gọi: trong handler **không được**
   đụng API Unity đòi main thread — `PlayerPrefs`, `FindAnyObjectByType`, thao
-  tác GameObject đều ném; `UnityEngine.Object == null` thì không. Game dùng
-  `UniTask.Post` ở chỗ cần. Có một loại callback **bắt buộc** ở ngoài player
-  loop — B4.
+  tác GameObject đều ném; `UnityEngine.Object == null` thì không. Bên gọi tự
+  đưa về thread Unity khi cần (A11). Có một loại callback **bắt buộc** ở ngoài
+  player loop — B4.
 - Android: mọi `Notify*` qua `HandlerThread` `RiseOnNativeAdMobEvents`
   (`AdEventDispatcher`), **không bao giờ main thread** — lý do ANR ở README
   Android. Tham số chụp local **trước** khi post; một queue giữ thứ tự. iOS:
   thread SDK chọn; Editor: đồng bộ trên thread Unity (màn che có
   `SynchronizationContext`).
-- **Readiness do native công bố, và chỉ native** (31c5562d). `OnStateChanged`
+- **Readiness do native công bố, và chỉ native** (0cf5db67). `OnStateChanged`
   áp đồng bộ dưới lock; `cachedCount` đi kèm `OnShowCompleted` (thông báo tách
   riêng đo được trễ 1.5 frame).
 - `Show` bị từ chối → `OnAdDisplayFailed` mã −1 ngay. `showId` echo để
   completion chỉ giải quyết đúng show đã đăng ký.
-- `OnDisplayed → Load()`: prefetch **khi ad lên màn hình** (8706d5cf).
+- `OnDisplayed → Load()`: prefetch **khi ad lên màn hình** (e31b462b).
 - Handler người dùng gọi qua `InvokeSafely` (log, nuốt) — điều đó **không** hạ
   màn che (B4).
 
@@ -537,19 +575,20 @@ Overlay và in-feed dùng chung một mô hình: giữ sẵn `CacheSize` ad ấm
 
 - **Mặc định 1** (`CacheSize = 0` nghĩa là 1 với overlay; với in-feed là
   `SlotCount + 1`). Trần là 5 (`MAX_CACHE_SIZE` / `kROMaxCacheSize`).
-- Collapsible để **2** vì plan chained bày ad thứ hai ngay khi ad đầu đóng.
+- Placement nào bày ad thứ hai ngay khi ad đầu đóng (chuỗi ad) nên để
+  `CacheSize` **2**.
 - Chỉ **ad ở đầu hàng** được dựng sẵn giao diện (`MediaSignature`: asset về
-  muộn làm chữ ký đổi thì dựng lại, c335fdc4).
-- **Một ad ấm không bao giờ bị huỷ để nạp ad khác** (236384ce): ghế trống là
+  muộn làm chữ ký đổi thì dựng lại, ad67dcb4).
+- **Một ad ấm không bao giờ bị huỷ để nạp ad khác** (4753cfb3): ghế trống là
   lý do duy nhất để load, bất kể ai đang trên màn hình.
-- **Paid event bám identity ad, không bám load generation** (87e2d1c9).
+- **Paid event bám identity ad, không bám load generation** (1a1dcf5d).
 
 | | Overlay | In-feed |
 |---|---|---|
-| Ai gọi nạp | provider `Load()`; load thành công tự nối; `Show` rút ad; `OnDisplayed` gọi `Load()` | **không có `Load()` công khai**: constructor, slot hết hàng (`RequestLoad`), retry, quét hết hạn |
+| Ai gọi nạp | bên gọi `Load()`; load thành công tự nối; `Show` rút ad; `OnDisplayed` gọi `Load()` | **không có `Load()` công khai**: constructor, slot hết hàng (`RequestLoad`), retry, quét hết hạn |
 | Load hỏng | no-fill backoff từ lần hụt đầu; layout fail hai lượt đầu ngay; chưa từng layout được mà cứ hỏng → poll chậm | `ScheduleNoFillRetry` → `BackoffDelayMs`: 1s, mũ trần 5 → 32s; slot layout fail: 2 lượt ngay, sau 20 lần chưa từng render → 5 phút/lần |
 
-**Đừng chồng thêm retry phía provider** — nhân đôi request lúc no-fill.
+**Bên gọi đừng chồng thêm retry** — nhân đôi request lúc no-fill.
 
 ### Hết hạn: 1 giờ
 
@@ -597,13 +636,14 @@ Unity dừng thì **C# không chạy**, mà `Hide()` là một lời gọi C#. N
 
 Lời gọi thì thread nào cũng được (JNI/DllImport post sang main native, còn
 sống khi Unity dừng). Cái chết là **chỗ xếp lịch**: `Update`, coroutine,
-`UniTask.Post`, callback SDK đã marshal về main thread. Trong game đường sống
-là `onCompletedAnyThread` (MAX với `InvokeEventsOnUnityMainThread = false`;
-trên iOS là NSOperationQueue nền — **iOS không được miễn**). **Mọi** đường
-kết thúc một lượt show phải mang nó, kể cả `FailedToDisplay`. Mọi thứ đứng
-trước `Hide` trong callback đó phải không ném và không đụng API Unity; điều
-kiện (`PlayerPrefs`, remote config, cheat) **tính trước trên thread Unity**,
-truyền bool (179d66e4).
+`UniTask.Post`, callback SDK đã marshal về main thread. Đường sống là
+callback bắn trên thread của chính SDK quảng cáo — vd. AppLovin MAX với
+`InvokeEventsOnUnityMainThread = false`; trên iOS đó là một NSOperationQueue
+nền, **iOS không được miễn**. **Mọi** đường kết thúc một lượt show phải hạ
+màn che, kể cả hiển thị thất bại. Mọi thứ đứng trước `Hide` trong callback đó
+phải không ném và không đụng API Unity; điều kiện (`PlayerPrefs`, remote
+config…) **tính trước trên thread Unity**, truyền bool (A11) — một game từng
+đọc `PlayerPrefs` ngay trong callback đó và màn che không bao giờ hạ.
 
 Đã trả giá: `Hide` qua callback marshal về main → `mResumedActivity` là màn
 che, `UnityPlayerActivity` STOPPED, log Unity im — màn đen vĩnh viễn, chỉ
@@ -651,21 +691,21 @@ element quan trọng.
   0.5 → cuộn cả headline 0.8/0.65/0.5; nấc cuộn luôn nhỏ hơn cỡ wrapped đã
   thất bại; `NudgeCutTextsWhole` trước mỗi nấc. Overlay rail: trần scale theo
   **bề rộng** rail (160dp→0, 400dp→1), thêm dòng (headline ≤4, body ≤6), hạ
-  scale 3 nấc 0.34, rồi mới marquee (2ebe96c2); `MARQUEE_TEXT_SHRINK` 0.8.
+  scale 3 nấc 0.34, rồi mới marquee (5a97fb4a); `MARQUEE_TEXT_SHRINK` 0.8.
 - **Điểm in-feed** (`EvaluatePlan`): di chuyển 1 000 000/px · trống 100/px ·
   lệch tier 1 000 · mỗi chữ cuộn 3 000 · media phải 500 · scrim 6 000 · diện
   tích media −30/% · mỗi element −10 000. Cuộn là giá giữ một element, không
   bao giờ thắng element bị bỏ.
-- **Tier là thang cỡ chữ, không phải cỡ ô** (ca935661). Scorer được leo ROOMY
+- **Tier là thang cỡ chữ, không phải cỡ ô** (77167823). Scorer được leo ROOMY
   cho ô 96dp → **mọi spacing tier phát ra bị chặn theo cạnh ngắn ô**
   (`CellSpacingCapPx` = clamp(shortSide×0.02, 1dp, 5dp); CTA padding ≤
   shortSide×0.035; scrim pad = clamp(shortSide×0.015, 1dp, 4dp)).
-- **Asset rỗng không chiếm chỗ** (996ae2bf); provider thiếu asset → **ẩn,
+- **Asset rỗng không chiếm chỗ** (1e4c37cb); creative thiếu asset → **ẩn,
   nhường chỗ**, không loại ad. Validator chỉ chặn vì chính sách (chữ cắt, media
   dưới sàn, đè nhau).
 - **Sàn 72dp** (`MIN_ICON_ROW_TEXT_WIDTH_DP`): headline cạnh icon phải còn
   ≥72dp chữ, không thì icon đứng riêng, chữ full width. **Một neo mỗi khối**
-  (f9b3ffc4): icon đứng riêng thì chữ căn giữa dưới nó; icon cạnh thì lề trái.
+  (66803d95): icon đứng riêng thì chữ căn giữa dưới nó; icon cạnh thì lề trái.
 - **Icon ngồi hàng nút lấy chiều cao nút** (`min(iconTier, ctaHeight)`).
 - Box lấy cỡ từ ô/ad, chữ từ box: CTA = clamp(shortSide×0.18, 24dp, 36dp),
   badge = clamp(shortSide×0.10, 15px, 18dp); tỉ lệ chữ 0.45 / 0.55. Ngưỡng
@@ -674,7 +714,7 @@ element quan trọng.
   half) / focus (full).
 - **Layout pass**: không bao giờ measure-thăm-dò rồi `requestLayout` từ giữa
   một layout pass mà không có khoá idempotent — Android vứt `requestLayout`
-  giữa pass và GMA lay cột ở cỡ thăm dò (c335fdc4, tìm bằng `dumpsys activity
+  giữa pass và GMA lay cột ở cỡ thăm dò (ad67dcb4, tìm bằng `dumpsys activity
   top`). Bản sửa đầu (`post()` từ `onSizeChanged`) sau đó bị thay (loạt 21/8):
   nó tự là cú nhảy sau frame đầu trên máy báo `heightPixels` có/không cutout
   khác nhau. Hiện tại kế hoạch né lập **trong `onMeasure`** theo kích thước
@@ -691,22 +731,22 @@ element quan trọng.
   (`MediaPolicyFloorPx`). Video không vừa → layout **không media** (không video
   nhỏ, không ảnh tĩnh trong MediaView, không scrim). Ô 96dp trên máy thật
   **không bao giờ hiện video**.
-- **Không cắm view vào TRONG MediaView** (e7f74bc0): con của nó thuộc SDK,
+- **Không cắm view vào TRONG MediaView** (38704204): con của nó thuộc SDK,
   không sống qua bind. Ambient là anh em đứng sau.
-- **Nền đen MediaView là chủ đích** (17281dba); band letterbox bằng màu panel,
+- **Nền đen MediaView là chủ đích** (87652fd1); band letterbox bằng màu panel,
   đen chỉ cho video.
 - **Media trái**; `MEDIA_RIGHT` phạt 500, không thắng hoà.
 - **Scrim là phương án cuối** (penalty 6 000): ảnh FIT + ambient crop-phủ dim
   55% sau, **một** veil `#B3000000` phủ toàn ô, khối chữ neo đáy. Ambient chỉ
-  cho scrim (8a91da54). `IsAllowedScrimOverlay` cho chữ trong khối scrim đè
+  cho scrim (229a361a). `IsAllowedScrimOverlay` cho chữ trong khối scrim đè
   media.
-- **Video không bao giờ làm nền** (644724e3).
+- **Video không bao giờ làm nền** (cd5fa5e0).
 - **Không hardcode ratio fallback**: không báo → nguyên dải trống lớn nhất đã
   qua sàn; có báo → box đúng cỡ, nở tới giới hạn thật, slack chia đôi
-  (8f3a4db1 → d95fc911). `DEFAULT_MEDIA_ASPECT_RATIO` chỉ để thăm dò.
+  (3e046158 → 8cc5a787). `DEFAULT_MEDIA_ASPECT_RATIO` chỉ để thăm dò.
 - Band MEDIA_TOP in-feed nuốt height thừa (min = plan size để validator đo
   không đổi).
-- Overlay side-media: aspect < 0.85 **nghiêm ngặt** (e8c7ff98), panel ≤
+- Overlay side-media: aspect < 0.85 **nghiêm ngặt** (a73d1309), panel ≤
   1.3×W, share ≤ 0.56, cột media cao đúng aspect, rail ≥ 120dp.
 
 ## B8. Layout side-media: biến thể đẹp không bao giờ được chật hơn bản gốc
@@ -736,7 +776,7 @@ mà không cắt từ ngân sách là trừ thẳng vào rail. Android
 `sideRowLeftInsetPx`, `railGap`, `sideRowRightPadding`); iOS
 `ROOverlayAdContentView.mm` nhánh `if (_sideMediaLayout)`. Mọi thứ đo từ mép
 media cộng mép trái đó; badge Ad trong side-media **né media**, bám mép phải
-media, control trái đứng cạnh (e7f74bc0). Log `padding <trái>/<khe>/<phải>
+media, control trái đứng cạnh (38704204). Log `padding <trái>/<khe>/<phải>
 of <x>`.
 
 ## B9. Padding ngang: một hằng số, ba nền tảng
@@ -756,34 +796,34 @@ trên cùng là chữ.
 
 ## B10. Overlay: sân media và né control
 
-Một câu (df038876): **media mọc từ stack lên, theo aspect (có báo; không báo =
+Một câu (fc370297): **media mọc từ stack lên, theo aspect (có báo; không báo =
 nguyên sân), trong sân cố định: hai bên không vượt lề 8dp sync (không bleed —
 user đòi lại lề); trần = mép trên panel; vươn vào dải control thì hai cột
 close/timer là tường. Nở tới tường đầu tiên; slack chỉ khi bị chặn ngang, chia
 đôi căn giữa.**
 
-- Bốn ứng viên (29571ce3): len khe hàng control trên / dưới hàng control trên /
+- Bốn ứng viên (dbd1408b): len khe hàng control trên / dưới hàng control trên /
   len khe giữa hai control bám mép ngay dưới badge / dưới control mép. Chọn
   media to nhất; control **di chuyển theo**; badge được đè, close/timer phải
   né; không ứng viên nào chứa sàn → đè như cũ. Half chạy cùng maximizer.
-- **Chỉ tường nhìn thấy** (32ccf46a); ứng viên control-mép bắt đầu `top = 0`
-  (d58aebbc).
-- **Cả hai vị trí close/timer là vật cản** dù nút nào đang hiện (59f14ccb);
+- **Chỉ tường nhìn thấy** (7a7c527c); ứng viên control-mép bắt đầu `top = 0`
+  (322ff153).
+- **Cả hai vị trí close/timer là vật cản** dù nút nào đang hiện (b74df31d);
   **không buffer**. Khoảng trống là [trái..phải] thật, căn giữa trong khoảng
-  (75f037ba).
-- **Thang co chrome chạy cho cả hai format** (1c848203); bộ sàn gọn là mặc
-  định của stacked-avoid (2234d84d) nhưng **không xoá padding ngăn hàng**
-  (72e655d9); icon đã bị tiêu thì settle không nở lại.
-- Margin media tính từ mép padding cột → trừ `paddingLeft` (72e655d9).
+  (1bfcb915).
+- **Thang co chrome chạy cho cả hai format** (b37ad3be); bộ sàn gọn là mặc
+  định của stacked-avoid (03f9427b) nhưng **không xoá padding ngăn hàng**
+  (ac0b32eb); icon đã bị tiêu thì settle không nở lại.
+- Margin media tính từ mép padding cột → trừ `paddingLeft` (ac0b32eb).
 - Half: **một resolver chiều cao** (`ResolveHalfScreenPanelHeight`), cover
-  dùng chung; panel đo chiều cao **nhận được** (5c638d92).
+  dùng chung; panel đo chiều cao **nhận được** (2720018e).
 - Panel thấp **tôn trọng ratio**: media → icon-hero → ticker (< 120dp) → nới
   tới 48dp khi ticker cũng không vừa. Stacked half né dải control trước, co
   CTA 44→36, icon 36→28, padding; chỉ đè media khi thật sự không vừa.
 - Full-screen không có trạm unrenderable. Control box 30dp, close vẽ hai nét.
 - Ad **đang hiện** mà sai: đọc cây view thật trên máy (cách lấy: README
   Android §9) và log `avoidance` (panel/box/top/interval/slack) trước khi
-  đoán (e4e48a18).
+  đoán (f6192ed4).
 
 ## B11. Bo góc ô in-feed
 
@@ -800,14 +840,12 @@ qua `Initialize(sizePx, roundCornerPx)` → `ConfigureSlot`** (unit ấm từ kh
   `edgeInset = max(CONTENT_EDGE_INSET_PX, cornerInset)`.
 - Badge trên root, tự mang thụt, mọi template kể cả scrim.
 - Màu trong suốt vẫn clip.
-- Game: Screen Space Overlay → world unit = px; `scale = (topRight.x −
-  topLeft.x)/paddedWidth` = `lossyScale.x`; `roundCornerPx = round(radius ×
-  scale)` (`ScreenRect`).
+- Bên gọi đổi bán kính từ đơn vị canvas sang px: A11.
 
 ## B12. Badge "Ad" và AdChoices
 
 - `ATTRIBUTION_TEXT` **phải là `"Ad"`** ở cả ba bên. Rule rename từng cắn
-  literal thành `"NativeAd"` (1c9f692b) → máy thật mất fill. **Rename không
+  literal thành `"NativeAd"` (5c6afa3b) → máy thật mất fill. **Rename không
   đụng string literal; audit chuỗi sau rename.**
 - Badge/control đè media và icon, **không đè chữ** (`IsAllowedBadgeOverlay`);
   badge là góc, không phải dải.
@@ -847,10 +885,10 @@ qua `Initialize(sizePx, roundCornerPx)` → `ConfigureSlot`** (unit ấm từ kh
 Xoay theo **số lần xuất hiện**; `DWELL_REFRESH_INTERVAL_MS` 30s chỉ cho slot
 không bao giờ ẩn.
 
-- **Liếc không phải lượt** (880f7d2d): `MIN_DWELL_MS` 4s trước khi hide được
+- **Liếc không phải lượt** (95236f74): `MIN_DWELL_MS` 4s trước khi hide được
   xoay; `MIN_SWAP_INTERVAL_MS` 3s giãn đổi.
 - **Xoay trong lúc ẩn**, sau khi frame commit hide (post từ frame callback).
-- **Foreground là resume, không phải rotation** (c6234465): chỉ present slot
+- **Foreground là resume, không phải rotation** (499d8e60): chỉ present slot
   trống; đọc tuổi ad bằng elapsed real time ở đây.
 - Activity nền: window không vẽ → chờ foreground, không coi là lỗi.
 - Watchdog 1s: materializing kẹt (`MATERIALIZING_ENTRY_TIMEOUT_MS` 20s, lưới
@@ -862,7 +900,7 @@ không bao giờ ẩn.
 
 ## B14. Đặt tên và phong cách code
 
-- **Container mang họ, type mang vai trò** (bdb69553): `RiseOn.NativeAdMob` /
+- **Container mang họ, type mang vai trò** (fadbc996): `RiseOn.NativeAdMob` /
   `com.riseon.nativeadmob` / `RO` / `NativeAdMob.androidlib`; type `BaseAd`,
   `InFeedAd(+Slot/Listener/Presentation/ViewFactory/LayoutEngine/LayoutValidator)`,
   `OverlayAd(+Activity/ContentView/Presentation)`, `FullScreenAd`,
@@ -883,8 +921,11 @@ không bao giờ ẩn.
 
 ## C1. Quy trình làm việc và cổng kiểm tra
 
-- **Chủ dự án tự build và chạy.** AI không build, không inject input
-  (`adb shell input`), **không click vào nội dung quảng cáo**.
+- Pack được phát triển trong một **project Unity sandbox** trỏ tới repo này
+  bằng `file:` trong `Packages/manifest.json`; build và chạy thử trên máy qua
+  project đó, hoặc qua một game đang dùng pack. **Chủ dự án tự build và
+  chạy.** AI không build, không inject input (`adb shell input`), **không
+  click vào nội dung quảng cáo**.
 - **Mỗi thay đổi quan sát được → build → nhìn → mới đi tiếp.**
 - Lỗi hiển nhiên → sửa ngay và báo. Quyết định thiết kế → trình bày, chờ chốt.
   "Sao không chạy?" → chỉ chẩn đoán. Chỉ đụng file/hàm được giao. Đọc lại file
@@ -894,25 +935,28 @@ không bao giờ ẩn.
   - **Java**: javac của OpenJDK Unity + `android.jar` (android-36) +
     `classes.jar` của `play-services-ads-api` và `play-services-ads` trong
     `~/.gradle/caches`. Công thức đầy đủ: README Android §8.
-  - **C#**: dùng compiler của chính Unity, đọc tham số từ file rsp Unity để
-    lại — nên reference và define giống hệt lúc Unity biên dịch.
-    Đường dẫn, dưới `<Unity>/Editor/Data` của bản Unity project đang mở:
+  - **C#**: dùng compiler của chính Unity, đọc tham số từ file rsp mà Unity
+    để lại trong **project host** (sandbox, hoặc game đang dùng pack) — nên
+    reference và define giống hệt lúc Unity biên dịch.
+    Đường dẫn, dưới `<Unity>/Editor/Data` của bản Unity project host đang mở:
     `NetCoreRuntime/dotnet.exe` chạy `DotNetSdkRoslyn/csc.dll`.
-    Rsp nằm ở `Library/Bee/artifacts/*.dag/<Tên assembly>.rsp` — lấy bản mới
-    nhất theo thời gian sửa; **project phải được mở trong Unity ít nhất một
-    lần** thì mới có. Chạy: `dotnet.exe csc.dll -nologo @<rsp đã sửa>`, rồi
-    lọc dòng chứa `: error `.
-    Bốn chỗ phải sửa trong rsp trước khi chạy:
+    Rsp nằm ở `<project host>/Library/Bee/artifacts/*.dag/<Tên assembly>.rsp`
+    — lấy bản mới nhất theo thời gian sửa; **project host phải được mở trong
+    Unity ít nhất một lần** thì mới có. Chạy: `dotnet.exe csc.dll -nologo
+    @<rsp đã sửa>`, rồi lọc dòng chứa `: error `.
+    Thứ tự: `RiseOn.NativeAdMob` trước, rồi `.Android`, `.iOS`, `.Editor` (ba
+    assembly này tham chiếu core). Muốn biết một thay đổi chữ ký có làm vỡ
+    code dùng pack không thì dựng thêm assembly của project host.
+    Những chỗ phải sửa trong rsp trước khi chạy:
     1. `-out:` trỏ sang thư mục tạm của mình; bỏ hẳn dòng `-refout:`.
-    2. Với assembly của game: mọi `-r:` trỏ tới dll RiseOn phải **trỏ sang bản
-       pack vừa dựng**, không thì đổi chữ ký hàm trong pack mà game vẫn "PASS"
-       vì đang tham chiếu dll cũ Unity để lại.
+    2. Khi dựng assembly dùng pack: mọi `-r:` trỏ tới dll RiseOn phải **trỏ
+       sang bản pack vừa dựng**, không thì đổi chữ ký hàm trong pack mà bên
+       dùng vẫn "PASS" vì đang tham chiếu dll cũ Unity để lại.
     3. Bỏ dòng file nguồn đã bị xoá (rsp chỉ được ghi lại khi Unity biên dịch,
        nên một commit vừa pull về xoá file là rsp thành cũ).
-    4. Thêm file `.cs` mới trong `Assets/_Game` mà rsp chưa liệt kê — trừ file
-       trong thư mục `Editor` và trong cây của một asmdef nào đó.
-    Thứ tự: dựng 4 assembly của pack trước (core rồi tới ba assembly nền tảng,
-    vì chúng tham chiếu core), rồi mới tới `Assembly-CSharp` của game.
+    4. Thêm file `.cs` mới thuộc assembly đó mà rsp chưa liệt kê (với
+       `Assembly-CSharp`: trừ file trong thư mục `Editor` và trong cây của một
+       asmdef khác).
     Mẹo khi chủ dự án đang sửa dở một file: cho phép thay tạm đường dẫn file đó
     bằng bản đã commit (`git show HEAD:<path>`) để phần còn lại vẫn kiểm được.
   - **iOS**: **không có compiler trên Windows** — chỉ kiểm được ba thứ: ngoặc
@@ -926,40 +970,37 @@ không bao giờ ẩn.
     sau đọc công thức trên rồi dựng lại. Chúng hardcode đường dẫn máy và chỉ
     phục vụ việc phát triển, không đáng nằm trong sản phẩm.
 - Sau sửa Java: kiểm build đã chứa code mới (grep symbol trong `classes/` của
-  `unityLibrary/NativeAdMob.androidlib`).
-- Ghi chú công cụ cho AI trong harness này: heredoc của Bash tool bị bóc nháy
-  và nuốt backslash — script ghi bằng Write tool rồi chạy file.
+  `unityLibrary/NativeAdMob.androidlib` trong project host, README Android §8).
 
 ## C2. Sổ sự cố
 
 | Khi | Triệu chứng | Nguyên nhân gốc | Luật rút ra |
 |---|---|---|---|
-| 2026-08-15 | Ô 96×120dp máy thật mất fill | Rule rename cắn literal, badge "NativeAd" (1c9f692b) | Rename không đụng literal (B12) |
-| 2026-08-15 | EditorAd không gắn, NRE | asm editor-only không AddComponent được (c2d5c777) | `defineConstraints UNITY_EDITOR` |
-| 2026-08-15 | Hai build Android vỡ javac | forward reference / definite assignment; backslash bị nuốt (bf207c86, 6786ef5e) | Cổng javac; script qua Write |
-| 2026-08-15 | Full-screen "delay" | bind creative trong `onCreate`, không phải Activity; Dialog 31bcbd2a revert | Activity + content dựng sẵn (4e4d73d4) |
-| 2026-08-16 | Collapsible miss mỗi lần thứ hai | load chỉ khi đóng; native chặn load khi show (8706d5cf) | Prefetch khi displayed |
-| 2026-08-16 | Prefetch vô ích | load lúc dismiss huỷ ad vừa nạp (236384ce) | Ad ấm không bị huỷ |
-| 2026-08-16 | Cache có ad mà "chưa có" | C# xoá cờ ready đè native (31c5562d) | Readiness chỉ native |
-| 2026-08-16 | Doanh thu ad đang xem mất | paid event gác generation (87e2d1c9) | Bám identity |
-| 2026-08-16 | Layout thỉnh thoảng vỡ (cột 421px, media 0) | recompute giữa layout pass (c335fdc4) | Idempotent trong `onMeasure` (B6) |
-| 2026-08-16 | Ambient không hiện | view cắm trong MediaView bị nuốt (e7f74bc0) | Không cắm con vào MediaView |
-| 2026-08-16 | Padding scrim to ở ô 96dp | ô chạy ROOMY, spacing theo tier (ca935661) | Spacing chặn theo ô |
-| 2026-08-16 | Media full-screen không to | pipeline co chrome sau `if (!fullscreen)` (1c848203) | Chạy cho cả hai format |
-| 2026-08-16 | Media "chưa chạm gì" mà không scale | tường vô hình; `top = badgeHeight` (32ccf46a, d58aebbc) | Chỉ tường nhìn thấy |
-| 2026-08-16 | Ad vuông lọt rail | cổng 1.05 (e8c7ff98) | 0.85 nghiêm ngặt |
-| 2026-08-16 | Mọi ad thành khung đen | nguyên dải cho cả ad có ratio (8f3a4db1→d95fc911) | Nguyên dải chỉ ca không báo |
-| 2026-08-16 | Headline trống chiếm chỗ | (996ae2bf) | Asset rỗng GONE |
-| 2026-08-16 | Focus lại là xoay ad | foreground present slot đã có ad (c6234465) | Resume ≠ rotation |
+| 2026-08-15 | Ô 96×120dp máy thật mất fill | Rule rename cắn literal, badge "NativeAd" (5c6afa3b) | Rename không đụng literal (B12) |
+| 2026-08-15 | EditorAd không gắn, NRE | asm editor-only không AddComponent được (93bc80be) | `defineConstraints UNITY_EDITOR` |
+| 2026-08-15 | Hai build Android vỡ javac | forward reference / definite assignment; backslash bị nuốt (b295eb56, 212266f0) | Cổng javac; script qua Write |
+| 2026-08-15 | Full-screen "delay" | bind creative trong `onCreate`, không phải Activity; Dialog 33cf6634 revert | Activity + content dựng sẵn (d64fdc88) |
+| 2026-08-16 | Collapsible miss mỗi lần thứ hai | load chỉ khi đóng; native chặn load khi show (e31b462b) | Prefetch khi displayed |
+| 2026-08-16 | Prefetch vô ích | load lúc dismiss huỷ ad vừa nạp (4753cfb3) | Ad ấm không bị huỷ |
+| 2026-08-16 | Cache có ad mà "chưa có" | C# xoá cờ ready đè native (0cf5db67) | Readiness chỉ native |
+| 2026-08-16 | Doanh thu ad đang xem mất | paid event gác generation (1a1dcf5d) | Bám identity |
+| 2026-08-16 | Layout thỉnh thoảng vỡ (cột 421px, media 0) | recompute giữa layout pass (ad67dcb4) | Idempotent trong `onMeasure` (B6) |
+| 2026-08-16 | Ambient không hiện | view cắm trong MediaView bị nuốt (38704204) | Không cắm con vào MediaView |
+| 2026-08-16 | Padding scrim to ở ô 96dp | ô chạy ROOMY, spacing theo tier (77167823) | Spacing chặn theo ô |
+| 2026-08-16 | Media full-screen không to | pipeline co chrome sau `if (!fullscreen)` (b37ad3be) | Chạy cho cả hai format |
+| 2026-08-16 | Media "chưa chạm gì" mà không scale | tường vô hình; `top = badgeHeight` (7a7c527c, 322ff153) | Chỉ tường nhìn thấy |
+| 2026-08-16 | Ad vuông lọt rail | cổng 1.05 (a73d1309) | 0.85 nghiêm ngặt |
+| 2026-08-16 | Mọi ad thành khung đen | nguyên dải cho cả ad có ratio (3e046158→8cc5a787) | Nguyên dải chỉ ca không báo |
+| 2026-08-16 | Headline trống chiếm chỗ | (1e4c37cb) | Asset rỗng GONE |
+| 2026-08-16 | Focus lại là xoay ad | foreground present slot đã có ad (499d8e60) | Resume ≠ rotation |
 | 2026-08-19 | Dải đen trên ad half máy cutout | cover đo `decorView`, ad đo `displayMetrics` | Một resolver |
 | 2026-08-19 | Collapsible mảng đen trống | type 1003 (số lớn không vẽ trên) | 1002 + hợp đồng cover-trước |
 | 2026-08-21 | Panel half bị đẩy lên nav bar | window tôn trọng bar (Samsung 3 nút) | Lay out dưới bar, sticky |
 | 2026-08-21 | Full-screen nhảy một bước sau frame đầu | `post()` từ `onSizeChanged` với `heightPixels` đoán | Lập kế hoạch trong `onMeasure` |
-| 2026-08-30 | 5 cụm ANR "Input dispatching timed out" | main parked ở GC suspend IL2CPP khi Unity pause (e4504f2c) | `AdEventDispatcher` |
-| 2026-08-30 | Game đen sau khi quay lại từ ad | BAL vứt `startActivity` end card (76fa0612) | `VerifyInitialAttach` → restore |
-| 2026-08-30 | Crash Android 8.0 orientation (7 user) | translucent + `screenOrientation` manifest (9164a0b0) | Xin ở `onCreate`, bỏ API 26 |
-| 2026-09 | Màn đen sau rewarded/interstitial, cả hai OS | `IsCheatAds` đọc PlayerPrefs trên thread SDK (179d66e4) | Tính bool trước trên thread Unity |
-| 2026-09 | End card rewarded không hiện (Editor) | cờ reward set qua `UniTask.Post`, đọc trước khi post (a9ad7014) | Set ngay trong callback SDK |
+| 2026-08-30 | 5 cụm ANR "Input dispatching timed out" | main parked ở GC suspend IL2CPP khi Unity pause (9d6667bc) | `AdEventDispatcher` |
+| 2026-08-30 | Game đen sau khi quay lại từ ad | BAL vứt `startActivity` end card (b970cd3d) | `VerifyInitialAttach` → restore |
+| 2026-08-30 | Crash Android 8.0 orientation (7 user) | translucent + `screenOrientation` manifest (dfef7999) | Xin ở `onCreate`, bỏ API 26 |
+| 2026-09 | Màn che full không bao giờ hạ sau một quảng cáo (cả hai OS) | Phía game đọc `PlayerPrefs` trong callback bắn trên thread SDK; callback ném trước khi tới `Hide` | Tính điều kiện trước trên thread Unity, truyền bool (A11, B4) |
 | 2026-09 | Thụt góc bo tính hai lần | `scrimPad + cornerInset` | Sàn, không cộng |
 | 2026-09-19 | AdChoices bị cung bo cắt | SDK ghim dấu vào góc thô của lớp riêng nó; reserve của ta không điều khiển được | (xem dòng dưới) |
 | 2026-09-21 | Fix "đăng ký `AdChoicesView`" không có tác dụng | Giả định SDK vẽ vào view đăng ký, chưa kiểm trên máy; cây view cho thấy SDK vẫn vẽ ở lớp của nó | Kiểm bằng cây view thật trước khi báo xong; padding `NativeAdView` (B12) |
@@ -997,22 +1038,20 @@ không bao giờ ẩn.
 
 Cập nhật mục này ở cuối mỗi phiên làm việc; ngày là của lần cập nhật.
 
-**2026-09-21** (nhánh `dev_improve_nativeadmob`)
+**2026-09-21** (repo `NativeAdMob`, nhánh `main`)
 
-- Đã commit (`e9fd3268`): fix AdChoices in-feed Android (padding
-  `NativeAdView`) và bộ README. **Chưa thử trên máy** — cần build rồi đọc cây
-  view: dấu "Ad Choices Icon" phải thụt đúng bằng badge "Ad" (lần đo trước:
-  7px).
-- Đã commit (`db1d9da3`): log tự kiểm cho fix Android
-  (`ReportSdkLayerShape`) và fix AdChoices iOS (`ROInFeedAdViewFactory.h/.mm`,
-  `ROInFeedAdPresentation.mm`). Build trên Mac vỡ vì `@try` (C2); đã chạy
-  được khi bật cờ tạm trong bản copy Xcode, log `applied … 3pt`.
-- Chưa commit: bỏ `@try` khỏi `ROGoogleMobileAdsVersion` (sửa lỗi build đó);
-  cổng iOS PASS và giờ bắt được đúng lỗi này. **Chưa build lại trên Mac.**
-- Phía game đã commit (2ff3a7e5 và trước): `InvokeSafely` trong `AdProvider`,
-  FSA counter atomic, `ShouldShowNativeEndCard` tính trước, reward flag set
-  trực tiếp. `chapterAdRoundCorner` 22.5 / `levelAdRoundCorner` 15 đã đặt
-  trong `Canvas-ChapterPopup.prefab`.
-- Việc kế tiếp: kiểm AdChoices iOS với ad thật trên Mac; chờ chủ dự án chốt
-  icon scrim và body 2 dòng (C3), hộp AdChoices 45px lấn headline (C3), cảnh
-  báo MediaView < 120×120 của SDK iOS (C3).
+- Pack vừa được tách khỏi repo game thành repo riêng — lịch sử giữ nguyên, mã
+  commit mới — và có `package.json` (`8a4d04b2`). Tag **`v1.0.0`** là commit
+  ngay sau đó, sửa README cho pack đứng riêng: bỏ mọi phần riêng của game,
+  thêm hướng dẫn tích hợp chung (A11), đổi mã commit sang repo này.
+- `386c942a`: fix AdChoices in-feed Android (padding `NativeAdView`). **Chưa
+  thử trên máy** — build rồi đọc cây view: dấu "Ad Choices Icon" phải thụt
+  đúng bằng badge "Ad".
+- `4324a629`, `3334eeea`: fix AdChoices in-feed iOS, log tự kiểm cho cả hai
+  nền tảng, rồi bỏ `@try` gây vỡ build Mac (C2). Bản còn `@try` đã chạy trên
+  iPhone nhờ cờ tạm và log `applied … 3pt`; **bản đã bỏ `@try` chưa build lại
+  trên Mac.**
+- Việc kế tiếp: build lại iOS trên Mac; thử Android trên máy; kiểm AdChoices
+  iOS khi có ad unit thật; chờ chủ dự án chốt icon scrim và body 2 dòng (C3),
+  hộp AdChoices 45px lấn headline (C3), cảnh báo MediaView < 120×120 của SDK
+  iOS (C3).

@@ -18,7 +18,7 @@ Bridge Java của pack: `Bridge/NativeAdMob.androidlib` (package
   - **Không có `android:screenOrientation` trên `OverlayAdActivity`.** Android
     8.0 (đúng API 26) ném "Only fullscreen opaque activities can request
     orientation" từ `super.onCreate` cho Activity translucent khai orientation
-    cố định — crash trước khi code của ta chạy, 7 người dùng dính (9164a0b0).
+    cố định — crash trước khi code của ta chạy, 7 người dùng dính (dfef7999).
     Orientation xin ở runtime trong `onCreate`, **bỏ qua API 26** (ở đó
     Activity translucent theo orientation của Activity đục bên dưới — game
     portrait — nên vẫn portrait).
@@ -63,17 +63,17 @@ Bridge Java của pack: `Bridge/NativeAdMob.androidlib` (package
 
 ## 3. Ad full-screen là Activity — yêu cầu cứng
 
-- **Không được đổi sang Dialog.** Bản Dialog (31bcbd2a) đã bị revert
-  (dfc1cab2) theo yêu cầu chủ dự án. Điều tra delay cho thấy thứ phình ra
+- **Không được đổi sang Dialog.** Bản Dialog (33cf6634) đã bị revert
+  (53434fcd) theo yêu cầu chủ dự án. Điều tra delay cho thấy thứ phình ra
   không phải Activity switch mà là **bind creative trong `onCreate`** (video
-  end card khởi tạo player). Fix giữ Activity (4e4d73d4): `OverlayAdContentView`
+  end card khởi tạo player). Fix giữ Activity (d64fdc88): `OverlayAdContentView`
   **dựng sẵn lúc LOAD**, truyền qua `Session` (kèm `CloseRelay` và
   `closeOnLeft` đã roll), `onCreate` chỉ attach; restore path dựng tươi. Log
   `Show timeline: content attached/presented +Xms (prebuilt: yes/no)` tag
   `OverlayAd` để đo (đã đo: launch ~167ms).
 - **Background activity launch (Android 10+)**: `startActivity` từ app đang ở
   nền **thành công như một lời gọi và bị hệ thống vứt lặng**. Kịch bản thật
-  (76fa0612): người chơi tap xuyên ad vào trình duyệt → interstitial tự đóng
+  (b970cd3d): người chơi tap xuyên ad vào trình duyệt → interstitial tự đóng
   sau lưng trình duyệt → start end card đi vào hư không → session treo sau
   màn che đen vĩnh viễn ("game đen sau khi quay lại"). Luật: **một session đã
   start thì hoặc attach, hoặc được restore khi resume, hoặc complete với lỗi —
@@ -187,7 +187,7 @@ nằm trong input region nên game vẫn nhận chạm.
   `setClipToOutline(true)`); màu trong suốt vẫn clip.
 - **Không measure-thăm-dò + `requestLayout` giữa layout pass** mà không có
   khoá idempotent: Android vứt `requestLayout` giữa pass và GMA lay cột ở cỡ
-  thăm dò (c335fdc4). Bản sửa `post()` từ `onSizeChanged` sau đó bị thay:
+  thăm dò (ad67dcb4). Bản sửa `post()` từ `onSizeChanged` sau đó bị thay:
   overlay giờ lập kế hoạch né control **trong `onMeasure`** theo kích thước
   thật, guard bằng `plannedPanelWidth/Height` + `avoidancePlanDirty`, và
   `planningInMeasure` chặn `requestLayout` thừa — vì `displayMetrics.heightPixels`
@@ -274,10 +274,11 @@ grep -a "<symbol>" Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/NativeAdMo
 ## 9. Debug trên máy
 
 - `adb` **không** có trong PATH của shell nền → đường dẫn tuyệt đối
-  `%LOCALAPPDATA%/Android/platform-tools/adb`. Hai thiết bị thường cắm cùng
-  lúc (máy thật density 3.0, giả lập 1.5) → **luôn truyền `-s <serial>`**,
-  thiếu là adb trả rỗng. Ô 288×361px = 96×120dp trên máy thật, 192×241dp
-  trên giả lập: khác biệt layout giữa hai máy thường là dp, không phải bug.
+  `%LOCALAPPDATA%/Android/platform-tools/adb`. Cắm nhiều thiết bị cùng lúc
+  thì **luôn truyền `-s <serial>`**, thiếu là adb trả rỗng. Cùng một ô tính
+  bằng px ra số dp khác nhau theo density của máy (máy thật thường 3.0, giả
+  lập có thể 1.5), nên layout khác nhau giữa hai máy thường là do dp, không
+  phải bug.
 - Log: `logcat -v time -s OverlayAd:V InFeedAd:V NativeAd:V` chạy **nền ra
   file** — buffer bị AppLovin spam đẩy trôi trong 1–2 phút nên `logcat -d`
   hay trượt. Dòng cần tìm: `In-feed layout ready <plan>` (template/tier/

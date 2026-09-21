@@ -10,8 +10,8 @@ thấy** ad và màn che trong play mode. Luật chung ở
 - Client Editor là **tức thời**: `Show` dựng ad ngay, báo
   `OnLoadingCompleted(1, 1)` ("một ad ấm, chỗ cho một") rồi `OnSlotDisplayed`.
   Không có độ trễ load, không dwell, không xoay vòng, không scheduler. Bộ mô
-  phỏng hành vi từng tồn tại (33f45878) và đã bị gỡ theo yêu cầu chủ dự án
-  (589ea8c2): preview để xem ad **trông ra sao**, không để tái tạo lifecycle.
+  phỏng hành vi từng tồn tại (e81149c2) và đã bị gỡ theo yêu cầu chủ dự án
+  (516759f6): preview để xem ad **trông ra sao**, không để tái tạo lifecycle.
   Đừng đem nó trở lại.
 - **Không port layout engine sang Editor** (chủ dự án chốt): preview chỉ vẽ
   vài layout đại diện — overlay xếp chồng (media dưới dải control, stack dồn
@@ -31,7 +31,7 @@ thấy** ad và màn che trong play mode. Luật chung ở
 `defineConstraints: ["UNITY_EDITOR"]` — **không** phải `includePlatforms:
 ["Editor"]`. Unity **cấm** `AddComponent` một MonoBehaviour thuộc assembly
 editor-only ("Can't add script behaviour ... because it is an editor script")
-→ `EditorAd` không gắn được, `GetComponent` trả null, NRE (c2d5c777). Với
+→ `EditorAd` không gắn được, `GetComponent` trả null, NRE (93bc80be). Với
 define constraint, asm được phân loại runtime nên attach được trong play mode,
 còn `UNITY_EDITOR` không tồn tại khi build player nên vẫn bị loại — đúng
 pattern asm test của Unity Test Framework. Bootstrap gác `Application.isEditor`.
@@ -52,8 +52,9 @@ Space Overlay và sorting order là thứ tự duy nhất. `EditorSortingOrder`:
 Hai số stub nằm trong prefab của package (`MaxSdk/Prefabs/Interstitial|Rewarded`
 order 999; `GoogleMobileAds PlaceholderAds/*/768x1024` order 0, GUIManager
 overlay của SDK 9999) — pack không đọc được, **kiểm lại mỗi khi nâng SDK**.
-Canvas của game phải nằm **dưới** cả thang (chủ dự án tự chỉnh canvas game;
-`-1` là số duy nhất đặt tay, phần còn lại suy ra).
+Canvas của game dùng pack phải nằm **dưới** cả thang — việc đó thuộc về
+game, pack không đụng tới canvas của game. `-1` là số duy nhất đặt tay, phần
+còn lại suy ra.
 
 ## 4. Pause
 
@@ -92,7 +93,7 @@ thread SDK (`onCompletedAnyThread`) được đưa về thread Unity.
 
 - Viền element là **inner stroke** (bốn thanh vẽ trong mép, thanh dọc rút
   2×độ dày để không đè góc) như `GradientDrawable` stroke của Android; Unity
-  `Outline` là outer, chủ dự án bác (17281dba). CTA `#2196F3` viền `#1565C0`
+  `Outline` là outer, chủ dự án bác (87652fd1). CTA `#2196F3` viền `#1565C0`
   như máy, phần còn lại đen 35%.
 - Dấu close **vẽ bằng hai nét** (capsule distance field) đúng hình học máy
   (`0.44` cạnh ngắn, nét 2.5dp), không gõ U+2715 (mỗi OEM một font). Close
