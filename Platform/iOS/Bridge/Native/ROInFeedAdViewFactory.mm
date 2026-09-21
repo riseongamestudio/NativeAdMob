@@ -1036,30 +1036,31 @@ static char kROSdkAdChoicesInsetAppliedKey;
 // The SDK's version, for the log. Read through the runtime rather than a
 // named SDK function: this file only compiles on a Mac, and a guessed name
 // would break the build for the sake of a log line.
+//
+// No @try: this file is compiled without -fobjc-exceptions (its .meta sets
+// no flags), and a @try here broke the first Mac build. Nothing below can
+// throw anyway - the getter is checked for before KVC asks for it, and the
+// buffer handed to getValue:size: is checked to match the boxed size.
 static NSString *ROGoogleMobileAdsVersion(void) {
-    @try {
-        GADMobileAds *mobileAds = [GADMobileAds sharedInstance];
-        if (![mobileAds respondsToSelector:
-                        NSSelectorFromString(@"versionNumber")]) {
-            return @"unknown";
-        }
-        id value = [mobileAds valueForKey:@"versionNumber"];
-        if (![value isKindOfClass:NSValue.class]) return @"unknown";
-
-        NSValue *boxed = (NSValue *)value;
-        NSUInteger size = 0;
-        NSGetSizeAndAlignment(boxed.objCType, &size, NULL);
-        if (size != sizeof(NSInteger) * 3) return @"unknown";
-
-        NSInteger parts[3] = {0, 0, 0};
-        [boxed getValue:parts size:sizeof(parts)];
-        return [NSString stringWithFormat:@"%ld.%ld.%ld"
-              , (long)parts[0]
-              , (long)parts[1]
-              , (long)parts[2]];
-    } @catch (NSException *exception) {
+    GADMobileAds *mobileAds = [GADMobileAds sharedInstance];
+    if (![mobileAds respondsToSelector:
+                    NSSelectorFromString(@"versionNumber")]) {
         return @"unknown";
     }
+    id value = [mobileAds valueForKey:@"versionNumber"];
+    if (![value isKindOfClass:NSValue.class]) return @"unknown";
+
+    NSValue *boxed = (NSValue *)value;
+    NSUInteger size = 0;
+    NSGetSizeAndAlignment(boxed.objCType, &size, NULL);
+    if (size != sizeof(NSInteger) * 3) return @"unknown";
+
+    NSInteger parts[3] = {0, 0, 0};
+    [boxed getValue:parts size:sizeof(parts)];
+    return [NSString stringWithFormat:@"%ld.%ld.%ld"
+          , (long)parts[0]
+          , (long)parts[1]
+          , (long)parts[2]];
 }
 
 static NSString *ROClassNames(NSArray<UIView *> *views) {

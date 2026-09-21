@@ -57,6 +57,14 @@ File này ghi những gì **riêng iOS**.
   và `InFeedAdLayoutEngine.java`; đừng "tối ưu" model đo cho giống UIKit hơn.
 - Method riêng tư prefix `ro_`, hằng `kRO*`; tham số nhiều dòng dấu phẩy đầu
   dòng như hai bên kia.
+- **`@try`/`@catch`/`@throw`/`@finally` chỉ biên dịch được trong file có cờ
+  `-fobjc-exceptions`**, và Unity truyền cờ theo từng file từ `CompileFlags`
+  trong `.meta`. Hiện chỉ `ROInFeedAdPresentation.mm` có cờ này (nó bắt
+  exception do factory ném khi bind). File khác cần xử lý lỗi thì kiểm điều
+  kiện trước thay vì `@try`; nếu thật sự cần `@try` thì thêm cờ vào `.meta`
+  của file đó. `[NSException raise:…]` là lời gọi method nên không cần cờ.
+  Một `@try` thiếu cờ đã làm vỡ lần build Mac 2026-09-21; cổng iOS giờ kiểm
+  điều này.
 
 ## 3. Khác biệt SDK phải nhớ
 
@@ -116,7 +124,9 @@ File này ghi những gì **riêng iOS**.
     `GADNativeAdView`, kể cả khung AdChoices của SDK, chờ Auto Layout sửa lại.
     Mọi view của pack đều đặt bằng frame (không chỗ nào tắt tamic), nên chỉ
     view của SDK bị bỏ qua.
-  - Chưa thấy với ad thật (test ad không có AdChoices).
+  - Đã chạy trên iPhone 14 Pro với test ad (2026-09-21): log `In-feed
+    AdChoices inset applied (GMA 13.9.0): SDK container inset by 3pt`, không
+    có `RESET`. Chưa thấy dấu thật vì chưa có ad unit iOS thật.
 - MAX trên iOS với `InvokeEventsOnUnityMainThread = false` bắn callback trên
   một `NSOperationQueue` nền, không phải main queue → **iOS không được miễn**
   luật "hide màn che phải ở ngoài player loop" (README gốc B4), và cũng
@@ -215,8 +225,9 @@ iPhoneOS SDK 26.5, Google-Mobile-Ads-SDK 13.9.0 (CocoaPods), Unity
 Ô in-feed đã hiện và layout đúng với test ad.
 
 Máy Windows vẫn không compile được — cổng local chỉ kiểm ngoặc `{}()[]` cân
-sau khi bỏ comment và chuỗi, và chữ ký ABI khớp ba nơi. Sửa code iOS xong thì
-vẫn phải build trên Mac mới biết.
+sau khi bỏ comment và chuỗi, chữ ký ABI khớp ba nơi, và cờ
+`-fobjc-exceptions` có mặt ở file dùng `@try` (§2). Sửa code iOS xong thì vẫn
+phải build trên Mac mới biết.
 
 **Cách đọc cây view trên iPhone** (đã dùng ngày 2026-09-21): chèn tạm một
 hàm dump đệ quy vào **bản copy** `ROInFeedAdViewFactory.mm` trong project Xcode

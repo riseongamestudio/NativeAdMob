@@ -915,11 +915,13 @@ không bao giờ ẩn.
     vì chúng tham chiếu core), rồi mới tới `Assembly-CSharp` của game.
     Mẹo khi chủ dự án đang sửa dở một file: cho phép thay tạm đường dẫn file đó
     bằng bản đã commit (`git show HEAD:<path>`) để phần còn lại vẫn kiểm được.
-  - **iOS**: **không có compiler trên Windows** — chỉ kiểm được hai thứ: ngoặc
-    `{}()[]` cân sau khi bỏ comment, chuỗi và ký tự; và chữ ký ABI
+  - **iOS**: **không có compiler trên Windows** — chỉ kiểm được ba thứ: ngoặc
+    `{}()[]` cân sau khi bỏ comment, chuỗi và ký tự; chữ ký ABI
     (`ROInFeedAd_Create`, `ROInFeedAd_Configure`) khớp giữa
-    `RONativeAdBridge.h`, `.mm` và `NativeAdBridge.cs`. Mọi hành vi iOS là
-    "chưa kiểm chứng" cho tới khi build trên máy Mac.
+    `RONativeAdBridge.h`, `.mm` và `NativeAdBridge.cs`; và **file `.mm` nào
+    dùng `@try`/`@catch`/`@throw`/`@finally` thì `.meta` của nó phải có
+    `CompileFlags: -fobjc-exceptions`** (bỏ comment và chuỗi trước khi tìm).
+    Muốn biết code iOS có biên dịch được không vẫn phải build trên Mac.
   - **Script gate không nằm trong repo** (chủ dự án chốt 2026-09-21): phiên
     sau đọc công thức trên rồi dựng lại. Chúng hardcode đường dẫn máy và chỉ
     phục vụ việc phát triển, không đáng nằm trong sản phẩm.
@@ -961,6 +963,7 @@ không bao giờ ẩn.
 | 2026-09 | Thụt góc bo tính hai lần | `scrimPad + cornerInset` | Sàn, không cộng |
 | 2026-09-19 | AdChoices bị cung bo cắt | SDK ghim dấu vào góc thô của lớp riêng nó; reserve của ta không điều khiển được | (xem dòng dưới) |
 | 2026-09-21 | Fix "đăng ký `AdChoicesView`" không có tác dụng | Giả định SDK vẽ vào view đăng ký, chưa kiểm trên máy; cây view cho thấy SDK vẫn vẽ ở lớp của nó | Kiểm bằng cây view thật trước khi báo xong; padding `NativeAdView` (B12) |
+| 2026-09-21 | Build iOS vỡ: "cannot use '@try' with Objective-C exceptions disabled" | `@try` mới trong `ROInFeedAdViewFactory.mm`, file này không có `-fobjc-exceptions` (chỉ `ROInFeedAdPresentation.mm` có) | Không dùng `@try` ở file không có cờ; cổng iOS giờ kiểm (C1) |
 
 ## C3. Việc còn mở
 
@@ -970,10 +973,11 @@ không bao giờ ẩn.
 - Body in-feed: `BodyMaxLines` = **1** ở COMPACT với `COMPACT_ROW` và scrim →
   body dài luôn cuộn dù ô còn chỗ. Chưa chốt: nới 2 dòng / nấc co CTA / đổi
   trọng số body-trọn vs dòng phụ.
-- AdChoices iOS in-feed: đã viết (sửa hai constraint, B12) nhưng **chưa thấy
-  trên máy với ad thật** — test ad iOS không có AdChoices. Hai điều chưa kiểm:
-  dấu thật có nằm trong `GADNativeAdAttributionView` không, và SDK có đặt lại
-  hai constraint sau khi mình sửa không (có log `RESET` nếu có).
+- AdChoices iOS in-feed: cơ chế **đã chạy trên iPhone** với test ad
+  (2026-09-21, GMA 13.9.0): log `In-feed AdChoices inset applied (GMA 13.9.0):
+  SDK container inset by 3pt`, không có `RESET`. Chưa thấy **dấu thật** vì
+  chưa có ad unit iOS thật (test ad không có AdChoices): dấu có nằm trong
+  `GADNativeAdAttributionView` không, cỡ có vừa, có đè chữ không.
 - Overlay (full/half) vẫn dùng ô giữ chỗ AdChoices; không bo góc nên chưa lộ.
 - Hộp dấu AdChoices của SDK cao 45px (cố định 15dp) trong khi dải trên cùng
   của ô in-feed chỉ chừa ~31px → hộp lấn vào dòng headline (có từ trước);
@@ -999,13 +1003,12 @@ Cập nhật mục này ở cuối mỗi phiên làm việc; ngày là của l�
   `NativeAdView`) và bộ README. **Chưa thử trên máy** — cần build rồi đọc cây
   view: dấu "Ad Choices Icon" phải thụt đúng bằng badge "Ad" (lần đo trước:
   7px).
-- Chưa commit: log tự kiểm cho fix Android (`ReportSdkLayerShape`); fix
-  AdChoices iOS (`ROInFeedAdViewFactory.h/.mm`, `ROInFeedAdPresentation.mm`)
-  — javac PASS, cổng iOS PASS, **chưa build trên Mac**; README cập nhật theo
-  báo cáo Mac.
-- iOS build sạch lần đầu trên Mac (README iOS §7). Trên Mac còn 2 thay đổi
-  tạm của lần thử: `IAPManager.prefab` và `AdMobUnitIdSO.asset` (unit test) —
-  revert trước khi commit.
+- Đã commit (`db1d9da3`): log tự kiểm cho fix Android
+  (`ReportSdkLayerShape`) và fix AdChoices iOS (`ROInFeedAdViewFactory.h/.mm`,
+  `ROInFeedAdPresentation.mm`). Build trên Mac vỡ vì `@try` (C2); đã chạy
+  được khi bật cờ tạm trong bản copy Xcode, log `applied … 3pt`.
+- Chưa commit: bỏ `@try` khỏi `ROGoogleMobileAdsVersion` (sửa lỗi build đó);
+  cổng iOS PASS và giờ bắt được đúng lỗi này. **Chưa build lại trên Mac.**
 - Phía game đã commit (2ff3a7e5 và trước): `InvokeSafely` trong `AdProvider`,
   FSA counter atomic, `ShouldShowNativeEndCard` tính trước, reward flag set
   trực tiếp. `chapterAdRoundCorner` 22.5 / `levelAdRoundCorner` 15 đã đặt
