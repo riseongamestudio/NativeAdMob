@@ -82,6 +82,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (ROInFeedTier)preferredTierForWidth:(CGFloat)width height:(CGFloat)height;
 - (CGFloat)minimumMediaLeftTextSlotWidthForPlan:(ROInFeedLayoutPlan *)plan;
 - (CGFloat)callToActionHeightForPlan:(ROInFeedLayoutPlan *)plan;
+// Moves the SDK's own AdChoices container in by the badge inset; see the
+// implementation for what that rests on. Idempotent, so every layout pass
+// may call it. logResult: report once per run how it went, from the pass by
+// which the SDK has had every chance to build the container.
+- (void)insetSdkAdChoicesInNativeAdView:(GADNativeAdView *)nativeAdView
+                              logResult:(BOOL)logResult;
 
 @end
 

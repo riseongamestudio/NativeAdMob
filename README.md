@@ -421,7 +421,8 @@ hết mọi nấc. Không media (video không vừa 120dp): icon, headline, body
 | Icon pipeline "tiêu" thì settle **không nở lại** | icon theo chữ | chứng chỉ fit bị vô hiệu sau lưng pipeline | A6 |
 | Bo góc: thụt = **sàn**, không cộng | cộng thêm | tiêu một lề hai lần | B11 |
 | Bán kính đi theo **rect** (`ConfigureSlot`) | Settings lúc sinh | unit ấm từ khởi động, ô đo sau | B11 |
-| AdChoices in-feed: **padding `NativeAdView`** để lớp của SDK co vào | đăng ký `AdChoicesView`; với vào view con của SDK | đăng ký không dời được dấu (đo trên máy); với vào con của SDK phụ thuộc thứ tự/thời điểm | B12 |
+| AdChoices in-feed Android: **padding `NativeAdView`** để lớp của SDK co vào | đăng ký `AdChoicesView`; với vào view con của SDK | đăng ký không dời được dấu (đo trên máy); với vào con của SDK phụ thuộc thứ tự/thời điểm | B12 |
+| AdChoices in-feed iOS: **sửa hai constraint ghim khung của SDK** | gán `adChoicesView` (header); thu nhỏ `GADNativeAdView` | gán: trên máy giống thất bại Android, khung 9pt nhỏ hơn dấu; thu nhỏ: MediaView scrim ra ngoài ad view (SDK coi là lỗi tích hợp), mất chạm ở viền | B12 |
 | Xoay theo **số lần xuất hiện** + dwell 4s | xoay theo đồng hồ / mỗi hide | liếc không phải lượt; foreground không phải rotation | B13 |
 | Xoay **trong lúc ẩn**, sau một frame | lúc trở lại / cùng message hide | bản thay thế có cả quãng ẩn; hide phải được vẽ trước | B13 |
 | Android: half ad và half cover cùng type 1002, **hợp đồng cover-trước** | type 1003 cho ad | 1003 vẽ **dưới** 1002 (dumpsys) | B3, README Android |
@@ -447,7 +448,7 @@ Tên là của Java; Obj-C++ cùng tên với prefix `ro_`/không prefix (README
 | Vì sao chữ cuộn | `TEXT_LADDER_MODES`, `NudgeCutTextsWhole`, `ApplyTextMode`, `BodyMaxLines`/`HeadlineMaxLines`/`AdvertiserMaxLines` |
 | Cây view in-feed của một template | `InFeedAdViewFactory.BuildContent` (nhánh template), `BuildIdentityAndText`, `BuildHeadlineAndActionStack`, `BuildTextStack`, `AddBodyAndOptional`, `CreateIconFiller` |
 | Badge, dải badge, bo góc | `AddBadgeOverlays`, `ConfigureBadgeOverlays`, `BadgeEdgeInsetPx`, `ConfigureInsetContent`, `CornerInsetForRadius`, `PaddingForTier`, `InFeedAdPresentation.ConfigureBackground` |
-| Dấu AdChoices của SDK nằm đâu / thụt thế nào | `InFeedAdViewFactory.InsetSdkOverlay` (Android); cây view thật bằng `uiautomator dump --windows` (README Android §9) |
+| Dấu AdChoices của SDK nằm đâu / thụt thế nào | Android `InFeedAdViewFactory.InsetSdkOverlay` + `ReportSdkLayerShape`; iOS `insetSdkAdChoicesInNativeAdView:` (gọi từ `ROInFeedAdPresentation.ro_layoutBoundContent`); cây view thật: Android `uiautomator dump --windows` (README Android §9), iOS dump tạm trên Mac (README iOS §7) |
 | Khi nào ô hiện, hình học có ổn không | `InFeedAdPresentation.Show`, `ActivateNextLayoutPlan`, `ObserveFinalAssetGeometry`, `RejectActivePlanAndTryNext`, `GeometrySignature` |
 | Slot xoay/không xoay | `InFeedAdSlot.HandleHiddenSwap`, `TrySwapActiveEntry`, `HandleRefresh`, `CurrentVisibleDurationMs`, `HandleForegroundRecheck` |
 | Slot kẹt/trống | `HandleWatchdog`, `RemoveExpiredMaterializingEntry`, `RemoveExpiredActiveEntry`, `HandleEntryExpiry`, `ScheduleLayoutRetry` |
@@ -824,7 +825,22 @@ qua `Initialize(sizePx, roundCornerPx)` → `ConfigureSlot`** (unit ấm từ kh
   theo vào; nội dung của ta bù lại bằng margin âm và `setClipToPadding(false)`
   nên phủ kín ô y như cũ (`InsetSdkOverlay`). Chi tiết và bằng chứng
   bytecode: README Android §7.
-- iOS và overlay chưa sửa (C3). Editor giả định glyph AdChoices 15dp.
+- Cách đang dùng (iOS, in-feed): SDK ghim khung AdChoices của nó
+  (`GADNativeAdAttributionView`) vào **mép** `GADNativeAdView` bằng hai
+  constraint `top == top`, `right == right` — padding hay margin không với
+  tới. Nên **sửa thẳng hai constraint đó** thành ±khoảng thụt badge
+  (`insetSdkAdChoicesInNativeAdView:`), gọi ở mọi lượt layout; khung giữ
+  nguyên cỡ, chỉ góc dời vào. Vòng layout của pack bỏ qua view do Auto Layout
+  quản (chỉ view của SDK mới là loại đó), không thì nó kéo khung ra phủ cả ô.
+  Chi tiết: README iOS §3. Gán `adChoicesView` (cách ghi trong header) đã cân
+  nhắc và bỏ: dấu hiệu trên máy giống kiểu thất bại của Android, và khung 9pt
+  của ta nhỏ hơn dấu.
+- **Cả hai fix dựa vào layout nội bộ của SDK**, nên cả hai tự kiểm và ghi log
+  mỗi lần chạy app một lần: thành công thì in khoảng thụt + phiên bản GMA;
+  cấu trúc SDK khác đi thì **không ép gì** (dấu về góc như trước) và in ra
+  thấy gì thay vào — log chứa `In-feed AdChoices`, tag `InFeedAd`/`InFeed`.
+  Nâng SDK xong hãy tìm dòng đó đầu tiên.
+- Overlay chưa sửa (C3). Editor giả định glyph AdChoices 15dp.
 
 ## B13. Slot in-feed: xoay vòng, dwell, watchdog
 
@@ -954,34 +970,46 @@ không bao giờ ẩn.
 - Body in-feed: `BodyMaxLines` = **1** ở COMPACT với `COMPACT_ROW` và scrim →
   body dài luôn cuộn dù ô còn chỗ. Chưa chốt: nới 2 dòng / nấc co CTA / đổi
   trọng số body-trọn vs dòng phụ.
-- AdChoices iOS in-feed **chưa sửa**: vẫn như HEAD, dấu SDK có thể bị cung bo
-  cắt y như Android trước đây. Chưa biết SDK iOS đặt dấu vào đâu — cần cây
-  view thật trên iPhone trước khi đổi gì (bài học 2026-09-21).
+- AdChoices iOS in-feed: đã viết (sửa hai constraint, B12) nhưng **chưa thấy
+  trên máy với ad thật** — test ad iOS không có AdChoices. Hai điều chưa kiểm:
+  dấu thật có nằm trong `GADNativeAdAttributionView` không, và SDK có đặt lại
+  hai constraint sau khi mình sửa không (có log `RESET` nếu có).
 - Overlay (full/half) vẫn dùng ô giữ chỗ AdChoices; không bo góc nên chưa lộ.
 - Hộp dấu AdChoices của SDK cao 45px (cố định 15dp) trong khi dải trên cùng
   của ô in-feed chỉ chừa ~31px → hộp lấn vào dòng headline (có từ trước);
   validator không thấy vì nó đo reserve 23px chứ không đo dấu thật.
 - Validator sàn ảnh 48dp chưa kiểm chứng trên máy với creative ảnh thật.
-- Toàn bộ Obj-C++ chưa qua compiler (README iOS).
+- Obj-C++ đã build sạch trên Mac (2026-09-21, README iOS §7), nhưng hành vi
+  iOS mới được nhìn một phần (ô in-feed với test ad).
+- SDK iOS 13.9.0 cảnh báo MediaView nhỏ hơn 120×120pt **cả với creative ảnh**
+  ("media views slots that have a width or height smaller than 120x120 will be
+  demonetized in the future") — trái với luật B7 "120dp chỉ cho video". Chưa
+  quyết.
+- SDK iOS log "Not all asset views lie inside the native ad view" 2 lần với
+  code hiện tại; chưa rõ asset nào.
 - Comment đầu `RONativeAdBridge.h` về `MobileAdsEventExecutor` đã cũ.
 
 ## C4. Trạng thái bàn giao
 
 Cập nhật mục này ở cuối mỗi phiên làm việc; ngày là của lần cập nhật.
 
-**2026-09-21**
+**2026-09-21** (nhánh `dev_improve_nativeadmob`)
 
-- Chưa commit trong package: fix AdChoices in-feed Android — **chỉ**
-  `InFeedAdViewFactory.java` khác HEAD (`InsetSdkOverlay`, `BadgeEdgeInsetPx`),
-  đã stage; javac PASS. Fix sai trước đó (đăng ký `AdChoicesView`) đã gỡ, các
-  file validator Android và 3 file iOS trả về đúng HEAD. **Chưa thử trên
-  máy** — cần build rồi đọc cây view: dấu "Ad Choices Icon" phải thụt đúng
-  bằng badge "Ad" (lần đo trước: 7px). Bốn README này chưa stage; README iOS
-  đã `git mv` từ `Bridge/Native/`. Ngoài package: `mainTemplate.gradle`,
-  `UnityConnectSettings.asset` là của chủ dự án.
+- Đã commit (`e9fd3268`): fix AdChoices in-feed Android (padding
+  `NativeAdView`) và bộ README. **Chưa thử trên máy** — cần build rồi đọc cây
+  view: dấu "Ad Choices Icon" phải thụt đúng bằng badge "Ad" (lần đo trước:
+  7px).
+- Chưa commit: log tự kiểm cho fix Android (`ReportSdkLayerShape`); fix
+  AdChoices iOS (`ROInFeedAdViewFactory.h/.mm`, `ROInFeedAdPresentation.mm`)
+  — javac PASS, cổng iOS PASS, **chưa build trên Mac**; README cập nhật theo
+  báo cáo Mac.
+- iOS build sạch lần đầu trên Mac (README iOS §7). Trên Mac còn 2 thay đổi
+  tạm của lần thử: `IAPManager.prefab` và `AdMobUnitIdSO.asset` (unit test) —
+  revert trước khi commit.
 - Phía game đã commit (2ff3a7e5 và trước): `InvokeSafely` trong `AdProvider`,
   FSA counter atomic, `ShouldShowNativeEndCard` tính trước, reward flag set
   trực tiếp. `chapterAdRoundCorner` 22.5 / `levelAdRoundCorner` 15 đã đặt
   trong `Canvas-ChapterPopup.prefab`.
-- Việc kế tiếp chờ chủ dự án chốt: icon scrim và body 2 dòng (C3); AdChoices
-  iOS (cần cây view trên iPhone); hộp AdChoices 45px lấn headline (C3).
+- Việc kế tiếp: kiểm AdChoices iOS với ad thật trên Mac; chờ chủ dự án chốt
+  icon scrim và body 2 dòng (C3), hộp AdChoices 45px lấn headline (C3), cảnh
+  báo MediaView < 120×120 của SDK iOS (C3).

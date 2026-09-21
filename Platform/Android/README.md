@@ -234,7 +234,15 @@ sát góc thô**; view của ta trống, thành một ô vô hình bấm đượ
 - `inset == 0` (ô vuông) → return sớm, không đổi gì.
 
 Rủi ro duy nhất: cách này dựa vào việc `zza` là con MATCH_PARENT của
-`NativeAdView`. Nâng GMA thì kiểm lại bytecode `zze` và cây view.
+`NativeAdView`. Nên mỗi lần bind, `ReportSdkLayerShape` kiểm đúng điều đó
+(trước khi nội dung của ta được thêm vào, lúc mọi con đều là của SDK) và log
+một lần mỗi lần chạy app, tag `InFeedAd`:
+- đúng: `In-feed AdChoices: SDK layer inset by 7px (GMA 25.x.y)`;
+- sai: `In-feed AdChoices inset may not reach the mark (GMA ...): SDK layer
+  <class> is <WxH margins=[...]>, not MATCH_PARENT without margins - update
+  InsetSdkOverlay for this SDK` (hoặc "no SDK layer at bind").
+Chỉ đọc, không đổi gì theo kết quả kiểm. Nâng GMA xong hãy tìm dòng này đầu
+tiên, rồi kiểm lại bytecode `zze` và cây view.
 
 Hộp dấu 45px (cố định 15dp) cao hơn dải trên cùng ta chừa cho badge (~31px)
 nên lấn vào dòng headline — có từ trước fix; validator không thấy vì nó đo

@@ -424,6 +424,13 @@ static void *kRORootBoundsContext = &kRORootBoundsContext;
     _nativeAdView.frame =
             CGRectMake(0, 0, _activePlan.width, _activePlan.height);
     for (UIView *child in _nativeAdView.subviews) {
+        // Views placed by Auto Layout are the SDK's - its AdChoices
+        // container and overlays; everything this pack builds is placed by
+        // frame. A frame from this pass would only fight their constraints:
+        // it stretched the AdChoices container over the whole cell until
+        // Auto Layout next ran, and would undo the pins moved just below.
+        if (!child.translatesAutoresizingMaskIntoConstraints) continue;
+
         [child ro_measureWithWidthSpec:HBMeasureSpecMake(
                         HBMeasureSpecExactly, _activePlan.width)
                             heightSpec:HBMeasureSpecMake(
@@ -431,6 +438,8 @@ static void *kRORootBoundsContext = &kRORootBoundsContext;
         [child ro_layoutWithFrame:CGRectMake(
                 0, 0, _activePlan.width, _activePlan.height)];
     }
+    [_viewFactory insetSdkAdChoicesInNativeAdView:_nativeAdView
+                                        logResult:NO];
 }
 
 - (void)ro_rejectActivePlanAndTryNext:(NSString *)reason {
@@ -633,6 +642,10 @@ static void *kRORootBoundsContext = &kRORootBoundsContext;
 
     [self ro_stopObserving];
     _layoutReady = YES;
+    // The layout has settled, so the SDK has built whatever it was going to:
+    // what the inset finds now is the verdict worth reporting.
+    [_viewFactory insetSdkAdChoicesInNativeAdView:_nativeAdView
+                                        logResult:YES];
     [self ro_startObservingRootBounds];
     NSLog(@"%@: In-feed layout ready %@ for %@"
           , kROTag

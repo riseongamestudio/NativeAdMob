@@ -71,15 +71,52 @@ File này ghi những gì **riêng iOS**.
   được phép từ chối target. Mất foreground đọc từ
   `UIApplicationWillResignActive` (`onPaused` của presentation); countdown
   giữ thời gian còn lại qua resign-active.
-- AdChoices in-feed **chưa sửa trên iOS**: code vẫn như HEAD — SDK tự vẽ dấu
-  ở góc ưu tiên (`GADAdChoicesPositionTopRightCorner` trong `ROBaseAd`), ta
-  chỉ có ô giữ chỗ `adChoicesReserve`; với ô bo góc thì dấu có thể bị cung
-  cắt y như Android trước đây. Cách Android đang dùng (padding
-  `NativeAdView`) **không chép sang được**: UIKit không có padding cho
-  subview đặt bằng frame, và chưa biết SDK iOS đặt dấu vào view nào. Gán
-  `GADNativeAdView.adChoicesView` là API có sẵn, nhưng đúng cách đó trên
-  Android đã không dời được dấu (README Android §7) — nên **không đoán nữa**:
-  lấy cây view trên iPhone (Xcode View Debugger) rồi mới quyết.
+- **AdChoices in-feed.** Đo trên iPhone (2026-09-21, GMA 13.9.0):
+  - SDK tạo `GADNativeAdAttributionView` làm **con trực tiếp** của
+    `GADNativeAdView`, ghim bằng Auto Layout vào **mép** của nó:
+    `V:|-(0)-[GADNativeAdAttributionView]` và
+    `GADNativeAdAttributionView.right == GADNativeAdView.right` — inset 0,
+    `translatesAutoresizingMaskIntoConstraints = NO`. Cung bo do
+    `ROInFeedAdPresentation` cắt (`clipsToBounds`, `cornerRadius`), nên dấu
+    hiện trong view này sẽ bị cắt như Android trước đây.
+  - SDK còn thêm `GADOverlayView` (ẩn) và một `UIView` trơn, cả hai phủ kín
+    `GADNativeAdView` bằng constraint center/width/height.
+  - Header SDK **hứa rõ**: gán `GADAdChoicesView` vào
+    `GADNativeAdView.adChoicesView` trước `setNativeAd:` thì AdChoices "will
+    render inside" view đó. Android không có câu hứa này và trên máy đã không
+    làm vậy. Khi gán, SDK có nhận view (log: nó tắt `userInteractionEnabled`
+    trên view đó như mọi asset view) nhưng **vẫn tạo** attribution view riêng;
+    vì test ad không có AdChoices nên chưa biết nội dung thật đi vào đâu.
+  - **Cách Android không chép sang được**: attribution view ghim vào mép
+    `GADNativeAdView`, không phải con MATCH_PARENT tôn trọng padding. Thu nhỏ
+    `GADNativeAdView` rồi cho nội dung tràn ra thì MediaView phủ cả ô của
+    template scrim sẽ nằm ngoài nó — SDK coi đó là lỗi tích hợp ("Not all
+    asset views lie inside the native ad view") — và chạm ở viền sẽ không tới
+    được ad. Đừng làm.
+  - **Cách đang dùng** — `ROInFeedAdViewFactory
+    insetSdkAdChoicesInNativeAdView:logResult:`, gọi cuối mỗi
+    `ro_layoutBoundContent` (không log) và một lần lúc layout ready (có log):
+    tìm subview class `GADNativeAdAttributionView`, tìm hai constraint trên
+    `GADNativeAdView` ghim nó `top == top`, `right/trailing == right/trailing`
+    (hệ số 1, quan hệ bằng, viết xuôi hay ngược đều nhận), rồi đổi hằng số
+    thành ±`ro_badgeEdgeInset` — đúng giá trị badge "Ad" dùng, nên hai dấu góc
+    luôn thụt bằng nhau. Chỉ gán khi khác; khung giữ nguyên cỡ.
+  - **Không ép gì khi SDK khác đi**: không thấy class, không thấy đủ hai
+    constraint, hay hằng số không phải 0/giá trị mình đặt → để nguyên (dấu về
+    góc như trước) và log một lần mỗi lần chạy app, dạng
+    `InFeed: In-feed AdChoices inset SKIPPED (GMA x.y.z): <thấy gì> - update
+    insetSdkAdChoicesInNativeAdView: for this SDK`. Thành công: `... inset
+    applied (GMA x.y.z): SDK container inset by 3pt`. SDK tự đặt lại hằng số
+    về 0 sau khi mình sửa: log `RESET` rồi sửa lại. Phiên bản GMA đọc qua
+    runtime (`valueForKey:@"versionNumber"`), không gọi hàm SDK theo tên —
+    file này chỉ biên dịch trên Mac, đoán sai tên hàm là vỡ build.
+  - **Vòng layout của pack bỏ qua view do Auto Layout quản**
+    (`translatesAutoresizingMaskIntoConstraints == NO`): trước đây
+    `ro_layoutBoundContent` gán frame cả ô cho **mọi** con của
+    `GADNativeAdView`, kể cả khung AdChoices của SDK, chờ Auto Layout sửa lại.
+    Mọi view của pack đều đặt bằng frame (không chỗ nào tắt tamic), nên chỉ
+    view của SDK bị bỏ qua.
+  - Chưa thấy với ad thật (test ad không có AdChoices).
 - MAX trên iOS với `InvokeEventsOnUnityMainThread = false` bắn callback trên
   một `NSOperationQueue` nền, không phải main queue → **iOS không được miễn**
   luật "hide màn che phải ở ngoài player loop" (README gốc B4), và cũng
@@ -171,11 +208,25 @@ Luật trả giá cho pause (hide phải đến từ thread còn chạy) ở REA
 
 ## 7. Kiểm chứng
 
-**Chưa compile được trên máy Windows này** — toàn bộ Obj-C++ cần Mac/Xcode
-(hoặc export Unity iOS trên Windows → `xcodebuild` trên runner macOS /
-Codemagic, build Simulator không cần Apple account; chạy thử bằng TestFlight).
-Cổng local chỉ kiểm: ngoặc `{}()[]` cân sau khi bỏ comment và string, và chữ
-ký ABI khớp ba nơi. Vì thế **mọi hành vi iOS đều là "chưa kiểm chứng"** cho
-tới khi build được; trước khi tin bất kỳ hành vi nào: build, chạy, đọc log
-theo cùng format với Android (`layout ready <plan>`, `rect=[..]px = [..]dp
-(density=..)`, `Show timeline:`).
+**Build sạch lần đầu ngày 2026-09-21** trên máy Mac của chủ dự án: Xcode 26.6,
+iPhoneOS SDK 26.5, Google-Mobile-Ads-SDK 13.9.0 (CocoaPods), Unity
+6000.3.19f1, chạy trên iPhone 14 Pro (scale 3). 0 lỗi; một warning có sẵn
+(`contentEdgeInsets` deprecated từ iOS 15, trong `ROInFeedAdViewFactory.mm`).
+Ô in-feed đã hiện và layout đúng với test ad.
+
+Máy Windows vẫn không compile được — cổng local chỉ kiểm ngoặc `{}()[]` cân
+sau khi bỏ comment và chuỗi, và chữ ký ABI khớp ba nơi. Sửa code iOS xong thì
+vẫn phải build trên Mac mới biết.
+
+**Cách đọc cây view trên iPhone** (đã dùng ngày 2026-09-21): chèn tạm một
+hàm dump đệ quy vào **bản copy** `ROInFeedAdViewFactory.mm` trong project Xcode
+đã export (Unity copy plugin chứ không symlink — không đụng repo), gọi sau
+`nativeAdView.nativeAd = _nativeAd;` bằng `dispatch_after` 3/8/15/30s, in class,
+`frame`, rect trong window, `hidden`, `autoresizingMask`,
+`translatesAutoresizingMaskIntoConstraints`, `clipsToBounds`, `cornerRadius`,
+và **mọi constraint mỗi view đang giữ**; lọc console theo một tiền tố. Chụp
+ảnh bằng `drawViewHierarchyInRect:` vào `tmp/` của app.
+
+**Test ad trên iOS không mang AdChoices** (unit test `3986624511`: container
+AdChoices của SDK luôn `hidden`, 0×0, rỗng). Mọi thứ liên quan AdChoices phải
+kiểm bằng ad thật.

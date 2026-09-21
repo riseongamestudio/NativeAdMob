@@ -23,6 +23,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.google.android.gms.ads.MediaContent;
+import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.nativead.MediaView;
 import com.google.android.gms.ads.nativead.NativeAdView;
 import com.google.android.gms.ads.nativead.NativeAd;
@@ -53,6 +54,10 @@ final class InFeedAdViewFactory {
     private static final int ATTRIBUTION_HEIGHT_DP = 18;
     private static final int AD_CHOICES_MIN_WIDTH_PX = 19;
     private static final int CONTENT_EDGE_INSET_PX = 0;
+    // Once per run each: whether the SDK layout the AdChoices inset leans on
+    // was found as expected, or what was found instead.
+    private static boolean sdkLayerInsetReported;
+    private static boolean sdkLayerProblemReported;
     // On a 96dp slot the short-side ratio lands on this floor every time, so
     // the floor is the height. 18dp was under anything worth pressing; 28dp
     // outweighed everything else in the slot - a full-width bar taking a
@@ -380,6 +385,101 @@ final class InFeedAdViewFactory {
         // scrim picture's edge above all.
         nativeAdView.setClipToPadding(false);
         contentParams.setMargins(-inset, -inset, -inset, -inset);
+        ReportSdkLayerShape(nativeAdView, inset);
+    }
+
+    // The padding reaches the AdChoices mark only while every layer the SDK
+    // puts on the NativeAdView fills the padded area - a MATCH_PARENT child
+    // with no margins, as play-services-ads 25.3.0 builds it. That is the
+    // SDK's private layout, not an API, so each bind checks it while every
+    // child is still the SDK's, before our content joins them. Once per run
+    // it says the inset took, or names what it found instead so the code can
+    // follow the SDK. Nothing is changed on the strength of the check.
+    private static void ReportSdkLayerShape(
+            NativeAdView nativeAdView
+          , int inset) {
+        String problem = null;
+        int childCount = nativeAdView.getChildCount();
+        if (childCount == 0) {
+            problem = "the NativeAdView has no SDK layer at bind";
+        }
+        for (int index = 0; problem == null && index < childCount; ++index) {
+            View child = nativeAdView.getChildAt(index);
+            ViewGroup.LayoutParams params = child.getLayoutParams();
+            if (!FillsPaddedArea(params)) {
+                problem = "SDK layer " + child.getClass().getName()
+                        + " is " + DescribeLayoutParams(params)
+                        + ", not MATCH_PARENT without margins";
+            }
+        }
+
+        if (problem != null) {
+            if (sdkLayerProblemReported) return;
+
+            sdkLayerProblemReported = true;
+            Log.w(TAG, "In-feed AdChoices inset may not reach the mark (GMA "
+                    + SdkVersion() + "): " + problem
+                    + " - update InsetSdkOverlay for this SDK");
+            return;
+        }
+        if (sdkLayerInsetReported) return;
+
+        sdkLayerInsetReported = true;
+        Log.i(TAG, "In-feed AdChoices: SDK layer inset by " + inset
+                + "px (GMA " + SdkVersion() + ")");
+    }
+
+    private static boolean FillsPaddedArea(ViewGroup.LayoutParams params) {
+        if (params == null
+                || params.width != ViewGroup.LayoutParams.MATCH_PARENT
+                || params.height != ViewGroup.LayoutParams.MATCH_PARENT) {
+            return false;
+        }
+        if (!(params instanceof ViewGroup.MarginLayoutParams)) return true;
+
+        ViewGroup.MarginLayoutParams margins =
+                (ViewGroup.MarginLayoutParams) params;
+        return margins.leftMargin == 0
+                && margins.topMargin == 0
+                && margins.rightMargin == 0
+                && margins.bottomMargin == 0
+                && margins.getMarginStart() == 0
+                && margins.getMarginEnd() == 0;
+    }
+
+    private static String DescribeLayoutParams(
+            ViewGroup.LayoutParams params) {
+        if (params == null) return "without LayoutParams";
+
+        String size = DescribeDimension(params.width)
+                + "x" + DescribeDimension(params.height);
+        if (!(params instanceof ViewGroup.MarginLayoutParams)) return size;
+
+        ViewGroup.MarginLayoutParams margins =
+                (ViewGroup.MarginLayoutParams) params;
+        return size + " margins=[" + margins.leftMargin
+                + "," + margins.topMargin
+                + "," + margins.rightMargin
+                + "," + margins.bottomMargin + "]";
+    }
+
+    private static String DescribeDimension(int dimension) {
+        if (dimension == ViewGroup.LayoutParams.MATCH_PARENT) {
+            return "MATCH_PARENT";
+        }
+        if (dimension == ViewGroup.LayoutParams.WRAP_CONTENT) {
+            return "WRAP_CONTENT";
+        }
+        return dimension + "px";
+    }
+
+    // For the log only, so it may never be the thing that fails.
+    private static String SdkVersion() {
+        try {
+            return String.valueOf(MobileAds.getVersion());
+        } catch (RuntimeException exception) {
+            return "unknown";
+        }
     }
 
     // Where every corner mark sits: the attribution, the AdChoices reserve

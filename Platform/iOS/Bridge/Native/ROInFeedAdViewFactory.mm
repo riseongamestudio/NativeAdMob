@@ -1,5 +1,7 @@
 #import "ROInFeedAdViewFactory.h"
 
+#import <objc/runtime.h>
+
 static NSString *const kROTag = @"InFeed";
 
 // Values carried over verbatim; dp reads as points, px floors convert
@@ -969,6 +971,7 @@ static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
                              plan:(ROInFeedLayoutPlan *)plan {
     CGFloat badgeHeight = [self ro_badgeHeightForPlan:plan];
     CGFloat minimumPt = [self ro_ptFromPx:kROMinAttributionSizePx];
+    CGFloat edgeInset = [self ro_badgeEdgeInset];
     if (views.attribution != nil) {
         CGFloat desiredWidth = round(badgeHeight * kROAttributionAspectRatio);
         CGFloat maximumWidth = MAX(minimumPt, plan.width - badgeHeight);
@@ -984,7 +987,7 @@ static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
         // carry the corner clearance themselves - on every template, the
         // scrim one included: only the picture runs under the curve.
         views.attribution.ro_layoutMargins =
-                UIEdgeInsetsMake(_cornerInset, _cornerInset, 0, 0);
+                UIEdgeInsetsMake(edgeInset, edgeInset, 0, 0);
     }
     if (views.adChoicesReserve != nil) {
         CGFloat reserveWidth = MAX(
@@ -995,8 +998,211 @@ static void ROInFeedCentreBlock(ROInFeedAssetViews *views) {
         views.adChoicesReserve.ro_layoutHeight = badgeHeight;
         views.adChoicesReserve.ro_layoutGravity = HBGravityTop | HBGravityRight;
         views.adChoicesReserve.ro_layoutMargins =
-                UIEdgeInsetsMake(_cornerInset, 0, 0, _cornerInset);
+                UIEdgeInsetsMake(edgeInset, 0, 0, edgeInset);
     }
+}
+
+// Where every corner mark sits: the attribution, the AdChoices reserve and -
+// through insetSdkAdChoicesInNativeAdView: - the SDK's own AdChoices
+// container.
+- (CGFloat)ro_badgeEdgeInset {
+    return _cornerInset;
+}
+
+// ---------------------------------------------------------------------------
+// The SDK's AdChoices container
+//
+// The AdChoices mark is the SDK's, drawn in a container it adds to
+// GADNativeAdView itself and pins to that view's top and right EDGES with
+// two constraints of constant 0 - the cell's raw corner, which the
+// presentation's rounded clip cuts into. Android moves the same mark by
+// padding its NativeAdView, because there the SDK's layer fills the padded
+// area. Here the SDK pins its container to the edges, which no margin or
+// padding reaches, so the two pins themselves are moved in by the badge
+// inset: the container keeps its own size, only its corner moves.
+//
+// Everything this rests on is the SDK's private layout, measured on device
+// with Google-Mobile-Ads-SDK 13.9.0 (2026-09-21), not promised by any API:
+// the container's class name and the shape of the two pins. So nothing is
+// forced. Anything unexpected is left alone - the mark stays where the SDK
+// put it, which is how every cell looked before - and reported once per run
+// with what was found instead, so an SDK upgrade tells us how to follow it.
+// ---------------------------------------------------------------------------
+
+static NSString *const kROSdkAdChoicesContainerClass =
+        @"GADNativeAdAttributionView";
+static char kROSdkAdChoicesInsetAppliedKey;
+
+// The SDK's version, for the log. Read through the runtime rather than a
+// named SDK function: this file only compiles on a Mac, and a guessed name
+// would break the build for the sake of a log line.
+static NSString *ROGoogleMobileAdsVersion(void) {
+    @try {
+        GADMobileAds *mobileAds = [GADMobileAds sharedInstance];
+        if (![mobileAds respondsToSelector:
+                        NSSelectorFromString(@"versionNumber")]) {
+            return @"unknown";
+        }
+        id value = [mobileAds valueForKey:@"versionNumber"];
+        if (![value isKindOfClass:NSValue.class]) return @"unknown";
+
+        NSValue *boxed = (NSValue *)value;
+        NSUInteger size = 0;
+        NSGetSizeAndAlignment(boxed.objCType, &size, NULL);
+        if (size != sizeof(NSInteger) * 3) return @"unknown";
+
+        NSInteger parts[3] = {0, 0, 0};
+        [boxed getValue:parts size:sizeof(parts)];
+        return [NSString stringWithFormat:@"%ld.%ld.%ld"
+              , (long)parts[0]
+              , (long)parts[1]
+              , (long)parts[2]];
+    } @catch (NSException *exception) {
+        return @"unknown";
+    }
+}
+
+static NSString *ROClassNames(NSArray<UIView *> *views) {
+    NSMutableArray<NSString *> *names =
+            [NSMutableArray arrayWithCapacity:views.count];
+    for (UIView *view in views) {
+        [names addObject:NSStringFromClass(view.class)];
+    }
+    return [names componentsJoinedByString:@", "];
+}
+
+- (void)insetSdkAdChoicesInNativeAdView:(GADNativeAdView *)nativeAdView
+                              logResult:(BOOL)logResult {
+    CGFloat inset = [self ro_badgeEdgeInset];
+    if (nativeAdView == nil || inset <= 0) return;
+
+    Class containerClass = NSClassFromString(kROSdkAdChoicesContainerClass);
+    UIView *container = nil;
+    if (containerClass != Nil) {
+        for (UIView *subview in nativeAdView.subviews) {
+            if ([subview isKindOfClass:containerClass]) {
+                container = subview;
+                break;
+            }
+        }
+    }
+    if (container == nil) {
+        if (logResult) {
+            [self ro_reportSdkAdChoicesInset:@"SKIPPED"
+                                     message:[NSString stringWithFormat:
+                    @"no %@ among the GADNativeAdView's subviews (%@)"
+                  , kROSdkAdChoicesContainerClass
+                  , ROClassNames(nativeAdView.subviews)]];
+        }
+        return;
+    }
+
+    NSLayoutConstraint *topPin = nil;
+    NSLayoutConstraint *rightPin = nil;
+    CGFloat topTarget = 0;
+    CGFloat rightTarget = 0;
+    NSMutableArray<NSString *> *mentions = [NSMutableArray array];
+    for (NSLayoutConstraint *constraint in nativeAdView.constraints) {
+        BOOL containerFirst = constraint.firstItem == container
+                && constraint.secondItem == nativeAdView;
+        BOOL containerSecond = constraint.firstItem == nativeAdView
+                && constraint.secondItem == container;
+        if (!containerFirst && !containerSecond) continue;
+
+        [mentions addObject:constraint.description];
+        if (constraint.relation != NSLayoutRelationEqual
+                || constraint.multiplier != 1
+                || constraint.firstAttribute != constraint.secondAttribute) {
+            continue;
+        }
+        // container.edge == view.edge + k, or the same written the other
+        // way round, which flips the sign that moves the container inward.
+        CGFloat inward = containerFirst ? inset : -inset;
+        switch (constraint.firstAttribute) {
+            case NSLayoutAttributeTop:
+                topPin = constraint;
+                topTarget = inward;
+                break;
+            case NSLayoutAttributeRight:
+            case NSLayoutAttributeTrailing:
+                rightPin = constraint;
+                rightTarget = -inward;
+                break;
+            default:
+                break;
+        }
+    }
+    if (topPin == nil || rightPin == nil) {
+        if (logResult) {
+            [self ro_reportSdkAdChoicesInset:@"SKIPPED"
+                                     message:[NSString stringWithFormat:
+                    @"%@ is not pinned by top == top and right == right to "
+                     "the GADNativeAdView; constraints naming it: [%@]"
+                  , kROSdkAdChoicesContainerClass
+                  , [mentions componentsJoinedByString:@"; "]]];
+        }
+        return;
+    }
+    BOOL topKnown = topPin.constant == 0 || topPin.constant == topTarget;
+    BOOL rightKnown = rightPin.constant == 0 || rightPin.constant == rightTarget;
+    if (!topKnown || !rightKnown) {
+        if (logResult) {
+            [self ro_reportSdkAdChoicesInset:@"SKIPPED"
+                                     message:[NSString stringWithFormat:
+                    @"the pins carry constants this code did not set: "
+                     "%@; %@"
+                  , topPin.description
+                  , rightPin.description]];
+        }
+        return;
+    }
+
+    BOOL appliedBefore = [objc_getAssociatedObject(
+            nativeAdView, &kROSdkAdChoicesInsetAppliedKey) boolValue];
+    BOOL reset = appliedBefore
+            && (topPin.constant == 0 || rightPin.constant == 0);
+    // Only when they differ: every layout pass comes through here, and a
+    // pass where nothing moved has no business touching the layout engine.
+    if (topPin.constant != topTarget) topPin.constant = topTarget;
+    if (rightPin.constant != rightTarget) rightPin.constant = rightTarget;
+    objc_setAssociatedObject(
+            nativeAdView, &kROSdkAdChoicesInsetAppliedKey, @YES
+          , OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    // Said whatever the pass: the SDK taking its pins back is news on its
+    // own, and the next pass only puts them back again.
+    if (reset) {
+        [self ro_reportSdkAdChoicesInset:@"RESET"
+                                 message:@"the SDK put its pins back to 0 "
+                                          "after they were moved; moved "
+                                          "them again"];
+    }
+    if (logResult) {
+        [self ro_reportSdkAdChoicesInset:@"applied"
+                                 message:[NSString stringWithFormat:
+                @"SDK container inset by %gpt", inset]];
+    }
+}
+
+// Once per run for each outcome: the same SDK builds every ad the same way,
+// so the first report says everything the rest would.
+- (void)ro_reportSdkAdChoicesInset:(NSString *)outcome
+                           message:(NSString *)message {
+    static NSMutableSet<NSString *> *reported;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        reported = [NSMutableSet set];
+    });
+    if ([reported containsObject:outcome]) return;
+
+    [reported addObject:outcome];
+    NSLog(@"%@: In-feed AdChoices inset %@ (GMA %@): %@%@"
+          , kROTag
+          , outcome
+          , ROGoogleMobileAdsVersion()
+          , message
+          , [outcome isEqualToString:@"applied"]
+                    ? @""
+                    : @" - update insetSdkAdChoicesInNativeAdView: for this SDK");
 }
 
 // ---------------------------------------------------------------------------
