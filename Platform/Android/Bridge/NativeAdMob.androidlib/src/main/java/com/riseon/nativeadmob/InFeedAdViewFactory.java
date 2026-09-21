@@ -313,11 +313,12 @@ final class InFeedAdViewFactory {
             // takes the click off its own NativeAdView.
             AssetViews views = new AssetViews();
             View content = BuildContent(plan, false, views, mainImage);
-            nativeAdView.addView(
-                    content
-                  , new FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                      , ViewGroup.LayoutParams.MATCH_PARENT));
+            FrameLayout.LayoutParams contentParams =
+                    new FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                          , ViewGroup.LayoutParams.MATCH_PARENT);
+            InsetSdkOverlay(nativeAdView, contentParams);
+            nativeAdView.addView(content, contentParams);
 
             if (views.headline != null) {
                 nativeAdView.setHeadlineView(views.headline);
@@ -351,6 +352,42 @@ final class InFeedAdViewFactory {
         } finally {
             if (!completed) nativeAdView.destroy();
         }
+    }
+
+    // The AdChoices mark on screen is the SDK's, not ours. NativeAdView
+    // keeps a layer of its own - a MATCH_PARENT FrameLayout it holds in
+    // front of every other child - and pins the mark to that layer's
+    // corner: the cell's raw corner, which the rounded outline clips.
+    // Registering an AdChoicesView does not move it. That was tried, and
+    // the device's view tree showed the SDK take the view and still draw
+    // its mark in its own layer (2026-09-21).
+    //
+    // So the layer is inset from outside. Padding on the NativeAdView
+    // pulls that layer in to the badge inset, and the mark with it. Our
+    // content takes the padding straight back through negative margins, so
+    // it still fills the cell to the pixel - same bounds, same layout, same
+    // validation - and the scrim picture still runs under the curve. A
+    // square cell has no inset and is left exactly as it was.
+    private void InsetSdkOverlay(
+            NativeAdView nativeAdView
+          , FrameLayout.LayoutParams contentParams) {
+        int inset = BadgeEdgeInsetPx();
+        if (inset <= 0) return;
+
+        nativeAdView.setPadding(inset, inset, inset, inset);
+        // Our content reaches back into the padding; clipping to it would
+        // cut off the ring between the padding and the cell edge - the
+        // scrim picture's edge above all.
+        nativeAdView.setClipToPadding(false);
+        contentParams.setMargins(-inset, -inset, -inset, -inset);
+    }
+
+    // Where every corner mark sits: the attribution, the AdChoices reserve
+    // and - through InsetSdkOverlay - the SDK's own AdChoices mark. A
+    // floor, not an addend: the content edge inset and the corner
+    // clearance both measure from the same cell edge.
+    private int BadgeEdgeInsetPx() {
+        return Math.max(CONTENT_EDGE_INSET_PX, cornerInsetPx);
     }
 
     boolean HasVideoContent() {
@@ -990,10 +1027,8 @@ final class InFeedAdViewFactory {
         int badgeHeight = BadgeHeightPx(plan);
         // The badges sit on the root, outside the outer column, so they
         // carry the corner clearance themselves - on every template, the
-        // scrim one included: only the picture runs under the curve. A
-        // floor again, not an addend: both insets measure from the same
-        // cell edge.
-        int edgeInset = Math.max(CONTENT_EDGE_INSET_PX, cornerInsetPx);
+        // scrim one included: only the picture runs under the curve.
+        int edgeInset = BadgeEdgeInsetPx();
         if (views.attribution != null) {
             int attributionWidth = AttributionWidthPx(plan, badgeHeight);
             views.attribution.setTextSize(
