@@ -4,6 +4,16 @@ Mọi thay đổi đáng kể của `com.riseon.nativeadmob` được ghi ở đ
 [Keep a Changelog](https://keepachangelog.com/vi/1.1.0/), đánh số theo
 [Semantic Versioning](https://semver.org/lang/vi/).
 
+## [1.0.3] - 2026-09-25
+
+### Sửa
+
+- Assembly nền tảng `RiseOn.NativeAdMob.Android` và `RiseOn.NativeAdMob.iOS`
+  bị UnityLinker bỏ khỏi bản build khi pack được cài dạng package, vì không
+  assembly nào tham chiếu tới chúng. Bootstrap của nền tảng không bao giờ chạy
+  nên không ad nào hiện được. Cả hai giờ khai `[assembly: AlwaysLinkAssembly]`.
+  Bản nằm trong `Assets/` không bị, vì Unity không cắt assembly của project.
+
 ## [1.0.2] - 2026-09-23
 
 ### Thay đổi

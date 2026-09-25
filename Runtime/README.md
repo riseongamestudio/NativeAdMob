@@ -96,6 +96,10 @@ native ở README iOS.
   factory bằng `[RuntimeInitializeOnLoadMethod(SubsystemRegistration)]` gác
   `Application.platform`. Bản build nào cũng chỉ có đúng một assembly nền
   tảng. Chủ dự án thích asm hơn `#if`; chỉ dùng `#if` khi bắt buộc.
+- Không assembly nào tham chiếu tới assembly nền tảng, nên mỗi cái khai
+  `[assembly: AlwaysLinkAssembly]` (file `AssemblyInfo.cs` trong thư mục của
+  nó). Thiếu dòng này, UnityLinker bỏ cả assembly khi pack cài dạng package,
+  kể cả ở mức stripping Minimal: bootstrap không chạy và không ad nào hiện.
 - Client là **transport câm**: không giữ trạng thái, không gác generation.
   Cổng release (`releasedManaged` + `nativeAdStateLock`), `showGeneration`,
   cờ ready/loading đều nằm trong core. Thêm hành vi thì thêm ở core, một lần

@@ -45,7 +45,7 @@ rồi thêm package:
     }
   ],
   "dependencies": {
-    "com.riseon.nativeadmob": "1.0.2"
+    "com.riseon.nativeadmob": "1.0.3"
   }
 }
 ```
@@ -53,7 +53,7 @@ rồi thêm package:
 **Git URL**: *Package Manager → + → Add package from git URL*:
 
 ```
-https://github.com/riseongamestudio/NativeAdMob.git#v1.0.2
+https://github.com/riseongamestudio/NativeAdMob.git#v1.0.3
 ```
 
 Cài bằng git thì plugin Google Mobile Ads vẫn phải lấy được từ một registry (vd.
